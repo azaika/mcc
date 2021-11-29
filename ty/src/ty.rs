@@ -1,20 +1,21 @@
-use std::cell::Cell;
+use std::rc::Rc;
+use std::cell::RefCell;
 use std::fmt;
 
 #[derive(Debug, Clone)]
-pub enum Ty<'a> {
+pub enum Ty {
     Unit,
     Bool,
     Int,
     Float,
-    Fun(Vec<Ty<'a>>, Box<Ty<'a>>),
-    Tuple(Vec<Ty<'a>>),
-    Array(Box<Ty<'a>>),
-    Var(Cell<&'a Ty<'a>>), // using typed_arena
+    Fun(Vec<Ty>, Box<Ty>),
+    Tuple(Vec<Ty>),
+    Array(Box<Ty>),
+    Var(Rc<RefCell<Ty>>),
     Unknown
 }
 
-impl<'a> Ty<'a> {
+impl Ty {
     fn print_block(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use Ty::*;
         match self {
@@ -24,7 +25,7 @@ impl<'a> Ty<'a> {
     }
 }
 
-impl<'a> fmt::Display for Ty<'a> {
+impl fmt::Display for Ty {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use Ty::*;
         match self {
@@ -51,8 +52,8 @@ impl<'a> fmt::Display for Ty<'a> {
                 write!(f, " array")
             },
             Var(t) => {
-                match t.get() {
-                    Unknown => write!(f, "'a"),
+                match &*t.borrow() {
+                    Unknown => write!(f, "'?"),
                     s => write!(f, "{}", s)
                 }
             },
@@ -64,13 +65,14 @@ impl<'a> fmt::Display for Ty<'a> {
 #[cfg(test)]
 mod tests {
     use super::Ty::*;
-    use std::cell::Cell;
+    use std::rc::Rc;
+    use std::cell::RefCell;
     #[test]
     fn print_type() {
         let iarr = Array(Box::new(Int));
         let iiarr = Array(Box::new(iarr.clone()));
 
-        let var = Var(Cell::new(&iarr));
+        let var = Var(Rc::new(RefCell::new(iarr.clone())));
         assert_eq!(var.to_string(), "int array");
 
         let fun1 = Fun(vec![Unit, iarr.clone()], Box::new(Float));
