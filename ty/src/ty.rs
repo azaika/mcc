@@ -16,6 +16,10 @@ pub enum Ty {
 }
 
 impl Ty {
+    pub fn new_var() -> Ty {
+        Ty::Var(Rc::new(RefCell::new(Ty::Unknown)))
+    }
+
     fn print_block(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use Ty::*;
         match self {

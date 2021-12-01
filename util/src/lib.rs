@@ -2,4 +2,4 @@ pub mod span;
 pub mod id;
 
 pub use span::*;
-pub use id::*;
+pub use id::Id;

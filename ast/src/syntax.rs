@@ -9,14 +9,14 @@ pub enum ConstKind {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
-pub enum UnOp {
+pub enum UnOpKind {
     Neg,
     FNeg,
     Not
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
-pub enum BinOp {
+pub enum BinOpKind {
     Add,
     Sub,
     FAdd,
@@ -29,33 +29,48 @@ pub enum BinOp {
     LE
 }
 
-pub type Var = (Id, ty::Ty);
+#[derive(Debug, Clone, PartialEq)]
+pub struct Decl {
+    pub name : Id,
+    pub t : ty::Ty
+}
+
+impl Decl {
+    pub fn new(name : Id, t : ty::Ty) -> Self {
+        Self {
+            name,
+            t
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Fundef {
-    fvar : Var,
-    args : Vec<Var>,
-    body : Box<Expr>
+    pub fvar : Decl,
+    pub args : Vec<Decl>,
+    pub body : Box<Expr>
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum LetKind {
-    Let(Var, Box<Expr>, Box<Expr>),
-    LetRec(Fundef),
-    LetTuple(Vec<Var>, Box<Expr>, Box<Expr>)
+    Let(Decl, Box<Expr>, Box<Expr>),
+    LetRec(Fundef, Box<Expr>),
+    LetTuple(Vec<Decl>, Box<Expr>, Box<Expr>)
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ExprKind {
     Const(ConstKind),
     Var(Id),
-    UnaryOp(UnOp, Box<Expr>),
-    BinOp(BinOp, Box<Expr>, Box<Expr>),
+    UnOp(UnOpKind, Box<Expr>),
+    BinOp(BinOpKind, Box<Expr>, Box<Expr>),
     If(Box<Expr>, Box<Expr>, Box<Expr>),
     Let(LetKind),
+    Tuple(Vec<Expr>),
+    App(Box<Expr>, Vec<Expr>),
     Array(Box<Expr>, Box<Expr>),
     Get(Box<Expr>, Box<Expr>),
-    Put(Box<Expr>, Box<Expr>)
+    Put(Box<Expr>, Box<Expr>, Box<Expr>)
 }
 
 pub type Expr = Spanned<ExprKind>;

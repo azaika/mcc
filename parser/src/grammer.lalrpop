@@ -1,10 +1,225 @@
 use std::str::FromStr;
+use util::*;
+use ast::syntax::*;
 
 grammar;
+// # operator priority (descending order)
+// : atom
+// : array get
+// : function application (left assoc)
+// : - -. (prefix)
+// : * / *. /. (left assoc)
+// : + - +. - (left assoc)
+// : = < (left assoc?)
+// : <- (left assoc)
+// : if 
+// : ; (right assoc)
+// : let , let rec
 
-pub Term: i32 = {
-    <n:Num> => n,
-    "(" <t:Term> ")" => t,
+Tier<Ops,NextTier>: Box<Expr> = {
+    <l:@L> <e1:Tier<Ops, NextTier>> <op:Ops> <e2:NextTier> <r:@R> => Box::new(Spanned::new(ExprKind::BinOp(op, e1, e2), (l, r))),
+    NextTier
 };
 
-Num: i32 = <s:r"[0-9]+"> => i32::from_str(s).unwrap();
+// Array Get
+Expr1 : Box<Expr> = {
+   <l:@L> <e1:Expr1> "." "(" <e2:Seq> ")" <r:@R> => Box::new(Spanned::new(ExprKind::Get(e1, e2), (l, r))),
+   Expr0
+};
+// Array Create
+Expr2 : Box<Expr> = {
+    <l:@L> ArrayCreate <e1:Expr1> <e2:Expr1> <r:@R> => Box::new(Spanned::new(ExprKind::Array(e1, e2), (l, r))),
+    <l:@L> <e:SimpleExpr> <args:ActualArgs> <r:@R> => Box::new(Spanned::new(ExprKind::App(e, args), (l, r))),
+    Expr1
+};
+
+// Unary ops
+PrefixMinus: UnOpKind = {
+    "-" => UnOpKind::Neg,
+    "-." => UnOpKind::FNeg
+};
+Expr3 : Box<Expr> = {
+    <l:@L> <op:PrefixMinus> <e:Expr3> <r:@R> =>
+    {  match &e.item {
+        ExprKind::Const(c) => {
+            match c {
+                ConstKind::CFloat(f) => Box::new(Spanned::new(ExprKind::Const(ConstKind::CFloat(-f)), e.loc)),
+                _ => Box::new(Spanned::new(ExprKind::UnOp(op, e), (l, r))),
+            }
+        },
+        _ => Box::new(Spanned::new(ExprKind::UnOp(op, e), (l, r))),
+       }
+    },
+    Expr2
+};
+
+// mul, div
+Expr4 = Tier<FactorOp, Expr3>;
+// plus, minus
+Expr5 = Tier<TermOp, Expr4>;
+
+// Comparison
+Expr6: Box<Expr> = {
+    <l:@L> <e1:Expr5> "=" <e2:Expr5> <r:@R> => Box::new(Spanned::new(ExprKind::BinOp(BinOpKind::Eq, e1, e2), (l, r))),
+    <l:@L> <e1:Expr5> "<>" <e2:Expr5> <r:@R> => Box::new(Spanned::new(
+        ExprKind::UnOp(
+            UnOpKind::Not,
+            Box::new(Spanned::new(ExprKind::BinOp(BinOpKind::Eq, e1, e2), (l, r)))
+        ),
+        (l, r)
+    )),
+    <l:@L> <e1:Expr5> "<" <e2:Expr5> <r:@R> => Box::new(Spanned::new(ExprKind::BinOp(BinOpKind::LE, e1, e2), (l, r))),
+    <l:@L> <e1:Expr5> ">" <e2:Expr5> <r:@R> => Box::new(Spanned::new(ExprKind::BinOp(BinOpKind::LE, e2, e1), (l, r))),
+    <l:@L> <e1:Expr5> ">=" <e2:Expr5> <r:@R> => Box::new(Spanned::new(
+        ExprKind::UnOp(
+            UnOpKind::Not,
+            Box::new(Spanned::new(ExprKind::BinOp(BinOpKind::LE, e1, e2), (l, r)))
+        ),
+        (l, r)
+    )),
+    <l:@L> <e1:Expr5> "<=" <e2:Expr5> <r:@R> => Box::new(Spanned::new(
+        ExprKind::UnOp(
+            UnOpKind::Not,
+            Box::new(Spanned::new(ExprKind::BinOp(BinOpKind::Eq, e2, e1), (l, r)))
+        ),
+        (l, r)
+    )),
+};
+
+// Array put
+Expr7: Box<Expr> = {
+    <l:@L> <e1:Expr1> "." "(" <e2:Seq> ")" "<-" <e3:Expr8> <r:@R> => Box::new(Spanned::new(ExprKind::Put(e1, e2, e3), (l, r))),
+    Expr6
+};
+
+// if
+Expr8: Box<Expr> = {
+    <l:@L> "if" <e1:Seq> "then" <e2:Seq> "else" <e3:Expr8> <r:@R> => Box::new(Spanned::new(ExprKind::If(e1, e2, e3), (l, r))),
+    Expr7
+};
+// expr ; expr
+SeqSub: Box<Expr> = {
+    <l:@L> <e1:SeqSub> ";" <e2:Expr8> <r:@R> => Box::new(Spanned::new(
+        ExprKind::Let(LetKind::Let(Decl::new(id::gen_uniq(), ty::Ty::Unit), e1, e2)),
+        (l, r)
+    )),
+    Expr8
+}
+Seq: Box<Expr> = {
+    <l:@L> <e1:SeqSub> ";" <e2:Expr9> <r:@R> => Box::new(Spanned::new(
+        ExprKind::Let(LetKind::Let(Decl::new(id::gen_uniq(), ty::Ty::Unit), e1, e2)),
+        (l, r)
+    )),
+    Expr9
+}
+
+// let kind (2)
+// if ... then ... else let ...
+// 系の優先順位を確定するための ad-hoc
+Expr9_2: LetKind = {
+    <x:Ident> "=" <e1:Seq> "in" <e2:Seq> => LetKind::Let(Decl::new(x, ty::Ty::new_var()), e1, e2),
+    "(" <e1:Pat> ")" "=" <e2:Seq> "in" <e3:Seq> => LetKind::LetTuple(e1, e2, e3),
+    "rec" <f:Fun> "in" <cont:Seq> => LetKind::LetRec(f, cont),
+};
+// let kind
+Expr9: Box<Expr> = {
+    <l:@L> "let" <e:Expr9_2> <r:@R> => Box::new(Spanned::new(ExprKind::Let(e), (l, r))),
+    <l1:@L> "if" <e1:Seq> "then" <e2:Seq> "else" <l2:@L> "let" <e3:Expr9_2> <r2:@R> <r1:@R> => Box::new(Spanned::new(
+        ExprKind::If(e1, e2, Box::new(Spanned::new(ExprKind::Let(e3), (l2, r2)))),
+        (l1, r1)
+    )),
+    Expr8
+};
+
+Elems: Vec<Expr> = {
+    <mut v:Elems> "," <e2:Seq> => {
+        v.push(*e2);
+        v
+    },
+    <e1:Seq> "," <e2:Seq> => vec![*e1, *e2]
+};
+Pat: Vec<Decl> = {
+    <mut p:Pat> "," <x:Ident> => {
+        p.push(Decl::new(x, ty::Ty::new_var()));
+        p
+    },
+    <x:Ident> "," <y:Ident> => vec![Decl::new(x, ty::Ty::new_var()), Decl::new(y, ty::Ty::new_var())],
+};
+
+Fun : Fundef = {
+    <n:Ident> <args:FormalArgs> "=" <body:Seq> => 
+        Fundef {
+            fvar: Decl::new(n, ty::Ty::new_var()),
+            args: args,
+            body: body,
+        },
+};
+ActualArgs: Vec<Expr> = {
+    <mut v:ActualArgs> <e:Expr1> => {
+        v.push(*e);
+        v
+    },
+    Expr1 => vec![*<>],
+};
+FormalArgs : Vec<Decl> = {
+    <mut v:FormalArgs> <a:IdArgs> => {
+        v.push(Decl::new(a, ty::Ty::new_var()));
+        v
+    },
+    <a:IdArgs> => vec![Decl::new(a, ty::Ty::new_var())],
+};
+
+ArrayCreate: () = {
+    "Array.make" => (),
+    "create_array" => (),
+};
+
+TermOp : BinOpKind = {
+    "+." => BinOpKind::FAdd,
+    "-." => BinOpKind::FSub,
+    "+" => BinOpKind::Add,
+    "-" => BinOpKind::Sub
+};
+FactorOp : BinOpKind = {
+    "*." => BinOpKind::FMul,
+    "/." => BinOpKind::FDiv,
+    "*" => BinOpKind::Mul,
+    "/" => BinOpKind::Div
+};
+
+Expr0 = SimpleExpr;
+
+pub SimpleExpr: Box<Expr> = {
+    "(" <e:Seq> ")" => e,
+    <l:@L> "()" <r:@R> => Box::new(Spanned::new(ExprKind::Const(ConstKind::CUnit), (l, r))),
+    <l:@L> <d:Int> <r:@R> => Box::new(Spanned::new(ExprKind::Const(ConstKind::CInt(d)), (l, r))),
+    <l:@L> <f:Float> <r:@R> => Box::new(Spanned::new(ExprKind::Const(ConstKind::CFloat(f)), (l, r))),
+    <l:@L> <b:Bool> <r:@R> => Box::new(Spanned::new(ExprKind::Const(ConstKind::CBool(b)), (l, r))),
+    <l:@L> <x:Ident> <r:@R> => Box::new(Spanned::new(ExprKind::Var(x), (l, r))),
+    <l:@L> "(" <e1:Elems> ")" <r:@R> => Box::new(Spanned::new(ExprKind::Tuple(e1), (l, r)))
+};
+
+pub Int: i32 = r"[0-9]+" => i32::from_str(<>).unwrap();
+pub Float: f32 = {
+    r"[0-9]+(\.[0-9]*)((e|E)(\+|-)?[0-9]+)?" => f32::from_str(<>).unwrap(),
+};
+
+pub IdArgs: Id = {
+    r"[a-z]([0-9]|[a-z]|[A-Z]|_)*" =>{
+        String::from(<>)
+    },
+    "()" => id::gen_uniq(),
+    "_" => id::gen_uniq()
+};
+pub Ident: Id = {
+    r"[a-z]([0-9]|[a-z]|[A-Z]|_)*" => {
+        String::from(<>)
+    },
+    "_" => id::gen_uniq()
+};
+pub Bool:bool = {
+    "true" => true,
+    "false" => false
+};
+
+pub Expr = Seq;
