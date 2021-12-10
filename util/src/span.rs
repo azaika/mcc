@@ -7,10 +7,18 @@ pub struct Spanned<T> {
 }
 
 impl<T> Spanned<T> {
+    #[inline]
     pub fn new(item : T, loc : Span) -> Self {
         Self {
             item,
             loc
         }
+    }
+
+    #[inline]
+    pub fn map<F, U>(self, func : F) -> Spanned<U>
+        where F: FnOnce(T) -> U
+    {
+        Spanned::new(func(self.item), self.loc)
     }
 }

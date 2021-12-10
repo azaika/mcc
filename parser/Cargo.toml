@@ -10,8 +10,11 @@ build = "build.rs" # LALRPOP preprocessing
 util = { path = "../util" }
 ty = { path = "../ty" }
 ast = { path = "../ast" }
+plex = "0.2.5"
 lalrpop-util = "0.19.6"
 regex = "1"
+anyhow = "1.0"
+thiserror = "1.0"
 
 [build-dependencies]
 lalrpop = "0.19.6"

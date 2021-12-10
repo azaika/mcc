@@ -1,13 +1,20 @@
+pub mod error;
+mod token;
+mod lexer;
+
+pub use error::ParseError as Error;
+
+use ast::syntax::Expr;
+
 #[macro_use]
 extern crate lalrpop_util;
 
 lalrpop_mod!(pub grammer);
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        let result = 2 + 2;
-        assert_eq!(result, 4);
-    }
+#[inline]
+pub fn parse<'input>(src : &'input str) -> Result<Expr, Error> {
+    let parser = grammer::ExprParser::new();
+    let lex = lexer::Lexer::new(src);
+
+    parser.parse(lex).map(|x| *x).map_err(error::from_lalrpop)
 }

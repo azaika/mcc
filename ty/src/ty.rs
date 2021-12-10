@@ -11,15 +11,16 @@ pub enum Ty {
     Fun(Vec<Ty>, Box<Ty>),
     Tuple(Vec<Ty>),
     Array(Box<Ty>),
-    Var(Rc<RefCell<Ty>>),
-    Unknown
+    Var(Option<Rc<RefCell<Ty>>>)
 }
 
 impl Ty {
+    #[inline]
     pub fn new_var() -> Ty {
-        Ty::Var(Rc::new(RefCell::new(Ty::Unknown)))
+        Ty::Var(None)
     }
 
+    #[inline]
     fn print_block(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use Ty::*;
         match self {
@@ -55,13 +56,8 @@ impl fmt::Display for Ty {
                 t.print_block(f)?;
                 write!(f, " array")
             },
-            Var(t) => {
-                match &*t.borrow() {
-                    Unknown => write!(f, "'?"),
-                    s => write!(f, "{}", s)
-                }
-            },
-            Unknown => write!(f, "!!unknown!!")
+            Var(None) => write!(f, "'?"),
+            Var(Some(t)) => write!(f, "{}", t.borrow())
         }
     }
 }
@@ -76,7 +72,7 @@ mod tests {
         let iarr = Array(Box::new(Int));
         let iiarr = Array(Box::new(iarr.clone()));
 
-        let var = Var(Rc::new(RefCell::new(iarr.clone())));
+        let var = Var(Some(Rc::new(RefCell::new(iarr.clone()))));
         assert_eq!(var.to_string(), "int array");
 
         let fun1 = Fun(vec![Unit, iarr.clone()], Box::new(Float));
@@ -90,6 +86,5 @@ mod tests {
 
         let tup2 = Tuple(vec![iarr.clone(), Float, iiarr.clone()]);
         assert_eq!(tup2.to_string(), "int array * float * int array array");
-        
     }
 }
