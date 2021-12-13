@@ -15,7 +15,7 @@ fn dummy_arg(path: &str) -> Args {
         loop_opt: 200,
         optimize: true,
         verbose: false,
-        lib: Some(vec!["".to_string()]),
+        lib: None,
         source: path.to_string()
     }
 }

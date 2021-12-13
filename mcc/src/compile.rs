@@ -30,7 +30,7 @@ fn parse_file(path: &str) -> Result<syntax::Expr> {
         // Generate & choose some colours for each of our elements
         let a = colors.next();
 
-        Report::build(ReportKind::Error, path, 12)
+        Report::build(ReportKind::Error, path, err.loc.0)
             .with_code(3)
             .with_message(err.item.to_string())
             .with_label(Label::new((path, err.into()))

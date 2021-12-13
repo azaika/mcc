@@ -32,7 +32,7 @@ lexer! {
 lexer! {
     fn next_token(text: 'input) -> LexToken;
 
-    r"[\t\n\v\f\r ]" => Space,
+    r"[\t\n\r ]" => Space,
     r"\(\*" => CommentBegin,
     r"\(" => Tok(Token::LPar),
     r"\)" => Tok(Token::RPar),

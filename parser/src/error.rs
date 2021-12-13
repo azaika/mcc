@@ -20,15 +20,15 @@ pub type LexError = Spanned<LexErrorKind>;
 
 #[derive(Debug, Error, Clone, PartialEq)]
 pub enum ParseErrorKind {
-    #[error("unexpected end of file")]
+    #[error("parse error: unexpected end of file")]
     Eof,
     #[error("lexer error: {0}")]
     Lexical(LexErrorKind),
-    #[error("found extra token `{0}`")]
+    #[error("parse error: found extra token `{0}`")]
     ExtraToken(token::Token),
-    #[error("invalid token `{0}`")]
+    #[error("parse error: invalid token `{0}`")]
     InvalidToken(token::Token),
-    #[error("unrecognized token `{0}`, expected `{1}`")]
+    #[error("parse error: unrecognized token `{0}`, expected `{1}`")]
     UnrecognizedToken(token::Token, String)
 }
 

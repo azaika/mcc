@@ -130,7 +130,7 @@ SimpleExpr: Box<Expr> = {
     "(" <e:Expr> ")" => e,
     Literal,
     <l:@L> <x:Ident> <r:@R> => Box::new(Spanned::new(ExprKind::Var(x), (l, r))),
-    // <l:@L> "(" <e1:Elems> ")" <r:@R> => Box::new(Spanned::new(ExprKind::Tuple(e1), (l, r))),
+    <l:@L> "(" <e1:Elems> ")" <r:@R> => Box::new(Spanned::new(ExprKind::Tuple(e1), (l, r))),
     // Array Get
     <l:@L> <e1:SimpleExpr> "." "(" <e2:Expr> ")" <r:@R> => Box::new(Spanned::new(ExprKind::Get(e1, e2), (l, r))),
 };
@@ -203,37 +203,46 @@ SubExpr: Box<Expr> = {
         (l, r)
     )),
 
-    #[precedence(level="6")]
-    <l:@L> "(" <e1:Elems> ")" <r:@R> => Box::new(Spanned::new(ExprKind::Tuple(e1), (l, r))),
-
     // Array Put
-    #[precedence(level="7")]
+    #[precedence(level="6")]
     <l:@L> <e1:SimpleExpr> "." "(" <e2:Expr> ")" "<-" <e3:SubExpr> <r:@R> => Box::new(Spanned::new(ExprKind::Put(e1, e2, e3), (l, r))),
 }
 
-pub Expr: Box<Expr> = {
+NoLet: Box<Expr> = {
     #[precedence(level="0")]
     SubExpr,
 
     // If
     #[precedence(level="1")]
-    <l:@L> "if" <e1:Expr> "then" <e2:Expr> "else" <e3:Expr> <r:@R> => Box::new(Spanned::new(ExprKind::If(e1, e2, e3), (l, r))),
+    <l:@L> "if" <e1:Expr> "then" <e2:Expr> "else" <e3:NoLet> <r:@R> => Box::new(Spanned::new(ExprKind::If(e1, e2, e3), (l, r))),
+}
 
-    // Sequence
-    #[precedence(level="2")]
-    #[assoc(side="right")]
-    <l:@L> <e1:Expr> ";" <e2:Expr> <r:@R> => Box::new(Spanned::new(
-        ExprKind::Let(LetKind::Let(Decl::new(id::gen_uniq(), ty::Ty::Unit), e1, e2)),
-        (l, r)
-    )),
-
+Let: Box<Expr> = {
     // Let
     #[precedence(level="3")]
     <l:@L> "let" <e:LetDecl> <r:@R> => Box::new(Spanned::new(ExprKind::Let(e), (l, r))),
     // if ... then ... else let ...
     // 系の優先順位を確定するための ad-hoc
-    // <l1:@L> "if" <e1:Expr> "then" <e2:Expr> "else" <l2:@L> "let" <e3:LetDecl> <r2:@R> <r1:@R> => Box::new(Spanned::new(
-    //     ExprKind::If(e1, e2, Box::new(Spanned::new(ExprKind::Let(e3), (l2, r2)))),
-    //     (l1, r1)
-    // )),
+    <l1:@L> "if" <e1:Expr> "then" <e2:Expr> "else" <l2:@L> "let" <e3:LetDecl> <r2:@R> <r1:@R> => Box::new(Spanned::new(
+        ExprKind::If(e1, e2, Box::new(Spanned::new(ExprKind::Let(e3), (l2, r2)))),
+        (l1, r1)
+    )),
+    NoLet
+}
+
+SeqSub: Box<Expr> = {
+    <l:@L> <e1:SeqSub> ";" <e2:NoLet> <r:@R> => Box::new(Spanned::new(
+        ExprKind::Let(LetKind::Let(Decl::new(id::gen_uniq(), ty::Ty::Unit), e1, e2)),
+        (l, r)
+    )),
+    NoLet
+}
+
+pub Expr: Box<Expr> = {
+    // Sequence
+    <l:@L> <e1:SeqSub> ";" <e2:Let> <r:@R> => Box::new(Spanned::new(
+        ExprKind::Let(LetKind::Let(Decl::new(id::gen_uniq(), ty::Ty::Unit), e1, e2)),
+        (l, r)
+    )),
+    Let
 }
