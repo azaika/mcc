@@ -1,3 +1,6 @@
+use std::ops::Range;
+use std::fmt;
+
 pub type Span = (usize, usize);
 
 #[derive(Debug, Clone, PartialEq)]
@@ -20,5 +23,19 @@ impl<T> Spanned<T> {
         where F: FnOnce(T) -> U
     {
         Spanned::new(func(self.item), self.loc)
+    }
+}
+
+impl<T> From<Spanned<T>> for Range<usize> {
+    fn from(spanned : Spanned<T>) -> Range<usize> {
+        let lo = spanned.loc.0;
+        let hi = spanned.loc.1;
+        lo..hi
+    }
+}
+
+impl<T : fmt::Display> fmt::Display for Spanned<T> {
+    fn fmt(&self, f : &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.item)
     }
 }

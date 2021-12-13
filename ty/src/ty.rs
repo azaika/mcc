@@ -20,7 +20,6 @@ impl Ty {
         Ty::Var(None)
     }
 
-    #[inline]
     fn print_block(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use Ty::*;
         match self {
@@ -45,13 +44,7 @@ impl fmt::Display for Ty {
                 }
                 write!(f, "{}", *ret)
             },
-            Tuple(ts) => {
-                ts.first().map_or(Ok(()), |t| t.print_block(f))?;
-                for t in &ts[1..ts.len()] {
-                    write!(f, " * {}", t)?;
-                }
-                Ok(())
-            },
+            Tuple(ts) => util::format_vec(f, &ts, "", " * ", ""),
             Array(t) => {
                 t.print_block(f)?;
                 write!(f, " array")
