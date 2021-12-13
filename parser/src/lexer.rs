@@ -32,21 +32,21 @@ lexer! {
 lexer! {
     fn next_token(text: 'input) -> LexToken;
 
-    r"[:space:]" => Space,
+    r"[\t\n\v\f\r ]" => Space,
     r"\(\*" => CommentBegin,
     r"\(" => Tok(Token::LPar),
     r"\)" => Tok(Token::RPar),
     "true" => Tok(Token::Bool(true)),
     "false" => Tok(Token::Bool(false)),
     "not" => Tok(Token::Not),
-    r"\d+" => {
+    r"[0-9]+" => {
         if let Ok(i) = text.parse() {
             Tok(Token::Int(i))
         } else {
             Error(LexErrorKind::TooLargeInteger(text.to_owned()))
         }
     },
-    r"\d+(\.\d*)?([eE][\+\-]?\d+)?" => {
+    r"[0-9]+(\.[0-9]*)?([eE][\+\-]?[0-9]+)?" => {
         if let Ok(f) = text.parse() {
             Tok(Token::Float(f))
         } else {
@@ -79,7 +79,7 @@ lexer! {
     r"\." => Tok(Token::Dot),
     r"<\-" => Tok(Token::LessMinus),
     r";" => Tok(Token::SemiColon),
-    r"[:lower:][:word:]*" => Tok(Token::Ident(text.to_owned())),
+    r"[a-z][0-9A-Za-z_]*" => Tok(Token::Ident(text.to_owned())),
     r"." => Error(LexErrorKind::UnrecognizedToken(text.to_owned()))
 }
 

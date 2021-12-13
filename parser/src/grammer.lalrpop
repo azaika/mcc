@@ -183,11 +183,11 @@ SubExpr: Box<Expr> = {
         (l, r)
     )),
     #[assoc(side="left")]
-    <l:@L> <e1:SubExpr> "<" <e2:SubExpr> <r:@R> => Box::new(Spanned::new(ExprKind::BinOp(BinOpKind::LE, e1, e2), (l, r))),
+    <l:@L> <e1:SubExpr> "<=" <e2:SubExpr> <r:@R> => Box::new(Spanned::new(ExprKind::BinOp(BinOpKind::LE, e1, e2), (l, r))),
     #[assoc(side="left")]
-    <l:@L> <e1:SubExpr> ">" <e2:SubExpr> <r:@R> => Box::new(Spanned::new(ExprKind::BinOp(BinOpKind::LE, e2, e1), (l, r))),
+    <l:@L> <e1:SubExpr> ">=" <e2:SubExpr> <r:@R> => Box::new(Spanned::new(ExprKind::BinOp(BinOpKind::LE, e2, e1), (l, r))),
     #[assoc(side="left")]
-    <l:@L> <e1:SubExpr> ">=" <e2:SubExpr> <r:@R> => Box::new(Spanned::new(
+    <l:@L> <e1:SubExpr> ">" <e2:SubExpr> <r:@R> => Box::new(Spanned::new(
         ExprKind::UnOp(
             UnOpKind::Not,
             Box::new(Spanned::new(ExprKind::BinOp(BinOpKind::LE, e1, e2), (l, r)))
@@ -195,10 +195,10 @@ SubExpr: Box<Expr> = {
         (l, r)
     )),
     #[assoc(side="left")]
-    <l:@L> <e1:SubExpr> "<=" <e2:SubExpr> <r:@R> => Box::new(Spanned::new(
+    <l:@L> <e1:SubExpr> "<" <e2:SubExpr> <r:@R> => Box::new(Spanned::new(
         ExprKind::UnOp(
             UnOpKind::Not,
-            Box::new(Spanned::new(ExprKind::BinOp(BinOpKind::Eq, e2, e1), (l, r)))
+            Box::new(Spanned::new(ExprKind::BinOp(BinOpKind::LE, e2, e1), (l, r)))
         ),
         (l, r)
     )),
