@@ -24,7 +24,7 @@ fn check_occur(r: Rc<RefCell<Option<Ty>>>, t: &Ty) -> bool {
         Tuple(a) => a.iter().any(|t| check_occur(r.clone(), t)),
         Array(t) => check_occur(r, t),
         Var(r1) => {
-            if r == *r1 {
+            if r.as_ptr() == r1.as_ptr() {
                 return true;
             }
             match &*r1.borrow() {
@@ -232,7 +232,7 @@ fn infer_impl(e : &Expr, env: &mut Map, extenv: &mut Map) -> Result<Ty, TypeErro
             let t = infer_impl(e3, env, extenv)?;
             unify(&Ty::Array(Box::new(t.clone())), &infer_impl(e1, env, extenv)?).map_err(with(e1.loc))?;
             unify(&Ty::Int, &infer_impl(e2, env, extenv)?).map_err(with(e2.loc))?;
-            Ok(t)
+            Ok(Ty::Unit)
         },
     }
 }

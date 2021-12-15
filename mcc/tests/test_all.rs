@@ -15,7 +15,7 @@ fn dummy_arg(path: &str) -> Args {
         loop_opt: 200,
         optimize: true,
         verbose: false,
-        lib: None,
+        lib: Some(vec!["../tests/libs/libmincaml.ml".to_string()]),
         source: path.to_string()
     }
 }
@@ -26,7 +26,7 @@ fn test_all() {
     let args: Vec<_> = srcs.into_iter().map(|x| dummy_arg(&x)).collect();
 
     for arg in args {
-        println!("testing {}...", arg.source);
+        println!("testing {}", arg.source);
         assert!(compile(arg).is_ok());
     }
 }

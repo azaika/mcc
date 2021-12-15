@@ -147,16 +147,16 @@ SubExpr: Box<Expr> = {
 
     // unary - -. not
     #[precedence(level="2")]
-    <l:@L> "-" <e:SubExpr> <r:@R> => Box::new(Spanned::new(ExprKind::UnOp(UnOpKind::Neg, e), (l, r))),
-    <l:@L> "-." <e:SubExpr> <r:@R> => {
+    <l:@L> "-." <e:SubExpr> <r:@R> => Box::new(Spanned::new(ExprKind::UnOp(UnOpKind::FNeg, e), (l, r))),
+    <l:@L> "-" <e:SubExpr> <r:@R> => {
         match &e.item {
             ExprKind::Const(c) => {
                 match c {
                     ConstKind::CFloat(f) => Box::new(Spanned::new(ExprKind::Const(ConstKind::CFloat(-f)), e.loc)),
-                    _ => Box::new(Spanned::new(ExprKind::UnOp(UnOpKind::FNeg, e), (l, r))),
+                    _ => Box::new(Spanned::new(ExprKind::UnOp(UnOpKind::Neg, e), (l, r))),
                 }
             },
-            _ => Box::new(Spanned::new(ExprKind::UnOp(UnOpKind::FNeg, e), (l, r))),
+            _ => Box::new(Spanned::new(ExprKind::UnOp(UnOpKind::Neg, e), (l, r))),
         }
     },
     <l:@L> "not" <e:SubExpr> <r:@R> => Box::new(Spanned::new(ExprKind::UnOp(UnOpKind::Not, e), (l, r))),

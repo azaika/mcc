@@ -138,7 +138,7 @@ impl ExprKind {
                         util::format_vec(f, &fundef.args, "[", ", ", "]")?;
                         write!(f, "\n{}body =\n", indent(level + 1))?;
                         fundef.body.item.format_indented(f, level + 2)?;
-                        e.item.format_indented(f, level + 1)
+                        e.item.format_indented(f, level)
                     },
                     LetTuple(decls, e1, e2) => {
                         write!(f, "LetTuple: ")?;
