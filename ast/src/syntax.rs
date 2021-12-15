@@ -83,6 +83,21 @@ pub enum ExprKind {
 
 pub type Expr = Spanned<ExprKind>;
 
+pub fn concat(e1: Expr, e2: Expr) -> Box<Expr> {
+    use ExprKind::*;
+    match e1.item {
+        Let(l) => {
+            let l = match l {
+                LetKind::Let(d, e1, e2_) => LetKind::Let(d, e1, concat(*e2_, e2)),
+                LetKind::LetRec(fundef, e) => LetKind::LetRec(fundef, concat(*e, e2)),
+                LetKind::LetTuple(ds, e1, e2_) => LetKind::LetTuple(ds, e1, concat(*e2_, e2)),
+            };
+            Box::new(util::Spanned::new(Let(l), e1.loc))
+        },
+        _ => Box::new(e2)
+    }
+}
+
 impl ExprKind {
     fn format_indented(&self, f: &mut fmt::Formatter, level: usize) -> fmt::Result {
         // print indentation

@@ -7,3 +7,4 @@ edition = "2021"
 
 [dependencies]
 global_counter = "0.2.2"
+fnv = "1"

@@ -1,14 +1,14 @@
 [package]
-name = "mcc"
+name = "typing"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-parser = { path = "../parser" }
-typing = { path = "../typing" }
 ast = { path = "../ast" }
-clap = { version = "3.0.0-rc.4", features = [ "derive" ]}
+util = { path = "../util" }
+ty = { path = "../ty" }
 anyhow = "1.0"
-ariadne = "0.1.3"
+thiserror = "1.0"
+log = "0.4.0"

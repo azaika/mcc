@@ -1,5 +1,6 @@
 [workspace]
 members = [
     "mcc",
-    "parser"
+    "parser",
+    "typing"
 ]

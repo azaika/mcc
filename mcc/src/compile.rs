@@ -44,6 +44,31 @@ fn parse_file(path: &str) -> Result<syntax::Expr> {
     })
 }
 
+fn infer(e: syntax::Expr, path: &str) -> Result<syntax::Expr> {
+    typing::infer(e).map_err(|err|{
+        use ariadne::{Report, ReportKind, Label, Source, ColorGenerator, Fmt};
+
+        let src = std::fs::read_to_string(path).context(format!("failed to open file: {}", path)).unwrap();
+
+        let mut colors = ColorGenerator::new();
+
+        // Generate & choose some colours for each of our elements
+        let a = colors.next();
+
+        Report::build(ReportKind::Error, path, err.span.0)
+            .with_code(3)
+            .with_message(err.to_string())
+            .with_label(Label::new((path, err.span.0 .. err.span.1))
+                .with_message(format!("error found {}", "here".fg(a)))
+                .with_color(a))
+            .finish()
+            .print((path, Source::from(src)))
+            .unwrap();
+        
+        anyhow::Error::msg("aborting because of the error above")
+    })
+}
+
 pub fn compile(args : Args) -> Result<()> {
     let parsed_libs = match args.lib {
         None => vec![],
@@ -53,7 +78,16 @@ pub fn compile(args : Args) -> Result<()> {
     };
     let parsed_src = parse_file(&args.source)?;
 
-    println!("{:?}", parsed_libs);
-    println!("{}", parsed_src);
+    // ライブラリを連結
+    let parsed = if let Some(libs) = parsed_libs.into_iter().reduce(|x, y| *syntax::concat(x, y)) {
+        *syntax::concat(libs,parsed_src)
+    }
+    else {
+        parsed_src
+    };
+
+    let typed = infer(parsed, &args.source)?;
+
+    println!("{}", typed);
     Ok(())
 }
