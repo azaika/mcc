@@ -162,44 +162,57 @@ fn infer_impl(e : &Expr, env: &mut Map, extenv: &mut Map) -> Result<Ty, TypeErro
             Ok(t1.clone())
         },
         ExprKind::Let(l) => {
+            fn restore(m: &mut Map, key: &str, t: Option<Ty>) {
+                match t {
+                    Some(t) => m.insert(key.to_string(), t),
+                    None => m.remove(key)
+                };
+            }
+
             use LetKind::*;
             match l {
                 Let(decl, e1, e2) => {
                     unify(&decl.t, &infer_impl(e1, env, extenv)?).map_err(with(e1.loc))?;
-                    env.insert(decl.name.clone(), decl.t.clone());
+                    let s = env.insert(decl.name.clone(), decl.t.clone());
                     let r = infer_impl(e2, env, extenv);
-                    env.remove(&decl.name);
+                    
+                    restore(env, &decl.name, s);
                     r
                 },
                 LetRec(fundef, e) => {
                     let Decl { name, t } = &fundef.fvar;
-                    env.insert(name.clone(), t.clone());
+                    let old_f = env.insert(name.clone(), t.clone());
+
+                    let mut old_args = vec![];
                     for Decl{ name, t} in &fundef.args {
-                        env.insert(name.clone(), t.clone());
+                        old_args.push(env.insert(name.clone(), t.clone()));
                     }
 
                     let fty = Ty::Fun(fundef.args.iter().map(|d| d.t.clone()).collect(), Box::new(infer_impl(&fundef.body, env, extenv)?));
 
                     unify(t, &fty).map_err(with(fundef.body.loc))?;
 
-                    for d in &fundef.args {
-                        env.remove(&d.name);
+                    for (t, d) in old_args.into_iter().zip(&fundef.args) {
+                        restore(env, &d.name, t);
                     }
 
                     let r = infer_impl(e, env, extenv);
-                    env.remove(name);
+                    restore(env, name, old_f);
                     r
                 },
                 LetTuple(ds, e1, e2) => {
                     let t = Ty::Tuple(ds.iter().map(|x| x.t.clone()).collect());
                     unify(&t, &infer_impl(e1, env, extenv)?).map_err(with(e1.loc))?;
 
+                    let mut old_vars = vec![];
                     for Decl{ name, t} in ds {
-                        env.insert(name.clone(), t.clone());
+                        old_vars.push(env.insert(name.clone(), t.clone()));
                     }
+
                     let r = infer_impl(e2, env, extenv);
-                    for d in ds {
-                        env.remove(&d.name);
+                    
+                    for (t, d) in old_vars.into_iter().zip(ds) {
+                        restore(env, &d.name, t);
                     }
                     r
                 },

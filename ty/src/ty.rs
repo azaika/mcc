@@ -44,7 +44,14 @@ impl fmt::Display for Ty {
                 }
                 write!(f, "{}", *ret)
             },
-            Tuple(ts) => util::format_vec(f, &ts, "", " * ", ""),
+            Tuple(ts) => {
+                // cannot use `util::format_vec` because it does not call print_block()
+                ts.first().map_or(Ok(()), |t| t.print_block(f))?;
+                for t in &ts[1..ts.len()] {
+                    write!(f, " * {}", t)?;
+                }
+                Ok(())
+            },
             Array(t) => {
                 t.print_block(f)?;
                 write!(f, " array")

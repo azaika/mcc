@@ -107,7 +107,7 @@ impl ExprKind {
         use ExprKind::*;
         match self {
             Const(c) => write!(f, "{:?}\n", c),
-            Var(v) => write!(f, "Var({})\n", v),
+            Var(v) => write!(f, "Var {}\n", v),
             UnOp(op, e) => {
                 write!(f, "{:?}\n", op)?;
                 e.item.format_indented(f, level + 1)
