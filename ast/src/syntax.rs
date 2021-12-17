@@ -10,6 +10,22 @@ pub enum ConstKind {
     CFloat(f32)
 }
 
+impl From<bool> for ConstKind {
+    fn from(b: bool) -> Self {
+        Self::CBool(b)
+    }
+}
+impl From<i32> for ConstKind {
+    fn from(i: i32) -> Self {
+        Self::CInt(i)
+    }
+}
+impl From<f32> for ConstKind {
+    fn from(f: f32) -> Self {
+        Self::CFloat(f)
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum UnOpKind {
     Neg,

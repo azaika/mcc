@@ -121,9 +121,9 @@ IdArgs: Id = {
 
 Literal: Box<Expr> = {
     <l:@L> "(" ")" <r:@R> => Box::new(Spanned::new(ExprKind::Const(ConstKind::CUnit), (l, r))),
-    <l:@L> <d:Int> <r:@R> => Box::new(Spanned::new(ExprKind::Const(ConstKind::CInt(d)), (l, r))),
-    <l:@L> <f:Float> <r:@R> => Box::new(Spanned::new(ExprKind::Const(ConstKind::CFloat(f)), (l, r))),
-    <l:@L> <b:Bool> <r:@R> => Box::new(Spanned::new(ExprKind::Const(ConstKind::CBool(b)), (l, r)))
+    <l:@L> <d:Int> <r:@R> => Box::new(Spanned::new(ExprKind::Const(d.into()), (l, r))),
+    <l:@L> <f:Float> <r:@R> => Box::new(Spanned::new(ExprKind::Const(f.into()), (l, r))),
+    <l:@L> <b:Bool> <r:@R> => Box::new(Spanned::new(ExprKind::Const(b.into()), (l, r)))
 }
 
 SimpleExpr: Box<Expr> = {
@@ -152,7 +152,7 @@ SubExpr: Box<Expr> = {
         match &e.item {
             ExprKind::Const(c) => {
                 match c {
-                    ConstKind::CFloat(f) => Box::new(Spanned::new(ExprKind::Const(ConstKind::CFloat(-f)), e.loc)),
+                    ConstKind::CFloat(f) => Box::new(Spanned::new(ExprKind::Const((-f).into()), e.loc)),
                     _ => Box::new(Spanned::new(ExprKind::UnOp(UnOpKind::Neg, e), (l, r))),
                 }
             },
