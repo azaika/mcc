@@ -40,11 +40,11 @@ fn parse_file(path: &str) -> Result<syntax::Expr> {
             .print((path, Source::from(src)))
             .unwrap();
         
-        anyhow::Error::msg("aborting because of the error above")
+        anyhow::Error::msg("aborting due to the error above")
     })
 }
 
-fn infer(e: syntax::Expr, path: &str) -> Result<syntax::Expr> {
+fn infer(e: syntax::Expr, path: &str) -> Result<(syntax::Expr, typing::TypeMap)> {
     typing::infer(e).map_err(|err|{
         use ariadne::{Report, ReportKind, Label, Source, ColorGenerator, Fmt};
 
@@ -65,7 +65,7 @@ fn infer(e: syntax::Expr, path: &str) -> Result<syntax::Expr> {
             .print((path, Source::from(src)))
             .unwrap();
         
-        anyhow::Error::msg("aborting because of the error above")
+        anyhow::Error::msg("aborting due to the error above")
     })
 }
 
@@ -86,8 +86,12 @@ pub fn compile(args : Args) -> Result<()> {
         parsed_src
     };
 
-    let typed = infer(parsed, &args.source)?;
+    let (typed, extenv) = infer(parsed, &args.source)?;
 
-    println!("{}", typed);
+    println!("[[typed]]\n{}", typed);
+
+    let knormed = knorm::convert::convert(typed, &extenv)?;
+
+    println!("[[knormed]]\n{}", knormed);
     Ok(())
 }

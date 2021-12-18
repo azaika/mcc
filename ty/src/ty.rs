@@ -1,6 +1,6 @@
 use std::rc::Rc;
 use std::cell::RefCell;
-use std::fmt;
+use std::{fmt, panic};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Ty {
@@ -63,6 +63,19 @@ impl fmt::Display for Ty {
                 }
             }
         }
+    }
+}
+
+pub fn short(t: &Ty) -> &'static str {
+    match t {
+        Ty::Unit => "u",
+        Ty::Bool => "b",
+        Ty::Int => "i",
+        Ty::Float => "d",
+        Ty::Fun(_, _) => "f",
+        Ty::Tuple(_) => "t",
+        Ty::Array(_) => "a",
+        Ty::Var(_) => panic!("Var(_) is not shortable")
     }
 }
 

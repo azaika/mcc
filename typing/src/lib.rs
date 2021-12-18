@@ -17,6 +17,8 @@ pub fn with(span: util::Span) -> impl FnOnce(UnifyError) -> TypeError {
 
 type Map = util::Map<util::Id, Ty>;
 
+pub type TypeMap = Map;
+
 fn check_occur(r: Rc<RefCell<Option<Ty>>>, t: &Ty) -> bool {
     use Ty::*;
     match t {
@@ -210,7 +212,7 @@ fn infer_impl(e : &Expr, env: &mut Map, extenv: &mut Map) -> Result<Ty, TypeErro
                     }
 
                     let r = infer_impl(e2, env, extenv);
-                    
+
                     for (t, d) in old_vars.into_iter().zip(ds) {
                         restore(env, &d.name, t);
                     }
@@ -290,11 +292,14 @@ fn deref_term(e: Expr) -> Box<Expr> {
     Box::new(util::Spanned::new(ek, e.loc))
 }
 
-pub fn infer(mut e : Expr) -> Result<Expr, TypeError> {
+pub fn infer(mut e : Expr) -> Result<(Expr, Map), TypeError> {
     let mut extenv = Map::default();
     let t = infer_impl(&mut e, &mut Map::default(), &mut extenv)?;
 
     unify(&Ty::Unit, &t).map_err(with(e.loc))?;
 
-    Ok(*deref_term(e))
+    for t in extenv.values_mut() {
+        *t = deref_ty(t.clone());
+    }
+    Ok((*deref_term(e), extenv))
 }

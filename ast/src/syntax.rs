@@ -66,6 +66,13 @@ impl Decl {
             t
         }
     }
+
+    pub fn gen_uniq(t: ty::Ty) -> Self {
+        Self {
+            name: util::id::gen_uniq_with(ty::short(&t)),
+            t
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

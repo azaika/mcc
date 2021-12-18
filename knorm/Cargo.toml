@@ -1,0 +1,11 @@
+[package]
+name = "knorm"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+util = { path = "../util" }
+ty = { path = "../ty" }
+ast = { path = "../ast" }
+log = "0.4.0"
+anyhow = "1.0"

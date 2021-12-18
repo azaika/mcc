@@ -9,6 +9,17 @@ pub enum ConstKind {
     CFloat(f32)
 }
 
+impl From<i32> for ConstKind {
+    fn from(i: i32) -> Self {
+        Self::CInt(i)
+    }
+}
+impl From<f32> for ConstKind {
+    fn from(f: f32) -> Self {
+        Self::CFloat(f)
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum UnOpKind {
     Neg,
@@ -43,6 +54,13 @@ impl Decl {
     pub fn new(name : Id, t : ty::Ty) -> Self {
         Self {
             name,
+            t
+        }
+    }
+
+    pub fn gen_uniq(t: ty::Ty) -> Self {
+        Self {
+            name: util::id::gen_uniq_with(ty::short(&t)),
             t
         }
     }
@@ -124,7 +142,7 @@ impl ExprKind {
                     LetTuple(decls, x, e) => {
                         write!(f, "LetTuple ")?;
                         util::format_vec(f, &decls, "(", ", ", ")")?;
-                        write!(f, " = {}\n", x)?;
+                        write!(f, ":\n{}{}\n", indent(level + 1), x)?;
                         e.item.format_indented(f, level)
                     }
                 } 

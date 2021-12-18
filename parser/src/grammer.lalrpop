@@ -232,7 +232,7 @@ Let: Box<Expr> = {
 
 SeqSub: Box<Expr> = {
     <l:@L> <e1:SeqSub> ";" <e2:NoLet> <r:@R> => Box::new(Spanned::new(
-        ExprKind::Let(LetKind::Let(Decl::new(id::gen_uniq(), ty::Ty::Unit), e1, e2)),
+        ExprKind::Let(LetKind::Let(Decl::gen_uniq(ty::Ty::Unit), e1, e2)),
         (l, r)
     )),
     NoLet
@@ -241,7 +241,7 @@ SeqSub: Box<Expr> = {
 pub Expr: Box<Expr> = {
     // Sequence
     <l:@L> <e1:SeqSub> ";" <e2:Let> <r:@R> => Box::new(Spanned::new(
-        ExprKind::Let(LetKind::Let(Decl::new(id::gen_uniq(), ty::Ty::Unit), e1, e2)),
+        ExprKind::Let(LetKind::Let(Decl::gen_uniq(ty::Ty::Unit), e1, e2)),
         (l, r)
     )),
     Let
