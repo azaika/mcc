@@ -205,7 +205,7 @@ SubExpr: Box<Expr> = {
 
     // Array Put
     #[precedence(level="6")]
-    <l:@L> <e1:SimpleExpr> "." "(" <e2:Expr> ")" "<-" <e3:SubExpr> <r:@R> => Box::new(Spanned::new(ExprKind::Put(e1, e2, e3), (l, r))),
+    <l:@L> <e1:SimpleExpr> "." "(" <e2:Expr> ")" "<-" <e3:NoLet> <r:@R> => Box::new(Spanned::new(ExprKind::Put(e1, e2, e3), (l, r))),
 }
 
 NoLet: Box<Expr> = {

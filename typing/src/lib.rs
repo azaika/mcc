@@ -26,11 +26,12 @@ fn check_occur(r: Rc<RefCell<Option<Ty>>>, t: &Ty) -> bool {
         Tuple(a) => a.iter().any(|t| check_occur(r.clone(), t)),
         Array(t) => check_occur(r, t),
         Var(r1) => {
-            if r.as_ptr() == r1.as_ptr() {
+            if Rc::ptr_eq(&r, r1) {
                 return true;
             }
+
             match &*r1.borrow() {
-                Some(r2) => check_occur(r, r2),
+                Some(t2) => check_occur(r, t2),
                 None => false
             }
         },
@@ -60,16 +61,17 @@ fn unify(t1 : &Ty, t2 : &Ty) -> Result<(), UnifyError> {
             Ok(())
         },
         (Array(t1), Array(t2)) => unify(t1, t2),
-        (Var(r1), Var(r2)) if r1.as_ptr() == r2.as_ptr() => Ok(()),
+        (Var(r1), Var(r2)) if Rc::ptr_eq(r1, r2) => Ok(()),
+        (Var(r), t) | (t, Var(r)) if r.borrow().is_some() => {
+            let r1 = r.borrow();
+            let t1 = r1.as_ref().unwrap();
+            unify(t1, t)?;
+            Ok(())
+        },
         (Var(r), t) | (t, Var(r)) => {
-            if let Some(r) = &*r.borrow() {
-                return unify(r, t);
-            }
-            
             if check_occur(r.clone(), t) {
                 return Err(UnifyError(Var(r.clone()), t.clone()));
             }
-            
             *r.borrow_mut() = Some(t.clone());
             Ok(())
         },

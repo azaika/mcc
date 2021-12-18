@@ -143,6 +143,8 @@ fn make_tymap(e: &Expr, env: &mut TyMap) {
     }
 }
 
+// α 変換を行う
+// α 変換後の式と, 変数名から型への対応を返す
 pub fn to_alpha_form(e: Expr) -> (Expr, TyMap) {
     let e = conv(e, &mut Map::default());
 
