@@ -90,7 +90,7 @@ pub fn compile(args : Args) -> Result<()> {
 
     println!("[[typed]]\n{}", typed);
 
-    let knormed = knorm::convert::convert(typed, &extenv)?;
+    let knormed = knorm::convert(typed, &extenv)?;
 
     println!("[[knormed]]\n{}", knormed);
     Ok(())
