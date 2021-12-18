@@ -17,3 +17,17 @@ pub fn gen_uniq_with(s: &str) -> Id {
 
     format!("T{}{}", s, n)
 }
+
+pub fn distinguish(mut x: Id) -> Id {
+    let n = COUNTER.get();
+    COUNTER.inc();
+
+    if let Some(dot) = x.find('.') {
+        x.replace_range((dot+1).., &n.to_string());
+    }
+    else {
+        x += &format!(".{}", n);
+    }
+
+    x
+}

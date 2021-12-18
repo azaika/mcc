@@ -20,3 +20,12 @@ pub fn format_vec<T: fmt::Display>(f: &mut fmt::Formatter, v: &Vec<T>, left: &st
 pub use fnv::FnvHashMap as Map;
 pub use fnv::FnvHashSet as Set;
 
+pub fn restore<V>(m: &mut Map<Id, V>, key: &str, t: Option<V>) {
+    match t {
+        Some(t) => m.insert(key.to_string(), t),
+        None => m.remove(key)
+    };
+}
+
+
+

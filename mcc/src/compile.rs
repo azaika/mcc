@@ -93,5 +93,10 @@ pub fn compile(args : Args) -> Result<()> {
     let knormed = knorm::convert(typed, &extenv)?;
 
     println!("[[knormed]]\n{}", knormed);
+
+    let alpha = knorm::to_alpha_form(knormed)?;
+
+    println!("[[alpha]]\n{}", alpha);
+
     Ok(())
 }
