@@ -39,10 +39,6 @@ fn check_occur(r: Rc<RefCell<Option<Ty>>>, t: &Ty) -> bool {
 }
 
 fn unify(t1 : &Ty, t2 : &Ty) -> Result<(), UnifyError> {
-    if t1 == t2 {
-        return Ok(());
-    }
-
     use Ty::*;
     match (t1, t2) {
         (Fun(a1, r1), Fun(a2, r2)) => {
@@ -64,6 +60,7 @@ fn unify(t1 : &Ty, t2 : &Ty) -> Result<(), UnifyError> {
             Ok(())
         },
         (Array(t1), Array(t2)) => unify(t1, t2),
+        (Var(r1), Var(r2)) if r1.as_ptr() == r2.as_ptr() => Ok(()),
         (Var(r), t) | (t, Var(r)) => {
             if let Some(r) = &*r.borrow() {
                 return unify(r, t);
@@ -76,7 +73,9 @@ fn unify(t1 : &Ty, t2 : &Ty) -> Result<(), UnifyError> {
             *r.borrow_mut() = Some(t.clone());
             Ok(())
         },
-        (t1, t2) => Err(UnifyError(t1.clone(), t2.clone()))
+        (t1, t2) => if t1 == t2 { Ok(()) } else {
+            Err(UnifyError(t1.clone(), t2.clone()))
+        }
     }
 }
 
@@ -90,11 +89,15 @@ fn deref_ty(t: Ty) -> Ty {
         Array(t) => Array(Box::new(deref_ty(*t))),
         Var(t) => {
             match t.take() {
-                Some(t) => deref_ty(t),
+                Some(r) => {
+                    let r = deref_ty(r);
+                    *t.borrow_mut() = Some(r.clone());
+                    r
+                },
                 None => {
                     info!("uninstantiated type variable detected; assuming int.");
                     *t.borrow_mut() = Some(Int);
-                    Var(Rc::new(RefCell::new(Some(Int))))
+                    Int
                 }
             }
         },

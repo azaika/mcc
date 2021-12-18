@@ -9,7 +9,7 @@ fn main() -> Result<()> {
     simplelog::CombinedLogger::init(vec![
         // 標準出力にはWarn以上を表示する。
         simplelog::TermLogger::new(
-            simplelog::LevelFilter::Warn,
+            simplelog::LevelFilter::Info,
             simplelog::Config::default(),
             simplelog::TerminalMode::Mixed,
             simplelog::ColorChoice::Auto

@@ -75,7 +75,7 @@ pub fn short(t: &Ty) -> &'static str {
         Ty::Fun(_, _) => "f",
         Ty::Tuple(_) => "t",
         Ty::Array(_) => "a",
-        Ty::Var(_) => panic!("Var(_) is not shortable")
+        Ty::Var(t) => panic!("Var({:?}) is not shortable", &t.borrow())
     }
 }
 

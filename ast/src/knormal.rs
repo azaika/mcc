@@ -149,17 +149,17 @@ impl ExprKind {
             },
             Tuple(xs) => {
                 write!(f, "Tuple ")?;
-                util::format_vec(f, xs, "(", ",", ")")?;
+                util::format_vec(f, xs, "(", ", ", ")")?;
                 write!(f, "\n")
             },
             App(func, args) => {
                 write!(f, "App {}", func)?;
-                util::format_vec(f, args, "(", ",", ")")?;
+                util::format_vec(f, args, "(", ", ", ")")?;
                 write!(f, "\n")
             },
             ExtApp(func, args) => {
                 write!(f, "ExtApp {}", func)?;
-                util::format_vec(f, args, "(", ",", ")")?;
+                util::format_vec(f, args, "(", ", ", ")")?;
                 write!(f, "\n")
             },
             CreateArray(num, init) => write!(f, "CreateArray {}, {}\n", num, init),
