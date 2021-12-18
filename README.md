@@ -10,3 +10,6 @@ git clone https://github.com/azaika/mcc
 cd mcc
 cargo run
 ```
+
+## Known Bug
+- When comments include multi-byte strings, compiler emits wrong report about location in source file 

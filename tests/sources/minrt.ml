@@ -1532,8 +1532,6 @@ let rec get_surface_id pixel index =
   surface_ids.(index)
 in
 
-(* 上下左右4点の直接光追跡の結果、自分と同じ面に衝突しているかをチェック
-   もし同じ面に衝突していれば、これら4点の結果を使うことで計算を省略出来る *)
 let rec neighbors_are_available x prev cur next nref =
   let sid_center = get_surface_id cur.(x) nref in
 
@@ -1548,37 +1546,25 @@ let rec neighbors_are_available x prev cur next nref =
   else false
 in
 
-(* 直接光の各衝突点における間接受光の強さを、上下左右4点の結果を使用して計算
-   する。もし上下左右4点の計算結果を使えない場合は、その時点で
-   do_without_neighborsに切り替える *)
-
 let rec try_exploit_neighbors x y prev cur next nref =
   let pixel = cur.(x) in
   if nref <= 4 then
 
-    (* 衝突面番号が有効(非負)か *)
     if get_surface_id pixel nref >= 0 then
-      (* 周囲4点を補完に使えるか *)
       if neighbors_are_available x prev cur next nref then (
 
-	(* 間接受光を計算するフラグが立っていれば実際に計算する *)
 	let calc_diffuse = p_calc_diffuse pixel in
         if calc_diffuse.(nref) then
 	  calc_diffuse_using_5points x prev cur next nref
 	else ();
 
-	(* 次の反射衝突点へ *)
 	try_exploit_neighbors x y prev cur next (nref + 1)
       ) else
-	(* 周囲4点を補完に使えないので、これらを使わない方法に切り替える *)
 	do_without_neighbors cur.(x) nref
     else ()
   else ()
 in
 
-(******************************************************************************
-   PPMファイルの書き込み関数
- *****************************************************************************)
 let rec write_ppm_header _ =
   (
     print_char 80; (* 'P' *)
@@ -1608,14 +1594,6 @@ let rec write_rgb _ =
    print_char 10
 in
 
-(******************************************************************************
-   あるラインの計算に必要な情報を集めるため次のラインの追跡を行っておく関数群
- *****************************************************************************)
-
-(* 間接光のサンプリングでは上下左右4点の結果を使うので、次のラインの計算を
-   行わないと最終的なピクセルの値を計算できない *)
-
-(* 間接光を 60本(20%)だけ計算しておく関数 *)
 let rec pretrace_diffuse_rays pixel nref =
   if nref <= 4 then
 
@@ -1628,8 +1606,6 @@ let rec pretrace_diffuse_rays pixel nref =
 	let group_id = p_group_id pixel in
 	vecbzero diffuse_ray;
 
-	(* 5つの方向ベクトル集合(各60本)から自分のグループIDに対応する物を
-	   一つ選んで追跡 *)
 	let nvectors = p_nvectors pixel in
 	let intersection_points = p_intersection_points pixel in
 	trace_diffuse_rays
@@ -1644,8 +1620,6 @@ let rec pretrace_diffuse_rays pixel nref =
   else ()
 in
 
-(* 各ピクセルに対して直接光追跡と間接受光の20%分の計算を行う *)
-
 let rec pretrace_pixels line x group_id lc0 lc1 lc2 =
   if x >= 0 then (
 
@@ -1657,12 +1631,10 @@ let rec pretrace_pixels line x group_id lc0 lc1 lc2 =
     vecbzero rgb;
     veccpy startp viewpoint;
 
-    (* 直接光追跡 *)
     trace_ray 0 1.0 ptrace_dirvec line.(x) 0.0;
     veccpy (p_rgb line.(x)) rgb;
     p_set_group_id line.(x) group_id;
 
-    (* 間接光の20%を追跡 *)
     pretrace_diffuse_rays line.(x) 0;
 
     pretrace_pixels line (x-1) (add_mod5 group_id 1) lc0 lc1 lc2
@@ -1670,36 +1642,24 @@ let rec pretrace_pixels line x group_id lc0 lc1 lc2 =
    ) else ()
 in
 
-(* あるラインの各ピクセルに対し直接光追跡と間接受光20%分の計算をする *)
 let rec pretrace_line line y group_id =
   let ydisp = scan_pitch.(0) *. float_of_int (y - image_center.(1)) in
 
-  (* ラインの中心に向かうベクトルを計算 *)
   let lc0 = ydisp *. screeny_dir.(0) +. screenz_dir.(0) in
   let lc1 = ydisp *. screeny_dir.(1) +. screenz_dir.(1) in
   let lc2 = ydisp *. screeny_dir.(2) +. screenz_dir.(2) in
   pretrace_pixels line (image_size.(0) - 1) group_id lc0 lc1 lc2
 in
 
-
-(******************************************************************************
-   直接光追跡と間接光20%追跡の結果から最終的なピクセル値を計算する関数
- *****************************************************************************)
-
-(* 各ピクセルの最終的なピクセル値を計算 *)
 let rec scan_pixel x y prev cur next =
   if x < image_size.(0) then (
 
-    (* まず、直接光追跡で得られたRGB値を得る *)
     veccpy rgb (p_rgb cur.(x));
 
-    (* 次に、直接光の各衝突点について、間接受光による寄与を加味する *)
     if neighbors_exist x y next then
       try_exploit_neighbors x y prev cur next 0
     else
       do_without_neighbors cur.(x) 0;
-
-    (* 得られた値をPPMファイルに出力 *)
     write_rgb ();
 
     scan_pixel (x + 1) y prev cur next
@@ -1720,11 +1680,6 @@ let rec scan_line y prev cur next group_id = (
 )
 in
 
-(******************************************************************************
-   ピクセルの情報を格納するデータ構造の割り当て関数群
- *****************************************************************************)
-
-(* 3次元ベクトルの5要素配列を割り当て *)
 let rec create_float5x3array _ = (
   let vec = Array.make 3 0.0 in
   let array = Array.make 5 vec in
@@ -1735,8 +1690,6 @@ let rec create_float5x3array _ = (
   array
 )
 in
-
-(* ピクセルを表すtupleを割り当て *)
 let rec create_pixel _ =
   let m_rgb = Array.make 3 0.0 in
   let m_isect_ps = create_float5x3array() in
@@ -1749,7 +1702,6 @@ let rec create_pixel _ =
   (m_rgb, m_isect_ps, m_sids, m_cdif, m_engy, m_r20p, m_gid, m_nvectors)
 in
 
-(* 横方向1ライン中の各ピクセル要素を割り当てる *)
 let rec init_line_elements line n =
   if n >= 0 then (
     line.(n) <- create_pixel();
@@ -1758,26 +1710,15 @@ let rec init_line_elements line n =
     line
 in
 
-(* 横方向1ライン分のピクセル配列を作る *)
 let rec create_pixelline _ =
   let line = Array.make image_size.(0) (create_pixel()) in
   init_line_elements line (image_size.(0)-2)
 in
 
-(******************************************************************************
-   間接光のサンプリングにつかう方向ベクトル群を計算する関数群
- *****************************************************************************)
-
-(* ベクトル達が出来るだけ一様に分布するよう、600本の方向ベクトルの向きを定める
-   立方体上の各面に100本ずつ分布させ、さらに、100本が立方体上の面上で10 x 10 の
-   格子状に並ぶような配列を使う。この配列では方角によるベクトルの密度の差が
-   大きいので、これに補正を加えたものを最終的に用いる *)
-
 let rec tan x =
   sin(x) /. cos(x)
 in
 
-(* ベクトル達が出来るだけ球面状に一様に分布するよう座標を補正する *)
 let rec adjust_position h ratio =
   let l = sqrt(h*.h +. 0.1) in
   let tan_h = 1.0 /. l in
@@ -1786,7 +1727,6 @@ let rec adjust_position h ratio =
   tan_m *. l
 in
 
-(* ベクトル達が出来るだけ球面状に一様に分布するような向きを計算する *)
 let rec calc_dirvec icount x y rx ry group_id index =
   if icount >= 5 then (
     let l = sqrt(fsqr x +. fsqr y +. 1.0) in
@@ -1794,7 +1734,6 @@ let rec calc_dirvec icount x y rx ry group_id index =
     let vy = y /. l in
     let vz = 1.0 /. l in
 
-    (* 立方体的に対称に分布させる *)
     let dgroup = dirvecs.(group_id) in
     vecset (d_vec dgroup.(index))    vx vy vz;
     vecset (d_vec dgroup.(index+40)) vx vz (fneg vy);
@@ -1807,33 +1746,26 @@ let rec calc_dirvec icount x y rx ry group_id index =
     calc_dirvec (icount + 1) x2 (adjust_position x2 ry) rx ry group_id index
 in
 
-(* 立方体上の 10x10格子の行中の各ベクトルを計算する *)
 let rec calc_dirvecs col ry group_id index =
   if col >= 0 then (
     (* 左半分 *)
-    let rx = (float_of_int col) *. 0.2 -. 0.9 in (* 列の座標 *)
+    let rx = (float_of_int col) *. 0.2 -. 0.9 in
     calc_dirvec 0 0.0 0.0 rx ry group_id index;
     (* 右半分 *)
-    let rx2 = (float_of_int col) *. 0.2 +. 0.1 in (* 列の座標 *)
+    let rx2 = (float_of_int col) *. 0.2 +. 0.1 in 
     calc_dirvec 0 0.0 0.0 rx2 ry group_id (index + 2);
 
     calc_dirvecs (col - 1) ry (add_mod5 group_id 1) index
    ) else ()
 in
 
-(* 立方体上の10x10格子の各行に対しベクトルの向きを計算する *)
 let rec calc_dirvec_rows row group_id index =
   if row >= 0 then (
-    let ry = (float_of_int row) *. 0.2 -. 0.9 in (* 行の座標 *)
-    calc_dirvecs 4 ry group_id index; (* 一行分計算 *)
+    let ry = (float_of_int row) *. 0.2 -. 0.9 in
+    calc_dirvecs 4 ry group_id index;
     calc_dirvec_rows (row - 1) (add_mod5 group_id 2) (index + 4)
    ) else ()
 in
-
-(******************************************************************************
-   dirvec のメモリ割り当てを行う
- *****************************************************************************)
-
 
 let rec create_dirvec _ =
   let v3 = Array.make 3 0.0 in
@@ -1856,10 +1788,6 @@ let rec create_dirvecs index =
    ) else ()
 in
 
-(******************************************************************************
-   補助関数達を呼び出してdirvecの初期化を行う
- *****************************************************************************)
-
 let rec init_dirvec_constants vecset index =
   if index >= 0 then (
     setup_dirvec_constants vecset.(index);
@@ -1880,20 +1808,14 @@ let rec init_dirvecs _ =
   init_vecset_constants 4
 in
 
-(******************************************************************************
-   完全鏡面反射成分を持つ物体の反射情報を初期化する
- *****************************************************************************)
-
-(* 反射平面を追加する *)
 let rec add_reflection index surface_id bright v0 v1 v2 =
   let dvec = create_dirvec() in
-  vecset (d_vec dvec) v0 v1 v2; (* 反射光の向き *)
+  vecset (d_vec dvec) v0 v1 v2;
   setup_dirvec_constants dvec;
 
   reflections.(index) <- (surface_id, dvec, bright)
 in
 
-(* 直方体の各面について情報を追加する *)
 let rec setup_rect_reflection obj_id obj =
   let sid = obj_id * 4 in
   let nr = n_reflections.(0) in
@@ -1907,7 +1829,6 @@ let rec setup_rect_reflection obj_id obj =
   n_reflections.(0) <- nr + 3
 in
 
-(* 平面について情報を追加する *)
 let rec setup_surface_reflection obj_id obj =
   let sid = obj_id * 4 + 1 in
   let nr = n_reflections.(0) in
@@ -1921,15 +1842,12 @@ let rec setup_surface_reflection obj_id obj =
   n_reflections.(0) <- nr + 1
 in
 
-
-(* 各オブジェクトに対し、反射する平面があればその情報を追加する *)
 let rec setup_reflections obj_id =
   if obj_id >= 0 then
     let obj = objects.(obj_id) in
     if o_reflectiontype obj = 2 then
       if fless (o_diffuse obj) 1.0 then
 	let m_shape = o_form obj in
-	(* 直方体と平面のみサポート *)
 	if m_shape = 1 then
 	  setup_rect_reflection obj_id obj
 	else if m_shape = 2 then
@@ -1940,11 +1858,6 @@ let rec setup_reflections obj_id =
   else ()
 in
 
-(*****************************************************************************
-   全体の制御
- *****************************************************************************)
-
-(* レイトレの各ステップを行う関数を順次呼び出す *)
 let rec rt size_x size_y =
 (
  image_size.(0) <- size_x;
