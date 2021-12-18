@@ -100,5 +100,14 @@ pub fn compile(args : Args) -> Result<()> {
 
     println!("[[tyenv]]\n{:#?}", _tyenv);
 
+    let _beta = if args.optimize {
+        let beta = knorm::beta_reduction(alpha);
+        println!("[[beta]]\n{}", beta);
+        beta
+    }
+    else {
+        alpha
+    };
+
     Ok(())
 }
