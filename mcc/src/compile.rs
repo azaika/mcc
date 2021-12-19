@@ -1,15 +1,15 @@
 use anyhow::{Result, Context};
 use clap::Parser;
 
-use ast::syntax;
+use ast::*;
 use ariadne;
 
 #[derive(Debug, Parser)]
 pub struct Args {
     #[clap(long, default_value_t=200)]
-    pub inline: i32,
+    pub inline: usize,
     #[clap(long, default_value_t=100)]
-    pub loop_opt: i32,
+    pub loop_opt: usize,
     #[clap(short, long)]
     pub optimize: bool,
     #[clap(short, long)]
@@ -69,6 +69,17 @@ fn infer(e: syntax::Expr, path: &str) -> Result<(syntax::Expr, typing::TypeMap)>
     })
 }
 
+fn optimize_knorm(mut e: knormal::Expr, tyenv: &mut knorm::TyMap, num_loop: usize) -> knormal::Expr {
+    for _ in 0..num_loop {
+        let flt = knorm::flatten_let(e);
+        let beta = knorm::beta_reduction(flt, tyenv);
+
+        e = beta;
+    }
+    
+    e
+}
+
 pub fn compile(args : Args) -> Result<()> {
     let parsed_libs = match args.lib {
         None => vec![],
@@ -88,22 +99,30 @@ pub fn compile(args : Args) -> Result<()> {
 
     let (typed, extenv) = infer(parsed, &args.source)?;
 
-    println!("[[typed]]\n{}", typed);
+    if args.verbose {
+        println!("[[typed]]\n{}", typed);
+    }
 
     let knormed = knorm::convert(typed, &extenv)?;
 
-    println!("[[knormed]]\n{}", knormed);
+    if args.verbose {
+        println!("[[knormed]]\n{}", knormed);
+    }
 
     let (alpha, mut tyenv) = knorm::to_alpha_form(knormed);
 
-    println!("[[alpha]]\n{}", alpha);
+    if args.verbose {
+        println!("[[alpha]]\n{}", alpha);
+    }
 
-    println!("[[tyenv]]\n{:#?}", tyenv);
-
-    let _beta = if args.optimize {
-        let beta = knorm::beta_reduction(alpha, &mut tyenv);
-        println!("[[beta]]\n{}", beta);
-        beta
+    let _opt_knorm = if args.optimize {
+        let r = optimize_knorm(alpha, &mut tyenv, args.loop_opt);
+        
+        if args.verbose {
+            println!("[[optimized_knorm]]\n{}", r);
+        }
+        
+        r
     }
     else {
         alpha

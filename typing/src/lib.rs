@@ -65,8 +65,7 @@ fn unify(t1 : &Ty, t2 : &Ty) -> Result<(), UnifyError> {
         (Var(r), t) | (t, Var(r)) if r.borrow().is_some() => {
             let r1 = r.borrow();
             let t1 = r1.as_ref().unwrap();
-            unify(t1, t)?;
-            Ok(())
+            unify(t1, t)
         },
         (Var(r), t) | (t, Var(r)) => {
             if check_occur(r.clone(), t) {
