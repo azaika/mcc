@@ -1,6 +1,7 @@
 use std::fmt;
 
 use util::{Spanned, Id};
+use ty::syntax as ty;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ConstKind {

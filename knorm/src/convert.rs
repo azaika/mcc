@@ -2,11 +2,13 @@ use anyhow::Context;
 use anyhow::Result;
 
 use ast::{syntax, knormal};
-use ty::Ty;
+use ty::syntax::Ty;
 use util::Id;
 use util::Map as FnvMap;
 use util::Spanned;
 use knormal::*;
+
+use ty::syntax::short;
 
 type Map = FnvMap<util::Id, Ty>;
 
@@ -18,7 +20,7 @@ fn insert_let<F: FnOnce(Id) -> (ExprKind, Ty)>(e: Expr, t: Ty, loc: util::Span, 
     match e.item {
         ExprKind::Var(x) => k(x),
         _ => {
-            let x = util::id::gen_uniq_with(ty::short(&t));
+            let x = util::id::gen_uniq_with(short(&t));
             let (e2, t2) = k(x.clone());
             let kind = LetKind::Let(Decl::new(x, t), Box::new(e), Box::new(Spanned::new(e2, loc)));
             (ExprKind::Let(kind), t2)

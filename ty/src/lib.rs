@@ -1,3 +1,2 @@
-pub mod ty;
-
-pub use crate::ty::*;
+pub mod syntax;
+pub mod knormal;

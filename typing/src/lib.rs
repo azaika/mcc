@@ -5,7 +5,7 @@ use std::{cell::RefCell, rc::Rc};
 use log::info;
 
 use ast::syntax::*;
-use ty::Ty;
+use ty::syntax::Ty;
 
 pub fn with(span: util::Span) -> impl FnOnce(UnifyError) -> TypeError {
     move |err: UnifyError| TypeError {

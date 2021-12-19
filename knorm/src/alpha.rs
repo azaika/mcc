@@ -1,7 +1,7 @@
 use util::Map as FnvMap;
 use util::{Id, Spanned, id};
 
-use ty::Ty;
+use ty::syntax::Ty;
 
 type Map = FnvMap<Id, Id>;
 pub type TyMap = FnvMap<Id, Ty>;

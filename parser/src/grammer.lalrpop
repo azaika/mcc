@@ -3,6 +3,8 @@ use ast::syntax::*;
 use crate::token::Token;
 use crate::error::LexError;
 
+use ty::syntax::*;
+
 grammar;
 extern {
     type Location = usize;
@@ -58,7 +60,7 @@ extern {
 // : let , let rec
 
 LetDecl: LetKind = {
-    <x:Ident> "=" <e1:Expr> "in" <e2:Expr> => LetKind::Let(Decl::new(x, ty::Ty::new_var()), e1, e2),
+    <x:Ident> "=" <e1:Expr> "in" <e2:Expr> => LetKind::Let(Decl::new(x, Ty::new_var()), e1, e2),
     "(" <e1:Pat> ")" "=" <e2:Expr> "in" <e3:Expr> => LetKind::LetTuple(e1, e2, e3),
     "rec" <f:Fun> "in" <cont:Expr> => LetKind::LetRec(f, cont),
 };
@@ -72,16 +74,16 @@ Elems: Vec<Expr> = {
 };
 Pat: Vec<Decl> = {
     <mut p:Pat> "," <x:Ident> => {
-        p.push(Decl::new(x, ty::Ty::new_var()));
+        p.push(Decl::new(x, Ty::new_var()));
         p
     },
-    <x:Ident> "," <y:Ident> => vec![Decl::new(x, ty::Ty::new_var()), Decl::new(y, ty::Ty::new_var())],
+    <x:Ident> "," <y:Ident> => vec![Decl::new(x, Ty::new_var()), Decl::new(y, Ty::new_var())],
 };
 
 Fun : Fundef = {
     <n:Ident> <args:FormalArgs> "=" <body:Expr> => 
         Fundef {
-            fvar: Decl::new(n, ty::Ty::new_var()),
+            fvar: Decl::new(n, Ty::new_var()),
             args: args,
             body: body,
         },
@@ -95,10 +97,10 @@ ActualArgs: Vec<Expr> = {
 };
 FormalArgs : Vec<Decl> = {
     <mut v:FormalArgs> <a:IdArgs> => {
-        v.push(Decl::new(a, ty::Ty::new_var()));
+        v.push(Decl::new(a, Ty::new_var()));
         v
     },
-    <a:IdArgs> => vec![Decl::new(a, ty::Ty::new_var())],
+    <a:IdArgs> => vec![Decl::new(a, Ty::new_var())],
 };
 
 TermOp : BinOpKind = {
@@ -232,7 +234,7 @@ Let: Box<Expr> = {
 
 SeqSub: Box<Expr> = {
     <l:@L> <e1:SeqSub> ";" <e2:NoLet> <r:@R> => Box::new(Spanned::new(
-        ExprKind::Let(LetKind::Let(Decl::gen_uniq(ty::Ty::Unit), e1, e2)),
+        ExprKind::Let(LetKind::Let(Decl::gen_uniq(Ty::Unit), e1, e2)),
         (l, r)
     )),
     NoLet
@@ -241,7 +243,7 @@ SeqSub: Box<Expr> = {
 pub Expr: Box<Expr> = {
     // Sequence
     <l:@L> <e1:SeqSub> ";" <e2:Let> <r:@R> => Box::new(Spanned::new(
-        ExprKind::Let(LetKind::Let(Decl::gen_uniq(ty::Ty::Unit), e1, e2)),
+        ExprKind::Let(LetKind::Let(Decl::gen_uniq(Ty::Unit), e1, e2)),
         (l, r)
     )),
     Let
