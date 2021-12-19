@@ -2,6 +2,7 @@ mod convert;
 mod alpha;
 mod beta;
 mod flatten;
+pub mod inlining;
 
 pub use convert::convert;
 pub use alpha::to_alpha_form;

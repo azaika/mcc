@@ -33,14 +33,14 @@ fn is_comparator(op: &syntax::BinOpKind) -> bool {
     }
 }
 
-fn conv(e: syntax::Expr, env: &mut Map, extenv: &Map) -> Result<(Box<knormal::Expr>, Ty)> {
+fn conv(e: Box<syntax::Expr>, env: &mut Map, extenv: &Map) -> Result<(Box<knormal::Expr>, Ty)> {
     macro_rules! lift {
         ($kind: expr) => {
-            Spanned::new($kind, e.loc)
+            Box::new(Spanned::new($kind, e.loc))
         }
     }
 
-    let kind = match e.item {
+    let (kind, t) = match e.item {
         syntax::ExprKind::Const(c) => {
             let (kind, t) = match c {
                 syntax::ConstKind::CUnit => (ConstKind::CUnit, Ty::Unit),
@@ -70,8 +70,8 @@ fn conv(e: syntax::Expr, env: &mut Map, extenv: &Map) -> Result<(Box<knormal::Ex
             return conv(
                 lift!(syntax::ExprKind::If(
                     e,
-                    Box::new(lift!(syntax::ExprKind::Const(false.into()))),
-                    Box::new(lift!(syntax::ExprKind::Const(true.into()))))
+                    lift!(syntax::ExprKind::Const(false.into())),
+                    lift!(syntax::ExprKind::Const(true.into())))
                 ),
                 env,
                 extenv
@@ -84,7 +84,7 @@ fn conv(e: syntax::Expr, env: &mut Map, extenv: &Map) -> Result<(Box<knormal::Ex
                 _ => unreachable!()
             };
 
-            let (e_, t_) = conv(*e_, env, extenv)?;
+            let (e_, t_) = conv(e_, env, extenv)?;
 
             insert_let(*e_, t_, e.loc, |x| (ExprKind::UnOp(op, x), t))
         },
@@ -92,9 +92,9 @@ fn conv(e: syntax::Expr, env: &mut Map, extenv: &Map) -> Result<(Box<knormal::Ex
             // if {e} then true else false に変換
             return conv(
                 lift!(syntax::ExprKind::If(
-                    Box::new(lift!(syntax::ExprKind::BinOp(op, e1, e2))),
-                    Box::new(lift!(syntax::ExprKind::Const(true.into()))),
-                    Box::new(lift!(syntax::ExprKind::Const(false.into()))))
+                    lift!(syntax::ExprKind::BinOp(op, e1, e2)),
+                    lift!(syntax::ExprKind::Const(true.into())),
+                    lift!(syntax::ExprKind::Const(false.into())))
                 ),
                 env,
                 extenv
@@ -113,8 +113,8 @@ fn conv(e: syntax::Expr, env: &mut Map, extenv: &Map) -> Result<(Box<knormal::Ex
                 _ => unreachable!()
             };
 
-            let (e1, t1) = conv(*e1, env, extenv)?;
-            let (e2, t2) = conv(*e2, env, extenv)?;
+            let (e1, t1) = conv(e1, env, extenv)?;
+            let (e2, t2) = conv(e2, env, extenv)?;
 
             insert_let(*e1, t1, e.loc, |x|
                 insert_let(*e2, t2, e.loc, |y|
@@ -130,10 +130,10 @@ fn conv(e: syntax::Expr, env: &mut Map, extenv: &Map) -> Result<(Box<knormal::Ex
                         syntax::BinOpKind::LE => IfKind::IfLE,
                         _ => unreachable!()
                     };
-                    let (e1, t) = conv(*e1, env, extenv)?;
-                    let (e2, _) = conv(*e2, env, extenv)?;
-                    let (e3, t3) = conv(*e3, env, extenv)?;
-                    let (e4, t4) = conv(*e4, env, extenv)?;
+                    let (e1, t) = conv(e1, env, extenv)?;
+                    let (e2, _) = conv(e2, env, extenv)?;
+                    let (e3, t3) = conv(e3, env, extenv)?;
+                    let (e4, t4) = conv(e4, env, extenv)?;
 
                     insert_let(*e3, t3, e.loc, |x|
                         insert_let(*e4, t4, e.loc, |y|
@@ -146,13 +146,13 @@ fn conv(e: syntax::Expr, env: &mut Map, extenv: &Map) -> Result<(Box<knormal::Ex
                     // {cond} = false なのは 0 の分岐は最適化できうるから
                     return conv(
                         lift!(syntax::ExprKind::If(
-                            Box::new(lift!(syntax::ExprKind::BinOp(
+                            lift!(syntax::ExprKind::BinOp(
                                 syntax::BinOpKind::Eq,
                                 cond,
-                                Box::new(lift!(syntax::ExprKind::Const(false.into())))
-                            ))),
-                            Box::new(*e2),
-                            Box::new(*e1)
+                                lift!(syntax::ExprKind::Const(false.into()))
+                            )),
+                            e2,
+                            e1
                         )),
                         env,
                         extenv
@@ -170,10 +170,10 @@ fn conv(e: syntax::Expr, env: &mut Map, extenv: &Map) -> Result<(Box<knormal::Ex
 
             match l {
                 syntax::LetKind::Let(decl, e1, e2) => {
-                    let (e1, _) = conv(*e1, env, extenv)?;
+                    let (e1, _) = conv(e1, env, extenv)?;
 
                     let s = env.insert(decl.name.clone(), decl.t.clone());
-                    let (e2, t2) =  conv(*e2, env, extenv)?;
+                    let (e2, t2) =  conv(e2, env, extenv)?;
 
                     restore(env, &decl.name, s);
                     
@@ -184,14 +184,14 @@ fn conv(e: syntax::Expr, env: &mut Map, extenv: &Map) -> Result<(Box<knormal::Ex
 
                     let old_f = env.insert(decl.name.clone(), decl.t.clone());
 
-                    let (e2, t2) =  conv(*e2, env, extenv)?;
+                    let (e2, t2) =  conv(e2, env, extenv)?;
 
                     let mut old_args = vec![];
                     for syntax::Decl{ name, t} in &fundef.args {
                         old_args.push(env.insert(name.clone(), t.clone()));
                     }
 
-                    let (body, _) =  conv(*fundef.body, env, extenv)?;
+                    let (body, _) =  conv(fundef.body, env, extenv)?;
 
                     for (t, d) in old_args.into_iter().zip(&fundef.args) {
                         restore(env, &d.name, t);
@@ -207,14 +207,14 @@ fn conv(e: syntax::Expr, env: &mut Map, extenv: &Map) -> Result<(Box<knormal::Ex
                     (ExprKind::Let(LetKind::LetRec(fundef, e2)), t2)
                 },
                 syntax::LetKind::LetTuple(ds, e1, e2) => {
-                    let (e1, t1) = conv(*e1, env, extenv)?;
+                    let (e1, t1) = conv(e1, env, extenv)?;
 
                     let mut old_vars = vec![];
                     for syntax::Decl{ name, t} in &ds {
                         old_vars.push(env.insert(name.clone(), t.clone()));
                     }
 
-                    let (e2, t2) = conv(*e2, env, extenv)?;
+                    let (e2, t2) = conv(e2, env, extenv)?;
 
                     for (t, d) in old_vars.into_iter().zip(&ds) {
                         restore(env, &d.name, t);
@@ -232,7 +232,7 @@ fn conv(e: syntax::Expr, env: &mut Map, extenv: &Map) -> Result<(Box<knormal::Ex
             let mut conv_es = vec![];
             conv_es.reserve(n);
             for e in es {
-                conv_es.push(conv(e, env, extenv)?);
+                conv_es.push(conv(Box::new(e), env, extenv)?);
             }
             let es = conv_es;
 
@@ -266,7 +266,7 @@ fn conv(e: syntax::Expr, env: &mut Map, extenv: &Map) -> Result<(Box<knormal::Ex
             let mut conv_args = vec![];
             conv_args.reserve(n);
             for arg in args {
-                conv_args.push(conv(arg, env, extenv)?);
+                conv_args.push(conv(Box::new(arg), env, extenv)?);
             }
             let args = conv_args;
 
@@ -286,7 +286,7 @@ fn conv(e: syntax::Expr, env: &mut Map, extenv: &Map) -> Result<(Box<knormal::Ex
                     }
                 },
                 _ => {
-                    let (f, tf) = conv(*f, env, extenv)?;
+                    let (f, tf) = conv(f, env, extenv)?;
                     let t = match &tf {
                         Ty::Fun(_, t) => (**t).clone(),
                         _ => panic!()
@@ -309,8 +309,8 @@ fn conv(e: syntax::Expr, env: &mut Map, extenv: &Map) -> Result<(Box<knormal::Ex
             )(Vec::with_capacity(n))
         },
         syntax::ExprKind::Array(e1, e2) => {
-            let (e1, t1) = conv(*e1, env, extenv)?;
-            let (e2, t2) = conv(*e2, env, extenv)?;
+            let (e1, t1) = conv(e1, env, extenv)?;
+            let (e2, t2) = conv(e2, env, extenv)?;
 
             let t = Ty::Array(Box::new(t2.clone()));
 
@@ -321,8 +321,8 @@ fn conv(e: syntax::Expr, env: &mut Map, extenv: &Map) -> Result<(Box<knormal::Ex
             )
         },
         syntax::ExprKind::Get(e1, e2) => {
-            let (e1, t1) = conv(*e1, env, extenv)?;
-            let (e2, t2) = conv(*e2, env, extenv)?;
+            let (e1, t1) = conv(e1, env, extenv)?;
+            let (e2, t2) = conv(e2, env, extenv)?;
 
             let t = match &t1 {
                 Ty::Array(t) => (**t).clone(),
@@ -336,9 +336,9 @@ fn conv(e: syntax::Expr, env: &mut Map, extenv: &Map) -> Result<(Box<knormal::Ex
             )
         },
         syntax::ExprKind::Put(e1, e2, e3) => {
-            let (e1, t1) = conv(*e1, env, extenv)?;
-            let (e2, t2) = conv(*e2, env, extenv)?;
-            let (e3, t3) = conv(*e3, env, extenv)?;
+            let (e1, t1) = conv(e1, env, extenv)?;
+            let (e2, t2) = conv(e2, env, extenv)?;
+            let (e3, t3) = conv(e3, env, extenv)?;
 
             let t = t3.clone();
 
@@ -352,11 +352,11 @@ fn conv(e: syntax::Expr, env: &mut Map, extenv: &Map) -> Result<(Box<knormal::Ex
         }
     };
 
-    Ok((Box::new(Spanned::new(kind.0, e.loc)), kind.1))
+    Ok((Box::new(Spanned::new(kind, e.loc)), t))
 }
 
 pub fn convert(e: syntax::Expr, extenv: &Map) -> Result<knormal::Expr> {
-    conv(e, &mut Map::default(), extenv)
+    conv(Box::new(e), &mut Map::default(), extenv)
         .map(|x| *x.0)
         .context("error occurred in converting process to KNormal form")
 }
