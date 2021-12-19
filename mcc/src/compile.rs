@@ -94,14 +94,14 @@ pub fn compile(args : Args) -> Result<()> {
 
     println!("[[knormed]]\n{}", knormed);
 
-    let (alpha, _tyenv) = knorm::to_alpha_form(knormed);
+    let (alpha, mut tyenv) = knorm::to_alpha_form(knormed);
 
     println!("[[alpha]]\n{}", alpha);
 
-    println!("[[tyenv]]\n{:#?}", _tyenv);
+    println!("[[tyenv]]\n{:#?}", tyenv);
 
     let _beta = if args.optimize {
-        let beta = knorm::beta_reduction(alpha);
+        let beta = knorm::beta_reduction(alpha, &mut tyenv);
         println!("[[beta]]\n{}", beta);
         beta
     }
