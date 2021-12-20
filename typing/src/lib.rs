@@ -125,7 +125,7 @@ fn infer_impl(e : &Expr, env: &mut Map, extenv: &mut Map) -> Result<Ty, TypeErro
                 Ok(t.clone())
             }
             else {
-                info!("free variable `{}` assumed as external.\n", v);
+                info!("free variable `{}` assumed as external.", v);
                 let t = Ty::new_var();
                 extenv.insert(v.clone(), t.clone());
                 Ok(t)

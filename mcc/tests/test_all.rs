@@ -15,7 +15,7 @@ fn dummy_arg(path: &str) -> Args {
         loop_opt: 200,
         optimize: true,
         verbose: false,
-        lib: Some(vec!["../tests/libs/globals.ml".to_string(), "../tests/libs/libmincaml.ml".to_string()]),
+        lib: Some(vec!["../tests/libs/globals.ml".to_string(), "../tests/libs/stdlib.ml".to_string()]),
         source: path.to_string()
     }
 }
