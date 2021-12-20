@@ -71,10 +71,9 @@ fn infer(e: syntax::Expr, path: &str) -> Result<(syntax::Expr, typing::TypeMap)>
 
 fn optimize_knorm(mut e: knormal::Expr, tyenv: &mut knorm::TyMap, num_loop: usize) -> knormal::Expr {
     for _ in 0..num_loop {
-        let flt = knorm::flatten_let(e);
-        let beta = knorm::beta_reduction(flt, tyenv);
-
-        e = beta;
+        e = knorm::fold_const(e, tyenv);
+        e = knorm::flatten_let(e);
+        e = knorm::beta_reduction(e, tyenv);
     }
     
     e
@@ -117,7 +116,7 @@ pub fn compile(args : Args) -> Result<()> {
 
     let _opt_knorm = if args.optimize {
         let r = optimize_knorm(alpha, &mut tyenv, args.loop_opt);
-        
+
         if args.verbose {
             println!("[[optimized_knorm]]\n{}", r);
         }

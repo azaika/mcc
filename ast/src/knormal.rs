@@ -2,7 +2,7 @@ use std::fmt;
 
 use util::{Spanned, Id};
 
-use ty::syntax as ty;
+use ty::knormal as ty;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ConstKind {
@@ -80,6 +80,23 @@ pub enum LetKind {
     Let(Decl, Box<Expr>, Box<Expr>),
     LetRec(Fundef, Box<Expr>),
     LetTuple(Vec<Decl>, Id, Box<Expr>)
+}
+
+impl LetKind {
+    pub fn map<F>(self, mut f: F) -> Self
+        where F: FnMut(Box<Expr>) -> Box<Expr>
+    {
+        match self {
+            LetKind::Let(d, e1, e2) => LetKind::Let(d, f(e1), f(e2)),
+            LetKind::LetRec(Fundef { fvar, args, body }, e2) => {
+                let body = f(body);
+                let e2 = f(e2);
+
+                LetKind::LetRec(Fundef { fvar, args, body }, e2)
+            },
+            LetKind::LetTuple(ds, x, e2) => LetKind::LetTuple(ds, x, f(e2)),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

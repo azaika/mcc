@@ -2,18 +2,18 @@ use anyhow::Context;
 use anyhow::Result;
 
 use ast::{syntax, knormal};
-use ty::syntax::Ty;
+use ty::knormal::{short, Ty};
+use ty::syntax::Ty as SyntaxTy;
 use util::Id;
 use util::Map as FnvMap;
 use util::Spanned;
 use knormal::*;
 
-use ty::syntax::short;
-
-type Map = FnvMap<util::Id, Ty>;
+type Map = FnvMap<Id, Ty>;
+type SyntaxMap = FnvMap<Id, SyntaxTy>;
 
 fn decl_conv(decl: syntax::Decl) -> Decl {
-    Decl { name: decl.name, t: decl.t }
+    Decl { name: decl.name, t: decl.t.into() }
 }
 
 fn insert_let<F: FnOnce(Id) -> (ExprKind, Ty)>(e: Expr, t: Ty, loc: util::Span, k: F) -> (ExprKind, Ty) {
@@ -35,7 +35,7 @@ fn is_comparator(op: &syntax::BinOpKind) -> bool {
     }
 }
 
-fn conv(e: Box<syntax::Expr>, env: &mut Map, extenv: &Map) -> Result<(Box<knormal::Expr>, Ty)> {
+fn conv(e: Box<syntax::Expr>, env: &mut Map, extenv: &SyntaxMap) -> Result<(Box<knormal::Expr>, Ty)> {
     macro_rules! lift {
         ($kind: expr) => {
             Box::new(Spanned::new($kind, e.loc))
@@ -58,9 +58,9 @@ fn conv(e: Box<syntax::Expr>, env: &mut Map, extenv: &Map) -> Result<(Box<knorma
             }
             else {
                 // 外部配列の参照
-                let t = extenv.get(&x).unwrap();
-                if let Ty::Array(_) = t {
-                    (ExprKind::ExtArray(x), t.clone())
+                let t = extenv.get(&x).unwrap().clone().into();
+                if let Ty::Array(_, _) = t {
+                    (ExprKind::ExtArray(x), t)
                 }
                 else {
                     return Err(anyhow::Error::msg(format!("external variable `{}` must have an array type, but it has type `{}`", x, t)));
@@ -174,7 +174,7 @@ fn conv(e: Box<syntax::Expr>, env: &mut Map, extenv: &Map) -> Result<(Box<knorma
                 syntax::LetKind::Let(decl, e1, e2) => {
                     let (e1, _) = conv(e1, env, extenv)?;
 
-                    let s = env.insert(decl.name.clone(), decl.t.clone());
+                    let s = env.insert(decl.name.clone(), decl.t.clone().into());
                     let (e2, t2) =  conv(e2, env, extenv)?;
 
                     restore(env, &decl.name, s);
@@ -184,13 +184,13 @@ fn conv(e: Box<syntax::Expr>, env: &mut Map, extenv: &Map) -> Result<(Box<knorma
                 syntax::LetKind::LetRec(fundef, e2) => {
                     let decl = fundef.fvar;
 
-                    let old_f = env.insert(decl.name.clone(), decl.t.clone());
+                    let old_f = env.insert(decl.name.clone(), decl.t.clone().into());
 
                     let (e2, t2) =  conv(e2, env, extenv)?;
 
                     let mut old_args = vec![];
                     for syntax::Decl{ name, t} in &fundef.args {
-                        old_args.push(env.insert(name.clone(), t.clone()));
+                        old_args.push(env.insert(name.clone(), t.clone().into()));
                     }
 
                     let (body, _) =  conv(fundef.body, env, extenv)?;
@@ -213,7 +213,7 @@ fn conv(e: Box<syntax::Expr>, env: &mut Map, extenv: &Map) -> Result<(Box<knorma
 
                     let mut old_vars = vec![];
                     for syntax::Decl{ name, t} in &ds {
-                        old_vars.push(env.insert(name.clone(), t.clone()));
+                        old_vars.push(env.insert(name.clone(), t.clone().into()));
                     }
 
                     let (e2, t2) = conv(e2, env, extenv)?;
@@ -277,8 +277,8 @@ fn conv(e: Box<syntax::Expr>, env: &mut Map, extenv: &Map) -> Result<(Box<knorma
                 syntax::ExprKind::Var(x) if extenv.contains_key(x) => {
                     // 外部関数の呼び出し
                     let tf = extenv.get(x).unwrap();
-                    if let Ty::Fun(_, t) = tf {
-                        let t = (**t).clone();
+                    if let SyntaxTy::Fun(_, t) = tf {
+                        let t = (**t).clone().into();
                         Box::new(|xs| {
                             (ExprKind::ExtApp(x.clone(), xs), t)
                         }) as Box<dyn FnOnce(Vec<Id>) -> (ExprKind, Ty)>
@@ -314,7 +314,7 @@ fn conv(e: Box<syntax::Expr>, env: &mut Map, extenv: &Map) -> Result<(Box<knorma
             let (e1, t1) = conv(e1, env, extenv)?;
             let (e2, t2) = conv(e2, env, extenv)?;
 
-            let t = Ty::Array(Box::new(t2.clone()));
+            let t = Ty::Array(Box::new(t2.clone().into()), None);
 
             insert_let(*e1, t1, e.loc, |idx|
                 insert_let(*e2, t2, e.loc, |init|
@@ -327,7 +327,7 @@ fn conv(e: Box<syntax::Expr>, env: &mut Map, extenv: &Map) -> Result<(Box<knorma
             let (e2, t2) = conv(e2, env, extenv)?;
 
             let t = match &t1 {
-                Ty::Array(t) => (**t).clone(),
+                Ty::Array(t, _) => (**t).clone(),
                 _ => panic!()
             };
 
@@ -357,7 +357,7 @@ fn conv(e: Box<syntax::Expr>, env: &mut Map, extenv: &Map) -> Result<(Box<knorma
     Ok((Box::new(Spanned::new(kind, e.loc)), t))
 }
 
-pub fn convert(e: syntax::Expr, extenv: &Map) -> Result<knormal::Expr> {
+pub fn convert(e: syntax::Expr, extenv: &SyntaxMap) -> Result<knormal::Expr> {
     conv(Box::new(e), &mut Map::default(), extenv)
         .map(|x| *x.0)
         .context("error occurred in converting process to KNormal form")

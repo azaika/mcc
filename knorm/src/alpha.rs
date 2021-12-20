@@ -1,7 +1,7 @@
 use util::Map as FnvMap;
 use util::{Id, Spanned, id};
 
-use ty::syntax::Ty;
+use ty::knormal::Ty;
 
 type Map = FnvMap<Id, Id>;
 pub type TyMap = FnvMap<Id, Ty>;
@@ -106,7 +106,7 @@ fn conv(e: Expr, env: &mut Map) -> Box<Expr> {
 fn make_tymap(e: &Expr, env: &mut TyMap) {
     macro_rules! push {
         ($decl: expr) => {
-            env.insert($decl.name.clone(), $decl.t.clone())
+            env.insert($decl.name.clone(), $decl.t.clone().into())
         }
     }
     
