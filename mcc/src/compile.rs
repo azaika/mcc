@@ -69,10 +69,11 @@ fn infer(e: syntax::Expr, path: &str) -> Result<(syntax::Expr, typing::TypeMap)>
     })
 }
 
-fn optimize_knorm(mut e: knormal::Expr, tyenv: &mut knorm::TyMap, num_loop: usize) -> knormal::Expr {
-    for _ in 0..num_loop {
-        e = knorm::fold_const(e, tyenv);
+fn optimize_knorm(mut e: knormal::Expr, tyenv: &mut knorm::TyMap, config: &Args) -> knormal::Expr {
+    for _ in 0..config.loop_opt {
+        e = knorm::inlining(e, config.inline, tyenv);
         e = knorm::flatten_let(e);
+        e = knorm::fold_const(e, tyenv);
         e = knorm::beta_reduction(e, tyenv);
     }
     
@@ -80,10 +81,10 @@ fn optimize_knorm(mut e: knormal::Expr, tyenv: &mut knorm::TyMap, num_loop: usiz
 }
 
 pub fn compile(args : Args) -> Result<()> {
-    let parsed_libs = match args.lib {
+    let parsed_libs = match &args.lib {
         None => vec![],
         Some(libs) => {
-            libs.iter().map(|x| parse_file(&x)).collect::<Result<Vec<syntax::Expr>>>()?
+            libs.iter().map(|x| parse_file(x)).collect::<Result<Vec<syntax::Expr>>>()?
         }
     };
     let parsed_src = parse_file(&args.source)?;
@@ -115,7 +116,7 @@ pub fn compile(args : Args) -> Result<()> {
     }
 
     let _opt_knorm = if args.optimize {
-        let r = optimize_knorm(alpha, &mut tyenv, args.loop_opt);
+        let r = optimize_knorm(alpha, &mut tyenv, &args);
 
         if args.verbose {
             println!("[[optimized_knorm]]\n{}", r);

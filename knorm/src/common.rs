@@ -1,17 +1,14 @@
 use util::Map as FnvMap;
 use util::{Id, Spanned, id};
 
-use ty::knormal::Ty;
-
 type Map = FnvMap<Id, Id>;
-pub type TyMap = FnvMap<Id, Ty>;
 
 use ast::knormal::*;
 
-pub fn conv(e: Expr, env: &mut Map) -> Box<Expr> {
+pub fn rename(e: Box<Expr>, env: &mut Map) -> Box<Expr> {
     macro_rules! map {
         ($name: expr) => {
-            env.get(&$name).unwrap().clone()
+            if let Some(_x) = env.get(&$name) { _x.clone() } else { $name.clone() }
         }
     }
 
@@ -21,18 +18,18 @@ pub fn conv(e: Expr, env: &mut Map) -> Box<Expr> {
         UnOp(op, x) => UnOp(op, map!(x)),
         BinOp(op, x, y) => BinOp(op, map!(x), map!(y)),
         If(kind, x, y, e1, e2) => {
-            let e1 = conv(*e1, env);
-            let e2 = conv(*e2, env);
+            let e1 = rename(e1, env);
+            let e2 = rename(e2, env);
             If(kind, map!(x), map!(y), e1, e2)
         },
         Let(l) => {
             let kind = match l {
                 LetKind::Let(decl, e1, e2) => {
-                    let e1 = conv(*e1, env);
+                    let e1 = rename(e1, env);
 
                     let new_name = id::distinguish(decl.name.clone());
                     let s = env.insert(decl.name.clone(), new_name.clone());
-                    let e2 = conv(*e2, env);
+                    let e2 = rename(e2, env);
                     util::restore(env, &decl.name, s);
                     
                     LetKind::Let(Decl::new(new_name, decl.t), e1, e2)
@@ -44,14 +41,14 @@ pub fn conv(e: Expr, env: &mut Map) -> Box<Expr> {
 
                     let old_f = env.insert(decl.name.clone(), new_name.clone());
 
-                    let e2 =  conv(*e2, env);
+                    let e2 =  rename(e2, env);
 
                     let mut old_args = vec![];
                     for (Decl{ name, t: _ }, x) in fundef.args.iter().zip(&new_args) {
                         old_args.push(env.insert(name.clone(), x.clone()));
                     }
 
-                    let body =  conv(*fundef.body, env);
+                    let body =  rename(fundef.body, env);
 
                     for (x, d) in old_args.into_iter().zip(&fundef.args) {
                         util::restore(env, &d.name, x);
@@ -76,7 +73,7 @@ pub fn conv(e: Expr, env: &mut Map) -> Box<Expr> {
                         old_vars.push(env.insert(name.clone(), x.clone()));
                     }
 
-                    let e2 = conv(*e2, env);
+                    let e2 = rename(e2, env);
 
                     for (x, d) in old_vars.into_iter().zip(&ds) {
                         util::restore(env, &d.name, x);
@@ -100,56 +97,4 @@ pub fn conv(e: Expr, env: &mut Map) -> Box<Expr> {
     };
 
     Box::new(Spanned::new(kind, e.loc))
-}
-
-// α 変換されている前提で変数と型の対応を作る
-pub fn make_tymap(e: &Expr, env: &mut TyMap) {
-    macro_rules! push {
-        ($decl: expr) => {
-            env.insert($decl.name.clone(), $decl.t.clone().into())
-        }
-    }
-    
-    match &e.item {
-        ExprKind::If(_, _, _, e1, e2) => {
-            make_tymap(e1, env);
-            make_tymap(e2, env);
-        },
-        ExprKind::Let(l) => {
-            match l {
-                LetKind::Let(decl, e1, e2) => {
-                    push!(decl);
-                    make_tymap(e1, env);
-                    make_tymap(e2, env);
-                },
-                LetKind::LetRec(fundef, e2) => {
-                    push!(fundef.fvar);
-                    for d in &fundef.args {
-                        push!(d);
-                    }
-
-                    make_tymap(&fundef.body, env);
-                    make_tymap(e2, env);
-                },
-                LetKind::LetTuple(ds, _, e2) => {
-                    for d in ds {
-                        push!(d);
-                    }
-                    make_tymap(e2, env);
-                },
-            }
-        },
-        _ => ()
-    }
-}
-
-// α 変換を行う
-// α 変換後の式と, 変数名から型への対応を返す
-pub fn to_alpha_form(e: Expr) -> (Expr, TyMap) {
-    let e = conv(e, &mut Map::default());
-
-    let mut tyenv = TyMap::default();
-    make_tymap(&e, &mut tyenv);
-
-    (*e, tyenv)
 }

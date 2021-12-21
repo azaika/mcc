@@ -18,6 +18,8 @@ pub fn gen_uniq_with(s: &str) -> Id {
     format!("T{}{}", s, n)
 }
 
+// x を x.157 のようなユニークな形式に変換する
+// 既に x.157 のように . がついている場合は x.157.391 ではなく x.391 に置き換える
 pub fn distinguish(mut x: Id) -> Id {
     let n = COUNTER.get();
     COUNTER.inc();
