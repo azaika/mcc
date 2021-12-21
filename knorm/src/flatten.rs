@@ -21,9 +21,9 @@ fn rotate(decl: Decl, cont: Box<Expr>, e: Box<Expr>) -> Box<Expr> {
 }
 
 // 変換の呼び出し
-fn conv(e: Box<Expr>) -> Box<Expr> {
+fn conv(mut e: Box<Expr>) -> Box<Expr> {
     use ExprKind::*;
-    let kind = match e.item {
+    e.item = match e.item {
         If(kind, x, y, e1, e2) => If(kind, x, y, conv(e1), conv(e2)),
         Let(l) => {
             use LetKind::*;
@@ -37,8 +37,8 @@ fn conv(e: Box<Expr>) -> Box<Expr> {
         },
         _ => return e
     };
-
-    Box::new(Spanned::new(kind, e.loc))
+    
+    e
 }
 
 // `let x = (letkind y = e1 in e2) in ...`

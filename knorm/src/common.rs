@@ -1,11 +1,11 @@
 use util::Map as FnvMap;
-use util::{Id, Spanned, id};
+use util::{Id, id};
 
 type Map = FnvMap<Id, Id>;
 
 use ast::knormal::*;
 
-pub fn rename(e: Box<Expr>, env: &mut Map) -> Box<Expr> {
+pub fn rename(mut e: Box<Expr>, env: &mut Map) -> Box<Expr> {
     macro_rules! map {
         ($name: expr) => {
             if let Some(_x) = env.get(&$name) { _x.clone() } else { $name.clone() }
@@ -13,7 +13,7 @@ pub fn rename(e: Box<Expr>, env: &mut Map) -> Box<Expr> {
     }
 
     use ExprKind::*;
-    let kind = match e.item {
+    e.item = match e.item {
         Var(x) => Var(map!(x)),
         UnOp(op, x) => UnOp(op, map!(x)),
         BinOp(op, x, y) => BinOp(op, map!(x), map!(y)),
@@ -81,7 +81,7 @@ pub fn rename(e: Box<Expr>, env: &mut Map) -> Box<Expr> {
 
                     let ds = new_names.into_iter().zip(ds).map(|(x, d)| Decl::new(x, d.t)).collect();
 
-                    LetKind::LetTuple(ds, x, e2)
+                    LetKind::LetTuple(ds, map!(x), e2)
                 }
             };
 
@@ -96,5 +96,5 @@ pub fn rename(e: Box<Expr>, env: &mut Map) -> Box<Expr> {
         _ => e.item
     };
 
-    Box::new(Spanned::new(kind, e.loc))
+    e
 }

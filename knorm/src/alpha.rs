@@ -8,7 +8,7 @@ pub type TyMap = FnvMap<Id, Ty>;
 
 use ast::knormal::*;
 
-pub fn conv(e: Expr, env: &mut Map) -> Box<Expr> {
+fn conv(e: Expr, env: &mut Map) -> Box<Expr> {
     macro_rules! map {
         ($name: expr) => {
             env.get(&$name).unwrap().clone()
@@ -84,7 +84,7 @@ pub fn conv(e: Expr, env: &mut Map) -> Box<Expr> {
 
                     let ds = new_names.into_iter().zip(ds).map(|(x, d)| Decl::new(x, d.t)).collect();
 
-                    LetKind::LetTuple(ds, x, e2)
+                    LetKind::LetTuple(ds, map!(x), e2)
                 }
             };
 
