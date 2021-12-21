@@ -56,7 +56,7 @@ fn conv(mut e: Box<Expr>, used: &mut Set) -> Box<Expr> {
                 },
                 LetKind::LetRec(Fundef { fvar, args, body }, e2) => {
                     let e2 = conv(e2, used);
-                    if !used.contains(&fvar.name) && !has_effect(&body) {
+                    if !used.contains(&fvar.name) {
                         log::info!("eliminating function `{}`.", fvar.name);
                         return e2;
                     }

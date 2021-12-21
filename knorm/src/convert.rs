@@ -143,6 +143,13 @@ fn conv(e: Box<syntax::Expr>, env: &mut Map, extenv: &SyntaxMap) -> Result<(Box<
                         )
                     )
                 },
+                syntax::ExprKind::UnOp(syntax::UnOpKind::Not, e3) => {
+                    return conv(
+                        lift!(syntax::ExprKind::If(e3, e2, e1)),
+                        env,
+                        extenv
+                    );
+                },
                 _ => {
                     // if {cond} = false then e2 else e1 に変換
                     // {cond} = false なのは 0 の分岐は最適化できうるから

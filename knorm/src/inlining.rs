@@ -58,14 +58,16 @@ fn conv(e: Box<Expr>, env: &mut Map, limit: usize) -> Box<Expr> {
             let kind = match l {
                 Let(decl, e1, e2) => Let(decl, conv(e1, env, limit), conv(e2, env, limit)),
                 LetRec(Fundef { fvar, args, body } , e2) => {
-                    let body = conv(body, env, limit);
                     let (is_recursive, size) = calc_info(&body, &fvar.name);
                     // 再帰関数や大きすぎる関数は展開しない
                     if !is_recursive && size < limit {
                         let xs = args.iter().map(|d| d.name.clone()).collect();
                         env.insert(fvar.name.clone(), (xs, body.as_ref().clone()));
                     }
-                    
+
+                    // 定義式の形を保存してから定義式を展開
+                    // 展開する前に定義式が膨張して展開されなくなるのを防止
+                    let body = conv(body, env, limit);
                     LetRec(Fundef { fvar, args, body }, conv(e2, env, limit))
                 },
                 LetTuple(ds, x, e2) => LetTuple(ds, x, conv(e2, env, limit))

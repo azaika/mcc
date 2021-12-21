@@ -1,14 +1,20 @@
 use util::Map as FnvMap;
 use util::{Id, Spanned};
 
-type Map = FnvMap<Id, Id>;
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Saved {
+    Var(Id),
+    Tup(Vec<Id>)
+}
+
+type Map = FnvMap<Id, Saved>;
 
 use ast::knormal::*;
 
 fn conv(e: Box<Expr>, env: &mut Map, tyenv: &mut super::TyMap) -> Box<Expr> {
     macro_rules! map {
         ($name: expr) => {
-            env.get(&$name).map_or($name, |x| x.clone())
+            if let Some(Saved::Var(x)) = env.get(&$name) { x.clone() } else { $name }
         }
     }
 
@@ -30,7 +36,7 @@ fn conv(e: Box<Expr>, env: &mut Map, tyenv: &mut super::TyMap) -> Box<Expr> {
                         Var(x) => {
                             log::info!("beta-reducing `{}` to `{}`", decl.name, x);
                             tyenv.remove(&decl.name);
-                            env.insert(decl.name.clone(), x);
+                            env.insert(decl.name.clone(), Saved::Var(x));
                             return conv(e2, env, tyenv);
                         },
                         _ => {
@@ -52,9 +58,24 @@ fn conv(e: Box<Expr>, env: &mut Map, tyenv: &mut super::TyMap) -> Box<Expr> {
                     LetKind::LetRec(fundef, e2)
                 },
                 LetKind::LetTuple(ds, x, e2) => {
-                    let e2 = conv(e2, env, tyenv);
+                    let x = map!(x);
+                    if let Some(Saved::Tup(xs)) = env.get(&x).cloned() {
+                        assert!(ds.len() == xs.len());
 
-                    LetKind::LetTuple(ds, map!(x), e2)
+                        log::info!("beta-reducing {:?} to {:?}", ds.iter().map(|d| &d.name).collect::<Vec<_>>(), xs);
+
+                        for (Decl { name, t: _ }, x) in ds.into_iter().zip(xs) {
+                            tyenv.remove(&name);
+                            env.insert(name, Saved::Var(x));
+                        }
+
+                        return conv(e2, env, tyenv);
+                    }
+                    else {
+                        env.insert(x.clone(), Saved::Tup(ds.iter().map(|d| d.name.clone()).collect()));
+                        let e2 = conv(e2, env, tyenv);
+                        LetKind::LetTuple(ds, x, e2)
+                    }
                 }
             };
 

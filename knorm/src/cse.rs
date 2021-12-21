@@ -95,7 +95,7 @@ fn conv(mut e: Box<Expr>, effects: &mut Set, saved: &mut Map) -> Box<Expr> {
                     let key = ExprInVal(e1);
                     if let Some(x) = saved.get(&key) {
                         // saved expression found
-                        log::info!("eliminating common sub-expressions `{}` to `{}`.", d.name, x);
+                        log::info!("found common sub-expressions `{}` and `{}`.", d.name, x);
                         let mut m = util::Map::default();
                         m.insert(d.name.clone(), x.clone());
                         LetKind::Let(d, Box::new(Spanned::new(Var(x.clone()), e.loc)), conv(e2, effects, saved))
