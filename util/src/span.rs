@@ -1,3 +1,4 @@
+use std::hash::Hash;
 use std::ops::Range;
 use std::fmt;
 
@@ -31,6 +32,12 @@ impl<T> From<Spanned<T>> for Range<usize> {
         let lo = spanned.loc.0;
         let hi = spanned.loc.1;
         lo..hi
+    }
+}
+
+impl<T: Hash> Hash for Spanned<T> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.item.hash(state);
     }
 }
 

@@ -72,12 +72,18 @@ fn infer(e: syntax::Expr, path: &str) -> Result<(syntax::Expr, typing::TypeMap)>
 fn optimize_knorm(mut e: knormal::Expr, tyenv: &mut knorm::TyMap, config: &Args) -> knormal::Expr {
     let mut prev = e.clone();
     for _ in 0..config.loop_opt {
+        e = knorm::flatten_let(e);
+        e = knorm::fold_const(e, tyenv);
+        e = knorm::beta_reduction(e, tyenv);
+        e = knorm::eliminate(e);
+        e = knorm::cse(e);
+        e = knorm::beta_reduction(e, tyenv);
         e = knorm::inlining(e, config.inline, tyenv);
         e = knorm::flatten_let(e);
         e = knorm::fold_const(e, tyenv);
         e = knorm::beta_reduction(e, tyenv);
         e = knorm::eliminate(e);
-
+        
         if e == prev {
             break;
         }

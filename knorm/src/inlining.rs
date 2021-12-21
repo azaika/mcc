@@ -3,7 +3,6 @@ use util::{Spanned, Id};
 use ast::knormal::*;
 
 use crate::TyMap;
-use crate::common::rename;
 
 // (has_occurence, size)
 type FuncInfo = (bool, usize);

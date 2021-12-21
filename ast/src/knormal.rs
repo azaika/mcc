@@ -1,7 +1,6 @@
-use std::fmt;
+use std::{fmt, hash::Hash};
 
 use util::{Spanned, Id};
-
 use ty::knormal as ty;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -19,6 +18,17 @@ impl From<i32> for ConstKind {
 impl From<f32> for ConstKind {
     fn from(f: f32) -> Self {
         Self::CFloat(f)
+    }
+}
+
+impl Hash for ConstKind {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        core::mem::discriminant(self).hash(state);
+        match self {
+            ConstKind::CInt(i) => i.hash(state),
+            ConstKind::CFloat(d) => d.to_bits().hash(state),
+            _ => ()
+        }
     }
 }
 
@@ -40,7 +50,7 @@ pub enum BinOpKind {
     FDiv
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Hash)]
 pub struct Decl {
     pub name : Id,
     pub t : ty::Ty
@@ -99,7 +109,7 @@ impl LetKind {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Hash)]
 pub enum IfKind {
     IfEq,
     IfLE
@@ -124,7 +134,139 @@ pub enum ExprKind {
 
 pub type Expr = Spanned<ExprKind>;
 
+type Map = util::Map<Id, Id>;
+
+// `e` must be alpha formed
+pub fn rename(mut e: Box<Expr>, env: &Map) -> Box<Expr> {
+    macro_rules! map {
+        ($name: expr) => {
+            if let Some(_x) = env.get(&$name) { _x.clone() } else { $name.clone() }
+        }
+    }
+
+    use ExprKind::*;
+    e.item = match e.item {
+        Var(x) => Var(map!(x)),
+        UnOp(op, x) => UnOp(op, map!(x)),
+        BinOp(op, x, y) => BinOp(op, map!(x), map!(y)),
+        If(kind, x, y, e1, e2) => {
+            let e1 = rename(e1, env);
+            let e2 = rename(e2, env);
+            If(kind, map!(x), map!(y), e1, e2)
+        },
+        Let(l) => {
+            let kind = match l {
+                LetKind::Let(decl, e1, e2) => {
+                    let e1 = rename(e1, env);
+                    let e2 = rename(e2, env);
+                    LetKind::Let(Decl::new(map!(decl.name), decl.t), e1, e2)
+                },
+                LetKind::LetRec(fundef, e2) => {
+                    let decl = fundef.fvar;
+                    let body =  rename(fundef.body, env);
+                    let args = fundef.args.into_iter().map(|d| Decl::new(map!(d.name), d.t)).collect();
+                    let e2 =  rename(e2, env);
+
+                    let fundef = Fundef {
+                        fvar: Decl::new(map!(decl.name), decl.t),
+                        args,
+                        body
+                    };
+                    LetKind::LetRec(fundef, e2)
+                },
+                LetKind::LetTuple(ds, x, e2) => {
+                    let ds = ds.into_iter().map(|d| Decl::new(map!(d.name), d.t)).collect();
+                    LetKind::LetTuple(ds, map!(x), rename(e2, env))
+                }
+            };
+
+            Let(kind)
+        },
+        Tuple(xs) => Tuple(xs.into_iter().map(|x| map!(x)).collect()),
+        App(f, args) => App(map!(f), args.into_iter().map(|x| map!(x)).collect()),
+        ExtApp(f, args) => ExtApp(f, args.into_iter().map(|x| map!(x)).collect()),
+        CreateArray(num, init) => CreateArray(map!(num), map!(init)),
+        Get(x, y) => Get(map!(x), map!(y)),
+        Put(x, y, z) => Put(map!(x), map!(y), map!(z)),
+        _ => e.item
+    };
+
+    e
+}
+
 impl ExprKind {
+    fn hash_impl<H: std::hash::Hasher>(&self, state: &mut H, num_let: usize) {
+        core::mem::discriminant(self).hash(state);
+        use ExprKind::*;
+        match self {
+            Const(c) => c.hash(state),
+            Var(x) | ExtArray(x) => x.hash(state),
+            UnOp(op, x) => {op.hash(state); x.hash(state)},
+            BinOp(op, x, y) => {
+                op.hash(state);
+                use BinOpKind::*;
+                let (x, y) = match op {
+                    Add | FAdd | Mul | FMul if x > y => (y, x),
+                    _ => (x, y),
+                };
+
+                x.hash(state);
+                y.hash(state)
+            },
+            If(kind, x, y, e1, e2) => {
+                kind.hash(state);
+                let (x, y) = if x < y { (x, y) } else { (y, x) };
+                x.hash(state);
+                y.hash(state);
+                e1.item.hash_impl(state, num_let);
+                e2.item.hash_impl(state, num_let)
+            },
+            Let(l) => {
+                match l {
+                    LetKind::Let(d, e1, e2) => {
+                        e1.item.hash_impl(state, num_let);
+
+                        let new_name = format!("V{}{}", ty::short(&d.t), num_let);
+
+                        new_name.hash(state);
+
+                        let mut m = Map::default();
+                        m.insert(d.name.clone(), new_name);
+
+                        let e2 = rename(Box::new(e2.as_ref().clone()), &m);
+
+                        e2.item.hash_impl(state, num_let + 1)
+                    },
+                    LetKind::LetRec(Fundef { fvar, args, body }, e2) => {
+                        fvar.hash(state);
+                        args.hash(state);
+                        body.item.hash_impl(state, num_let);
+                        e2.item.hash_impl(state, num_let);
+                    },
+                    LetKind::LetTuple(ds, x, e2) => {
+                        ds.hash(state);
+                        x.hash(state);
+                        e2.item.hash_impl(state, num_let);
+                    },
+                }
+            },
+            Tuple(xs) => xs.hash(state),
+            App(f, args) | ExtApp(f, args) => {
+                f.hash(state);
+                args.hash(state)
+            },
+            CreateArray(x, y) | Get(x, y) => {
+                x.hash(state);
+                y.hash(state)
+            },
+            Put(x, y, z) => {
+                x.hash(state);
+                y.hash(state);
+                z.hash(state)
+            },
+        }
+    }
+
     fn format_indented(&self, f: &mut fmt::Formatter, level: usize) -> fmt::Result {
         // print indentation
         let indent = |level: usize| "    ".repeat(level);
@@ -185,6 +327,12 @@ impl ExprKind {
             Get(arr, idx) => write!(f, "Get {}, {}\n", arr, idx),
             Put(arr, idx, e) => write!(f, "Put {}, {}, {}\n", arr, idx, e)
         }
+    }
+}
+
+impl Hash for ExprKind {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.hash_impl(state, 0);
     }
 }
 

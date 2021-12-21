@@ -1,7 +1,7 @@
 use std::{fmt, panic};
 use crate::syntax;
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum Ty {
     Unit,
     Int,

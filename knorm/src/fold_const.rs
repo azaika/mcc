@@ -37,6 +37,17 @@ fn get_tup<'a>(consts: &'a ConstMap, x: &Id) -> Option<&'a Vec<Id>> {
 fn conv(mut e: Box<Expr>, tyenv: &mut TyMap, consts: &mut ConstMap) -> Box<Expr> {
     use ConstKind::*;
     e.item = match e.item {
+        ExprKind::Var(x) => {
+            if let Some(i) = get_int(consts, &x) {
+                ExprKind::Const(CInt(i))
+            }
+            else if let Some(d) = get_float(consts, &x) {
+                ExprKind::Const(CFloat(d))
+            }
+            else {
+                ExprKind::Var(x)
+            }
+        }
         ExprKind::UnOp(op, x) => {
             use UnOpKind::*;
             let r = match op {

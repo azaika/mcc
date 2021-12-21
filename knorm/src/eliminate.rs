@@ -68,7 +68,7 @@ fn conv(mut e: Box<Expr>, used: &mut Set) -> Box<Expr> {
                     let e2 = conv(e2, used);
                     let necessary = ds.iter().any(|d| used.contains(&d.name));
                     if !necessary {
-                        log::info!("eliminating variables {:?}.", ds.iter().map(|d| &d.name));
+                        log::info!("eliminating variables {:?}.", ds.iter().map(|d| &d.name).collect::<Vec<_>>());
                         return e2;
                     }
 
