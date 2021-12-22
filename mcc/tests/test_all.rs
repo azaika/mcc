@@ -15,9 +15,28 @@ fn dummy_arg(path: &str) -> Args {
         loop_opt: 200,
         optimize: true,
         verbose: false,
-        lib: Some(vec!["../tests/libs/globals.ml".to_string(), "../tests/libs/stdlib.ml".to_string()]),
+        lib: Some(vec!["../tests/libs/stdlib.ml".to_string()]),
         source: path.to_string()
     }
+}
+
+fn dummy_arg_minrt(path: &str) -> Args {
+    Args {
+        inline: 300,
+        loop_opt: 200,
+        optimize: true,
+        verbose: false,
+        lib: Some(vec!["../tests/minrt/globals.ml".to_string(), "../tests/libs/stdlib.ml".to_string()]),
+        source: path.to_string()
+    }
+}
+
+#[test]
+fn test_minrt() {
+    let src = "../tests/minrt/minrt.ml".to_string();
+    let arg = dummy_arg_minrt(&src);
+
+    assert!(compile(arg).is_ok());
 }
 
 #[test]

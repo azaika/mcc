@@ -2,7 +2,7 @@ use ast::knormal::*;
 use util::{Id, Spanned};
 
 // for comparison considering commutativity
-// ignoring float constant NaN, which is not emerge in constant context
+// ignoring float constant NaN, which do not emerge in constant context
 // so this provides `Eq` trait
 #[derive(Debug, Clone, Hash)]
 struct ExprInVal(Box<Expr>);
@@ -94,7 +94,6 @@ fn conv(mut e: Box<Expr>, effects: &mut Set, saved: &mut Map) -> Box<Expr> {
                 LetKind::Let(d, e1, e2) => {
                     let key = ExprInVal(e1);
                     if let Some(x) = saved.get(&key) {
-                        // saved expression found
                         log::info!("found common sub-expressions `{}` and `{}`.", d.name, x);
                         let mut m = util::Map::default();
                         m.insert(d.name.clone(), x.clone());
