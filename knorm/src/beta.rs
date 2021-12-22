@@ -1,5 +1,5 @@
 use util::Map as FnvMap;
-use util::{Id, Spanned};
+use util::Id;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Saved {
@@ -11,7 +11,7 @@ type Map = FnvMap<Id, Saved>;
 
 use ast::knormal::*;
 
-fn conv(e: Box<Expr>, env: &mut Map, tyenv: &mut super::TyMap) -> Box<Expr> {
+fn conv(mut e: Box<Expr>, env: &mut Map, tyenv: &mut super::TyMap) -> Box<Expr> {
     macro_rules! map {
         ($name: expr) => {
             if let Some(Saved::Var(x)) = env.get(&$name) { x.clone() } else { $name }
@@ -19,7 +19,7 @@ fn conv(e: Box<Expr>, env: &mut Map, tyenv: &mut super::TyMap) -> Box<Expr> {
     }
 
     use ExprKind::*;
-    let kind = match e.item {
+    e.item = match e.item {
         Var(x) => Var(map!(x)),
         UnOp(op, x) => UnOp(op, map!(x)),
         BinOp(op, x, y) => BinOp(op, map!(x), map!(y)),
@@ -87,10 +87,17 @@ fn conv(e: Box<Expr>, env: &mut Map, tyenv: &mut super::TyMap) -> Box<Expr> {
         CreateArray(num, init) => CreateArray(map!(num), map!(init)),
         Get(x, y) => Get(map!(x), map!(y)),
         Put(x, y, z) => Put(map!(x), map!(y), map!(z)),
+        Loop { vars, init, cond, body } => {
+            let init = init.into_iter().map(|x| map!(x)).collect();
+            let cond = Condition(cond.0, map!(cond.1), map!(cond.2));
+            let body = conv(body, env, tyenv);
+            Loop { vars, init, cond, body }
+        },
+        Continue(xs) => Continue(xs.into_iter().map(|x| map!(x)).collect()),
         _ => e.item
     };
 
-    Box::new(Spanned::new(kind, e.loc))
+    e
 }
 
 // β 簡約を行う

@@ -14,7 +14,8 @@ fn has_effect(e: &Expr) -> bool {
                 LetKind::LetRec(_, e2) | LetKind::LetTuple(_, _, e2) => has_effect(&e2),
             }
         },
-        App(_, _) | ExtApp(_, _) | CreateArray(_, _) | Put(_, _, _) => true,
+        Loop { body, .. } => has_effect(&body),
+        App(_, _) | ExtApp(_, _) | Put(_, _, _) => true,
         _ => false,
     }
 }
@@ -117,6 +118,21 @@ fn conv(mut e: Box<Expr>, used: &mut Set) -> Box<Expr> {
             used.insert(y.clone());
             used.insert(z.clone());
             Put(x, y, z)
+        },
+        Loop { vars, init, cond, body } => {
+            let body = conv(body, used);
+            for x in &init {
+                used.insert(x.clone());
+            };
+            used.insert(cond.1.clone());
+            used.insert(cond.2.clone());
+            Loop { vars, init, cond, body }
+        },
+        Continue(xs) => {
+            for x in &xs {
+                used.insert(x.clone());
+            };
+            Continue(xs)
         },
         _ => e.item
     };

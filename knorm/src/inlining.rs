@@ -18,6 +18,7 @@ fn merge(f1: FuncInfo, f2: FuncInfo) -> FuncInfo {
 // 関数呼び出しの中身までは見ない
 fn calc_info(e: &Expr, name: &Id) -> FuncInfo {
     match &e.item {
+        ExprKind::Const(_) => (false, 1),
         ExprKind::Var(x) | ExprKind::UnOp(_, x) | ExprKind::ExtArray(x) => (x == name, 1),
         ExprKind::BinOp(_, x, y) | ExprKind::CreateArray(x, y) | ExprKind::Get(x, y) =>
             (x == name || y == name, 1),
@@ -42,7 +43,12 @@ fn calc_info(e: &Expr, name: &Id) -> FuncInfo {
         ExprKind::App(f, args) | ExprKind::ExtApp(f, args)=>
             (f == name || args.iter().any(|x| x == name), 1),
         ExprKind::Put(x, y, z) => ([x, y, z].iter().any(|x| *x == name), 1),
-        _ => (false, 1)
+        ExprKind::Loop { init, cond, body, .. } => {
+            let info = calc_info(body, name);
+            let emerge = init.iter().any(|x| x == name) || &cond.1 == name || &cond.2 == name;
+            (emerge || info.0, info.1 + 1)
+        },
+        ExprKind::Continue(xs) => (xs.iter().any(|x| x == name), 1),
     }
 }
 
@@ -90,6 +96,7 @@ fn conv(e: Box<Expr>, env: &mut Map, limit: usize) -> Box<Expr> {
                 App(f, args)
             }
         },
+        Loop { vars, init, cond, body } => Loop { vars, init, cond, body: conv(body, env, limit) },
         _ => return e
     };
 
@@ -99,6 +106,6 @@ fn conv(e: Box<Expr>, env: &mut Map, limit: usize) -> Box<Expr> {
 pub fn inlining(e: Expr, limit: usize, tyenv: &mut TyMap) -> Expr {
     let e = *conv(Box::new(e), &mut Map::default(), limit);
     tyenv.clear();
-    crate::alpha::make_tymap(&e, tyenv);
+    make_tymap(&e, tyenv);
     e
 }

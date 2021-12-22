@@ -35,6 +35,7 @@ fn conv(mut e: Box<Expr>) -> Box<Expr> {
 
             ExprKind::Let(kind)
         },
+        Loop { vars, init, cond, body } => Loop { vars, init, cond, body: conv(body) },
         _ => return e
     };
     

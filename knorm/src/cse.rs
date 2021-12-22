@@ -1,10 +1,12 @@
+use std::hash::Hash;
+
 use ast::knormal::*;
 use util::{Id, Spanned};
 
 // for comparison considering commutativity
 // ignoring float constant NaN, which do not emerge in constant context
 // so this provides `Eq` trait
-#[derive(Debug, Clone, Hash)]
+#[derive(Debug, Clone)]
 struct ExprInVal(Box<Expr>);
 
 fn eq_in_val(e: &Expr, other: &Expr) -> bool {
@@ -44,6 +46,9 @@ fn eq_in_val(e: &Expr, other: &Expr) -> bool {
                 _ => l1 == l2 // for simplicity
             }
         },
+        (Loop { vars: xs, init: i1, cond: e1, body: e2 }, Loop { vars: ys, init: i2, cond: e3, body: e4 }) => {
+            xs == ys && i1 == i2 && e1 == e3 && e2 == e4 // for simplicity
+        },
         _ => e.item == other.item
     }
 }
@@ -54,6 +59,87 @@ impl PartialEq for ExprInVal {
     }
 }
 impl Eq for ExprInVal {}
+
+fn hash_impl<H: std::hash::Hasher>(e: &Expr, state: &mut H, num_let: usize) {
+    core::mem::discriminant(&e.item).hash(state);
+    use ExprKind::*;
+    match &e.item {
+        Const(c) => c.hash(state),
+        Var(x) | ExtArray(x) => x.hash(state),
+        UnOp(op, x) => {op.hash(state); x.hash(state)},
+        BinOp(op, x, y) => {
+            op.hash(state);
+            use BinOpKind::*;
+            let (x, y) = match op {
+                Add | FAdd | Mul | FMul if x > y => (y, x),
+                _ => (x, y),
+            };
+
+            x.hash(state);
+            y.hash(state)
+        },
+        If(kind, x, y, e1, e2) => {
+            kind.hash(state);
+            let (x, y) = if x < y { (x, y) } else { (y, x) };
+            x.hash(state);
+            y.hash(state);
+            hash_impl(&e1, state, num_let);
+            hash_impl(&e2, state, num_let)
+        },
+        Let(l) => {
+            match l {
+                LetKind::Let(d, e1, e2) => {
+                    hash_impl(&e1, state, num_let);
+
+                    let new_name = format!("V{}{}", ty::knormal::short(&d.t), num_let);
+
+                    new_name.hash(state);
+
+                    let mut m = util::Map::default();
+                    m.insert(d.name.clone(), new_name);
+
+                    let e2 = rename(Box::new(e2.as_ref().clone()), &m);
+
+                    hash_impl(&e2, state, num_let + 1)
+                },
+                LetKind::LetRec(Fundef { fvar, args, body }, e2) => {
+                    fvar.hash(state);
+                    args.hash(state);
+                    hash_impl(&body, state, num_let);
+                    hash_impl(&e2, state, num_let);
+                },
+                LetKind::LetTuple(ds, x, e2) => {
+                    ds.hash(state);
+                    x.hash(state);
+                    hash_impl(&e2, state, num_let);
+                },
+            }
+        },
+        Tuple(xs) => xs.hash(state),
+        App(f, args) | ExtApp(f, args) => {
+            f.hash(state);
+            args.hash(state)
+        },
+        CreateArray(x, y) | Get(x, y) => {
+            x.hash(state);
+            y.hash(state)
+        },
+        Put(x, y, z) => {
+            x.hash(state);
+            y.hash(state);
+            z.hash(state)
+        },
+        Loop { .. } | Continue(_) => {
+            // do nothing because loop is not target of CSE
+        },
+    }
+}
+
+impl Hash for ExprInVal {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        hash_impl(&self.0, state, 0);
+    }
+}
 
 type Set = util::Set<Id>;
 type Map = util::Map<ExprInVal, Id>;
@@ -80,7 +166,7 @@ fn is_impure(e: &Expr, effects: &mut Set) -> bool {
             }
         },
         App(f, _) => effects.contains(f),
-        ExtApp(_, _) | CreateArray(_, _) | ExtArray(_) | Put(_, _, _) | Get(_, _) => true,
+        ExtApp(_, _) | CreateArray(_, _) | ExtArray(_) | Put(_, _, _) | Get(_, _) | Loop { .. } => true,
         _ => false
     }
 }
@@ -121,6 +207,14 @@ fn conv(mut e: Box<Expr>, effects: &mut Set, saved: &mut Map) -> Box<Expr> {
             };
 
             Let(kind)
+        },
+        Loop { vars, init, cond, body } => {
+            Loop {
+                vars,
+                init,
+                cond,
+                body: conv(body, effects, saved),
+            }
         },
         _ => e.item
     };
