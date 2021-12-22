@@ -6,7 +6,7 @@ use ariadne;
 
 #[derive(Debug, Parser)]
 pub struct Args {
-    #[clap(long, default_value_t=200)]
+    #[clap(long, default_value_t=100)]
     pub inline: usize,
     #[clap(long, default_value_t=100)]
     pub loop_opt: usize,

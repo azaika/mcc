@@ -22,7 +22,7 @@ fn dummy_arg(path: &str) -> Args {
 
 fn dummy_arg_minrt(path: &str) -> Args {
     Args {
-        inline: 300,
+        inline: 100,
         loop_opt: 200,
         optimize: true,
         verbose: false,

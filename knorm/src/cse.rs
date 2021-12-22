@@ -58,29 +58,29 @@ impl Eq for ExprInVal {}
 type Set = util::Set<Id>;
 type Map = util::Map<ExprInVal, Id>;
 
-fn has_side_effect(e: &Expr, effects: &mut Set) -> bool {
+fn is_impure(e: &Expr, effects: &mut Set) -> bool {
     use ExprKind::*;
     match &e.item {
-        If(_, _, _, e1, e2) => has_side_effect(e1, effects) || has_side_effect(e2, effects),
+        If(_, _, _, e1, e2) => is_impure(e1, effects) || is_impure(e2, effects),
         Let(l) => {
             match l {
-                LetKind::Let(_, e1, e2) => has_side_effect(e1, effects) || has_side_effect(e2, effects),
+                LetKind::Let(_, e1, e2) => is_impure(e1, effects) || is_impure(e2, effects),
                 LetKind::LetRec(fundef, e2) => {
-                    if has_side_effect(&fundef.body, effects) {
+                    if is_impure(&fundef.body, effects) {
                         effects.insert(fundef.fvar.name.clone());
                     }
 
-                    let r = has_side_effect(e2, effects);
+                    let r = is_impure(e2, effects);
 
                     effects.remove(&fundef.fvar.name);
 
                     r
                 },
-                LetKind::LetTuple(_, _, e2) => has_side_effect(e2, effects),
+                LetKind::LetTuple(_, _, e2) => is_impure(e2, effects),
             }
         },
         App(f, _) => effects.contains(f),
-        ExtApp(_, _) | CreateArray(_, _) | ExtArray(_) | Put(_, _, _) => true,
+        ExtApp(_, _) | CreateArray(_, _) | ExtArray(_) | Put(_, _, _) | Get(_, _) => true,
         _ => false
     }
 }
@@ -101,7 +101,7 @@ fn conv(mut e: Box<Expr>, effects: &mut Set, saved: &mut Map) -> Box<Expr> {
                     }
                     else {
                         let e1 = key.0;
-                        if !has_side_effect(&e1, effects) {
+                        if !is_impure(&e1, effects) {
                             saved.insert(ExprInVal(e1.clone()), d.name.clone());
                         }
                         LetKind::Let(d, conv(e1, effects, saved), conv(e2, effects, saved))
@@ -109,7 +109,7 @@ fn conv(mut e: Box<Expr>, effects: &mut Set, saved: &mut Map) -> Box<Expr> {
                 },
                 LetKind::LetRec(Fundef { fvar, args, body }, e2) => {
                     // この宣言が副作用を持つか調べる
-                    if has_side_effect(&body, effects) {
+                    if is_impure(&body, effects) {
                         effects.insert(fvar.name.clone());
                     }
 
