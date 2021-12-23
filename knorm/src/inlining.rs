@@ -90,7 +90,7 @@ fn conv(e: Box<Expr>, env: &mut Map, limit: usize) -> Box<Expr> {
                     rename_map.insert(y.clone(), x);
                 }
 
-                return rename(Box::new(body.clone()), &mut rename_map);
+                return crate::alpha::conv(Box::new(body.clone()), &mut rename_map);
             }
             else {
                 App(f, args)

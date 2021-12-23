@@ -8,7 +8,7 @@ pub type TyMap = FnvMap<Id, Ty>;
 
 use ast::knormal::*;
 
-fn conv(mut e: Box<Expr>, env: &mut Map) -> Box<Expr> {
+pub fn conv(mut e: Box<Expr>, env: &mut Map) -> Box<Expr> {
     macro_rules! map {
         ($name: expr) => {
             env.get(&$name).unwrap().clone()
