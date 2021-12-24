@@ -115,18 +115,6 @@ pub enum IfKind {
     IfLE
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Condition(pub IfKind, pub Id, pub Id);
-
-impl fmt::Display for Condition {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self.0 {
-            IfKind::IfEq => write!(f, "{} = {}", self.1, self.2),
-            IfKind::IfLE => write!(f, "{} <= {}", self.1, self.2),
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub enum ExprKind {
     Const(ConstKind),
@@ -145,7 +133,6 @@ pub enum ExprKind {
     Loop {
         vars: Vec<Decl>,
         init: Vec<Id>,
-        cond: Condition,
         body: Box<Expr>
     },
     Continue(Vec<Id>), // only in Loop.body
@@ -207,13 +194,12 @@ pub fn rename(mut e: Box<Expr>, env: &Map) -> Box<Expr> {
         CreateArray(num, init) => CreateArray(map!(num), map!(init)),
         Get(x, y) => Get(map!(x), map!(y)),
         Put(x, y, z) => Put(map!(x), map!(y), map!(z)),
-        Loop { vars, init, cond, body } => {
+        Loop { vars, init, body } => {
             let vars = vars.into_iter().map(|d| Decl::new(map!(d.name), d.t)).collect();
             let init = init.into_iter().map(|x| map!(x)).collect();
-            let cond = Condition(cond.0, map!(cond.1), map!(cond.2));
             let body = rename(body, env);
 
-            Loop { vars, init, cond, body }
+            Loop { vars, init, body }
         },
         Continue(xs) => Continue(xs.into_iter().map(|x| map!(x)).collect()),
         _ => e.item
@@ -331,12 +317,12 @@ impl ExprKind {
             CreateArray(num, init) => write!(f, "CreateArray {}, {}\n", num, init),
             Get(arr, idx) => write!(f, "Get {}, {}\n", arr, idx),
             Put(arr, idx, e) => write!(f, "Put {}, {}, {}\n", arr, idx, e),
-            Loop { vars, init, cond, body } => {
+            Loop { vars, init, body } => {
                 write!(f, "Loop:\n{}vars = ", indent(level + 1))?;
                 util::format_vec(f, vars, "[", ", ", "]")?;
                 write!(f, "\n{}init = ", indent(level + 1))?;
                 util::format_vec(f, init, "[", ", ", "]")?;
-                write!(f, "\n{}cond = {}\n{}body =\n", indent(level + 1), cond, indent(level + 1))?;
+                write!(f, "\n{}body =\n", indent(level + 1))?;
                 body.item.format_indented(f, level + 2)
             },
             Continue(xs) => {

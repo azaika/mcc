@@ -46,8 +46,8 @@ fn eq_in_val(e: &Expr, other: &Expr) -> bool {
                 _ => l1 == l2 // for simplicity
             }
         },
-        (Loop { vars: xs, init: i1, cond: e1, body: e2 }, Loop { vars: ys, init: i2, cond: e3, body: e4 }) => {
-            xs == ys && i1 == i2 && e1 == e3 && e2 == e4 // for simplicity
+        (Loop { vars: xs, init: i1, body: e1 }, Loop { vars: ys, init: i2, body: e2 }) => {
+            xs == ys && i1 == i2 && e1 == e2 // for simplicity
         },
         _ => e.item == other.item
     }
@@ -208,14 +208,7 @@ fn conv(mut e: Box<Expr>, effects: &mut Set, saved: &mut Map) -> Box<Expr> {
 
             Let(kind)
         },
-        Loop { vars, init, cond, body } => {
-            Loop {
-                vars,
-                init,
-                cond,
-                body: conv(body, effects, saved),
-            }
-        },
+        Loop { vars, init, body } => Loop { vars, init, body: conv(body, effects, saved) },
         _ => e.item
     };
 

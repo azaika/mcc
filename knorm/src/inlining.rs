@@ -23,19 +23,19 @@ fn calc_info(e: &Expr, name: &Id) -> FuncInfo {
         ExprKind::BinOp(_, x, y) | ExprKind::CreateArray(x, y) | ExprKind::Get(x, y) =>
             (x == name || y == name, 1),
         ExprKind::If(_, x, y, e1, e2) => {
-            let info = merge(calc_info(e1, name), calc_info(e2, name));
-            (x == name || y == name || info.0, info.1 + 1)
+            let (is_rec, size) = merge(calc_info(e1, name), calc_info(e2, name));
+            (is_rec || x == name || y == name, size + 1)
         },
         ExprKind::Let(l) => {
             match l {
                 LetKind::Let(_, e1, e2)
                 | LetKind::LetRec(Fundef { fvar: _, args: _, body: e1 }, e2) => {
-                    let info = merge(calc_info(e1, name), calc_info(e2, name));
-                    (info.0, info.1 + 1)
+                    let (is_rec, size) = merge(calc_info(e1, name), calc_info(e2, name));
+                    (is_rec, size + 1)
                 },
                 LetKind::LetTuple(_, x, e2) => {
-                    let info = calc_info(e2, name);
-                    (x == name || info.0, info.1 + 1)
+                    let (is_rec, size) = calc_info(e2, name);
+                    (is_rec || x == name, size + 1)
                 },
             }
         },
@@ -43,10 +43,9 @@ fn calc_info(e: &Expr, name: &Id) -> FuncInfo {
         ExprKind::App(f, args) | ExprKind::ExtApp(f, args)=>
             (f == name || args.iter().any(|x| x == name), 1),
         ExprKind::Put(x, y, z) => ([x, y, z].iter().any(|x| *x == name), 1),
-        ExprKind::Loop { init, cond, body, .. } => {
-            let info = calc_info(body, name);
-            let emerge = init.iter().any(|x| x == name) || &cond.1 == name || &cond.2 == name;
-            (emerge || info.0, info.1 + 1)
+        ExprKind::Loop { init, body, .. } => {
+            let (is_rec, size) = calc_info(body, name);
+            (is_rec || init.iter().any(|x| x == name), size + 1)
         },
         ExprKind::Continue(xs) => (xs.iter().any(|x| x == name), 1),
     }
@@ -96,7 +95,7 @@ fn conv(e: Box<Expr>, env: &mut Map, limit: usize) -> Box<Expr> {
                 App(f, args)
             }
         },
-        Loop { vars, init, cond, body } => Loop { vars, init, cond, body: conv(body, env, limit) },
+        Loop { vars, init, body } => Loop { vars, init, body: conv(body, env, limit) },
         _ => return e
     };
 

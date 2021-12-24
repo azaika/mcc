@@ -119,14 +119,12 @@ fn conv(mut e: Box<Expr>, used: &mut Set) -> Box<Expr> {
             used.insert(z.clone());
             Put(x, y, z)
         },
-        Loop { vars, init, cond, body } => {
+        Loop { vars, init, body } => {
             let body = conv(body, used);
             for x in &init {
                 used.insert(x.clone());
             };
-            used.insert(cond.1.clone());
-            used.insert(cond.2.clone());
-            Loop { vars, init, cond, body }
+            Loop { vars, init, body }
         },
         Continue(xs) => {
             for x in &xs {

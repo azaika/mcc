@@ -87,11 +87,10 @@ fn conv(mut e: Box<Expr>, env: &mut Map, tyenv: &mut super::TyMap) -> Box<Expr> 
         CreateArray(num, init) => CreateArray(map!(num), map!(init)),
         Get(x, y) => Get(map!(x), map!(y)),
         Put(x, y, z) => Put(map!(x), map!(y), map!(z)),
-        Loop { vars, init, cond, body } => {
+        Loop { vars, init, body } => {
             let init = init.into_iter().map(|x| map!(x)).collect();
-            let cond = Condition(cond.0, map!(cond.1), map!(cond.2));
             let body = conv(body, env, tyenv);
-            Loop { vars, init, cond, body }
+            Loop { vars, init, body }
         },
         Continue(xs) => Continue(xs.into_iter().map(|x| map!(x)).collect()),
         _ => e.item
