@@ -22,7 +22,7 @@ fn is_tailrec(e: &Expr, f: &Id, is_inlet: bool) -> (bool, bool) {
                 LetKind::Let(_, e1, e2) => {
                     merge(is_tailrec(&e1, f, true), is_tailrec(&e2, f, is_inlet))
                 },
-                // when nested let rec found, assume that outer let rec is not tail recursive for simplicity
+                // when nested let rec found, assume that outer let rec is not tail recursive (for simplicity)
                 LetKind::LetRec(_, _) => (false, false),
                 LetKind::LetTuple(_, x, e2) => merge((false, x != f), is_tailrec(&e2, f, is_inlet)),
             }
@@ -124,7 +124,7 @@ fn conv(mut e: Box<Expr>) -> Box<Expr> {
                         args: new_args,
                         body,
                     };
-                    LetKind::LetRec(fundef, e2)
+                    LetKind::LetRec(fundef, conv(e2))
                 }
             },
             LetKind::LetTuple(ds, x, e2) => LetKind::LetTuple(ds, x, conv(e2)),
