@@ -9,3 +9,4 @@ ty = { path = "../ty" }
 ast = { path = "../ast" }
 log = "0.4.0"
 anyhow = "1.0"
+bit-vec = "0.6"

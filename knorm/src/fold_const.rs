@@ -2,7 +2,6 @@ use util::{Spanned, Id};
 
 use ast::knormal::*;
 use crate::TyMap;
-use ty::knormal::Ty;
 
 #[derive(Debug, Clone)]
 enum Const {
@@ -112,7 +111,7 @@ fn conv(mut e: Box<Expr>, tyenv: &mut TyMap, consts: &mut ConstMap) -> Box<Expr>
         },
         ExprKind::Let(l) => ExprKind::Let(
             match l {
-                LetKind::Let(mut d, e1, e2) => {
+                LetKind::Let(d, e1, e2) => {
                     let e1 = conv(e1, tyenv, consts);
                     // e1 が定数式だったら定数テーブルを更新
                     match &e1.item {
@@ -128,28 +127,6 @@ fn conv(mut e: Box<Expr>, tyenv: &mut TyMap, consts: &mut ConstMap) -> Box<Expr>
                         },
                         ExprKind::Tuple(xs) => {
                             consts.insert(d.name.clone(), Const::Tup(xs.clone()));
-                        },
-                        ExprKind::CreateArray(num, _) => {
-                            // if-let-chain を使うともっと簡潔になるが, まだ unstable
-                            // https://github.com/rust-lang/rust/issues/53667
-                            if let Ty::Array(t, None) = d.t {
-                                d.t = if let Some(Const::Val(CInt(s))) = consts.get(num) {
-                                    let s = *s;
-                                    if s >= 0 {
-                                        let new_t = Ty::Array(t, Some(s as usize));
-                                        // 型情報を更新
-                                        tyenv.get_mut(&d.name).map(|t| *t = new_t.clone());
-                                        new_t
-                                    }
-                                    else {
-                                        log::warn!("negative sized array created in {}:{}", e.loc.0, e.loc.1);
-                                        Ty::Array(t, None)
-                                    }
-                                }
-                                else {
-                                    Ty::Array(t, None)
-                                };
-                            }
                         },
                         _ => ()
                     };
