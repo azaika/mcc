@@ -8,3 +8,4 @@ edition = "2021"
 [dependencies]
 ty = { path = "../ty" }
 util = { path = "../util" }
+typed-arena = "2.0"

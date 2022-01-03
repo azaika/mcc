@@ -78,8 +78,8 @@ impl Ty {
         }
     }
 
-    pub fn short(t: &Ty) -> &'static str {
-        match t.demut() {
+    pub fn short(&self) -> &'static str {
+        match self.demut() {
             Ty::Unit => "u",
             Ty::Int => "i",
             Ty::Float => "d",
