@@ -1,4 +1,5 @@
-use typed_arena::Arena;
+use id_arena::Arena;
+
 use util::{Spanned, Id, Map};
 pub use ty::closure::Ty as Ty;
 
@@ -112,58 +113,119 @@ pub enum IfKind {
 
 // basic block の末尾にあるもの
 #[derive(Debug, Clone, PartialEq)]
-pub enum TailKind<'a> {
-    If(IfKind, Id, Id, RefCell<Block<'a>>, RefCell<Block<'a>>),
-    ForEach(Id, Id, RefCell<Block<'a>>), // (element, array_var, body)
-    Jump(RefCell<Block<'a>>),
+pub enum TailKind {
+    If(IfKind, Id, Id, BlockId, BlockId),
+    ForEach(Id, Id, BlockId), // (element, array_var, body)
+    Jump(BlockId),
     Return(Id),
 }
 
-impl<'a> fmt::Display for TailKind<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl TailKind {
+    fn format(&self, f: &mut fmt::Formatter, arena: &Arena<Block>) -> fmt::Result {
         use TailKind::*;
         match self {
-            If(kind, x, y, e1, e2) => {
-                write!(f, "{:?} {}, {} => {} | {}", kind, x, y, e1.borrow().name, e2.borrow().name)
+            If(kind, x, y, b1, b2) => {
+                write!(f, "{:?} {}, {} => {} | {}", kind, x, y, arena[*b1].name, arena[*b2].name)
             },
             ForEach(e, arr, body) => {
-                write!(f, "ForEach {} <- {} => {}", e, arr, body.borrow().name)
+                write!(f, "ForEach {} <- {} => {}", e, arr, arena[*body].name)
             },
-            Jump(block) => write!(f, "Jump {}", block.borrow().name),
+            Jump(block) => write!(f, "Jump {}", arena[*block].name),
             Return(r) => write!(f, "Return {}", r),
         }
     }
 }
 
-pub type Tail<'a> = Spanned<TailKind<'a>>;
+pub type Tail = Spanned<TailKind>;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct BlockData<'a> {
+pub struct Block {
     pub name: String,
     pub body: Vec<(Id, Inst)>,
-    pub tail: Box<Tail<'a>>
+    pub tail: Box<Tail>
 }
 
-pub type Block<'a> = &'a BlockData<'a>;
+impl Block {
+    fn format_indented(&self, f: &mut fmt::Formatter, level: usize, arena: &Arena<Block>) -> fmt::Result {
+        // print indentation
+        let indent = |level: usize| "    ".repeat(level);
+        write!(f, "{}Block {}\n", indent(level), self.name)?;
+        write!(f, "{}body:\n", indent(level))?;
+        for (x, inst) in &self.body {
+            write!(f, "{}{} <- {}\n", indent(level + 1), x, inst)?;
+        }
+        write!(f, "{}tail: ", indent(level + 1))?;
+        self.tail.item.format(f, arena)?;
+        write!(f, "\n")
+    }
+}
+
+pub type BlockId = id_arena::Id<Block>;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Fundef<'a> {
+pub struct Fundef {
     pub name: Label,
     pub args: Vec<Id>,
     pub formal_fv: Vec<Id>,
-    pub entry: RefCell<Block<'a>>
+    pub entry: BlockId
+}
+
+impl Fundef {
+    fn format_indented(&self, f: &mut fmt::Formatter, tymap: &Map<Id, Ty>, level: usize, arena: &Arena<Block>) -> fmt::Result {
+        // print indentation
+        let indent = |level: usize| "    ".repeat(level);
+        write!(f, "{}Fundef ({}, {})\n", indent(level), self.name, tymap.get(&self.name.0).unwrap())?;
+        write!(f, "{}args: ", indent(level + 1))?;
+        util::format_vec(f, &self.args, "[", ", ", "]")?;
+        write!(f, "\n{}formal_fv: ", indent(level + 1))?;
+        util::format_vec(f, &self.formal_fv, "[", ", ", "]")?;
+        write!(f, "\n{}entry: {}\n", indent(level + 1), arena[self.entry].name)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Global<'a> {
+pub struct Global {
     pub name: Label,
-    pub init: RefCell<Block<'a>>
+    pub init: BlockId
 }
 
-pub struct Program<'a> {
+impl Global {
+    fn format(&self, f: &mut fmt::Formatter, arena: &Arena<Block>) -> fmt::Result {
+        write!(f, "{} => {}", self.name, arena[self.init].name)
+    }
+}
+
+pub struct Program {
     pub tymap: Map<Id, Ty>,
-    pub block_arena: Arena<Block<'a>>,
-    pub globals: Vec<Global<'a>>,
-    pub fundefs: Vec<Fundef<'a>>,
-    pub entry: RefCell<Block<'a>>
+    pub block_arena: Arena<Block>,
+    pub globals: Vec<Global>,
+    pub fundefs: Vec<Fundef>,
+    pub entry: BlockId
+}
+
+impl fmt::Display for Program {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Entry: {}\n\n", self.block_arena[self.entry].name)?;
+
+        write!(f, "Globals:\n")?;
+        for global in &self.globals {
+            write!(f, "    ")?;
+            global.format(f, &self.block_arena)?;
+            write!(f, "\n")?;
+        }
+
+        write!(f, "Fundefs:\n")?;
+        for fun in &self.fundefs {
+            fun.format_indented(f, &self.tymap, 1, &self.block_arena)?;
+            write!(f, "\n")?;
+        }
+
+        write!(f, "Blocks:\n")?;
+        for (_, block) in &self.block_arena {
+            block.format_indented(f, 1, &self.block_arena)?;
+            write!(f, "\n")?;
+        }
+
+        Ok(())
+    }
 }
