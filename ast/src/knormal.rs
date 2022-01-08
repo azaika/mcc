@@ -135,7 +135,7 @@ pub enum ExprKind {
         init: Vec<Id>,
         body: Box<Expr>
     },
-    Continue(Vec<Id>), // only in Loop.body
+    Continue(Vec<(Id, Id)>), // only in Loop.body
 }
 
 pub type Expr = Spanned<ExprKind>;
@@ -201,7 +201,7 @@ pub fn rename(mut e: Box<Expr>, env: &Map) -> Box<Expr> {
 
             Loop { vars, init, body }
         },
-        Continue(xs) => Continue(xs.into_iter().map(|x| map!(x)).collect()),
+        Continue(xs) => Continue(xs.into_iter().map(|x| (map!(x.0), map!(x.1))).collect()),
         _ => e.item
     };
 
@@ -327,7 +327,7 @@ impl ExprKind {
             },
             Continue(xs) => {
                 write!(f, "Continue ")?;
-                util::format_vec(f, xs, "[", ", ", "]")?;
+                util::format_vec(f, &xs.iter().map(|(_, x)| x).collect(), "[", ", ", "]")?;
                 write!(f, "\n")
             },
         }

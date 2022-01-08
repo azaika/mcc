@@ -127,7 +127,7 @@ fn conv(mut e: Box<Expr>, used: &mut Set) -> Box<Expr> {
             Loop { vars, init, body }
         },
         Continue(xs) => {
-            for x in &xs {
+            for (_, x) in &xs {
                 used.insert(x.clone());
             };
             Continue(xs)

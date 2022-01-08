@@ -41,7 +41,7 @@ fn is_tailrec(e: &Expr, f: &Id, is_inlet: bool, orig: &Vec<Decl>) -> (Option<Bit
                 LetKind::LetTuple(_, x, e2) => merge((None, x != f), is_tailrec(&e2, f, is_inlet, orig)),
             }
         },
-        Tuple(xs) | ExtApp(_, xs) | Continue(xs) => (None, xs.iter().all(|x| x != f)),
+        Tuple(xs) | ExtApp(_, xs) => (None, xs.iter().all(|x| x != f)),
         App(func, args) => {
             if func == f {
                 let b = args.iter().zip(orig).map(|(x, y)| x == &y.name).collect();
@@ -55,26 +55,27 @@ fn is_tailrec(e: &Expr, f: &Id, is_inlet: bool, orig: &Vec<Decl>) -> (Option<Bit
         Loop { init, body, .. } => {
             merge((None, init.iter().all(|x| x != f)), is_tailrec(&body, f, is_inlet, orig))
         },
+        Continue(xs) => (None, xs.iter().all(|(_, x)| x != f)),
         _ => (None, true)
     }
 }
 
-fn insert_continue(mut e: Box<Expr>, f: &Id, mask: &BitVec) -> Box<Expr> {
+fn insert_continue(mut e: Box<Expr>, f: &Id, orig: &Vec<Decl>, mask: &BitVec) -> Box<Expr> {
     use ExprKind::*;
     e.item = match e.item {
         App(func, args) if &func == f => {
             let args = args.into_iter().enumerate().filter_map(|(idx, x)|
-                if mask[idx] { None } else { Some(x) }
+                if mask[idx] { None } else { Some((orig[idx].name.clone(), x)) }
             ).collect();
             Continue(args)
         },
-        If(kind, x, y, e1, e2) => If(kind, x, y, insert_continue(e1, f, mask), insert_continue(e2, f, mask)),
+        If(kind, x, y, e1, e2) => If(kind, x, y, insert_continue(e1, f, orig,  mask), insert_continue(e2, f, orig, mask)),
         Let(l) => Let(match l {
-            LetKind::Let(d, e1, e2) => LetKind::Let(d, e1, insert_continue(e2, f, mask)),
+            LetKind::Let(d, e1, e2) => LetKind::Let(d, e1, insert_continue(e2, f, orig, mask)),
             LetKind::LetRec(_, _) => panic!(),
-            LetKind::LetTuple(ds, x, e2) => LetKind::LetTuple(ds, x, insert_continue(e2, f, mask)),
+            LetKind::LetTuple(ds, x, e2) => LetKind::LetTuple(ds, x, insert_continue(e2, f, orig, mask)),
         }),
-        Loop { vars, init, body } => Loop { vars, init, body: insert_continue(body, f, mask) },
+        Loop { vars, init, body } => Loop { vars, init, body: insert_continue(body, f, orig, mask) },
         _ => e.item
     };
 
@@ -122,7 +123,7 @@ fn conv(mut e: Box<Expr>) -> Box<Expr> {
                         }
                     }
 
-                    let mut body = insert_continue(body, &fvar.name, &mask);
+                    let mut body = insert_continue(body, &fvar.name, &args, &mask);
 
                     let mut new_args = vec![];
                     let mut init = vec![];

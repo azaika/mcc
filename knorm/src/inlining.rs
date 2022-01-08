@@ -47,7 +47,7 @@ fn calc_info(e: &Expr, name: &Id) -> FuncInfo {
             let (is_rec, size) = calc_info(body, name);
             (is_rec || init.iter().any(|x| x == name), size + 1)
         },
-        ExprKind::Continue(xs) => (xs.iter().any(|x| x == name), 1),
+        ExprKind::Continue(xs) => (xs.iter().any(|(_, x)| x == name), 1),
     }
 }
 

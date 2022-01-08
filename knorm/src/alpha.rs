@@ -115,7 +115,7 @@ pub fn conv(mut e: Box<Expr>, env: &mut Map) -> Box<Expr> {
             
             Loop { vars, init, body }
         },
-        Continue(xs) => Continue(xs.into_iter().map(|x| map!(x)).collect()),
+        Continue(xs) => Continue(xs.into_iter().map(|(x, y)| (map!(x), map!(y))).collect()),
         _ => e.item
     };
 
