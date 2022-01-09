@@ -46,3 +46,13 @@ impl<T : fmt::Display> fmt::Display for Spanned<T> {
         write!(f, "{}", self.item)
     }
 }
+
+pub trait ToSpanned where Self: Sized {
+    fn with_span(self, span: Span) -> Spanned<Self>;
+}
+
+impl<T> ToSpanned for T {
+    fn with_span(self, span: Span) -> Spanned<Self> {
+        Spanned::new(self, span)
+    }
+}

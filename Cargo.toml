@@ -1,6 +1,11 @@
 [workspace]
 members = [
     "mcc",
+    "util",
+    "ty",
+    "ast",
     "parser",
-    "typing"
+    "typing",
+    "knorm",
+    "closure"
 ]
