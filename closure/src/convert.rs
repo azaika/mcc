@@ -1,7 +1,7 @@
 use util::ToSpanned;
 use util::{ id, Id };
-use ast::{ knormal, mir };
-use ty::mir::Ty;
+use ast::{ knormal, closure };
+use ty::knormal::Ty;
 
 type Set = util::Set<Id>;
 
@@ -56,50 +56,6 @@ fn conv_simple(e : knormal::ExprKind, known: &mut Set) -> mir::InstKind {
         knormal::ExprKind::Put(x, y, z) => InstKind::ArrayPut(x, y, z),
         _ => panic!("non-simple ExprKind has been passed: {}", e)
     }
-}
-
-fn gen_array_init(name: Id, num: Id, init: Id, span: util::Span, p: &mut mir::Program, bid: mir::BlockId) -> mir::BlockId {
-    use mir::InstKind;
-    use mir::TailKind;
-    // `let a = Array.make num init` を
-    // ```
-    // let a = Array.alloc num in
-    // for i in 0..len(a) {
-    //   a[i] := init
-    // }
-    // ```
-    // に変換する
-    let t = p.tymap.get(&init).unwrap();
-    p.block_arena[bid].body.push((Some(name.clone()), InstKind::AllocArray(num.clone(), t.clone()).with_span(span)));
-
-    let idx_var = id::gen_uniq_with("Idx");
-    let idx_t = Ty::Ref(Box::new(Ty::Int));
-
-    p.tymap.insert(idx_var.clone(), idx_t);
-
-    let loop_id = p.block_arena.alloc(mir::Block::with_name(id::gen_uniq_with(".FEEntry")));
-    let body_id = p.block_arena.alloc(mir::Block::with_name(id::gen_uniq_with(".FEBody")));
-    let cont_id = p.block_arena.alloc(mir::Block::new());
-
-    *p.block_arena[bid].tail = TailKind::Jump(loop_id).with_span(span);
-
-    let bl = &mut p.block_arena[body_id];
-    bl.body = vec![
-        (None, InstKind::ArrayPut(name.clone(), idx_var.clone(), init.clone()).with_span(span)),
-        (None, InstKind::Assign(idx_var.clone(), init.clone()).with_span(span))
-    ];
-    bl.tail = Box::new(TailKind::Jump(loop_id).with_span(span));
-
-    let size = if let Ty::MutArray(_, size) = p.tymap.get(&name).unwrap() {
-        if size.is_some() { None } else { Some(num) }
-    }
-    else {
-        unreachable!()
-    };
-
-    *p.block_arena[loop_id].tail = TailKind::ForEach(idx_var, name, size, body_id, cont_id).with_span(span);
-
-    cont_id
 }
 
 fn conv_let(d: knormal::Decl, e1: Box<knormal::Expr>, tyenv: &knormal::TyMap, span: util::Span, p: &mut mir::Program, known: &mut Set, bid: id_arena::Id<mir::Block>, is_top: bool) -> Option<mir::BlockId> {

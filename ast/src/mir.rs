@@ -3,7 +3,7 @@ use id_arena::Arena;
 use util::{Spanned, Id, Map};
 pub use ty::mir::Ty as Ty;
 
-use std::{fmt, collections::{BTreeSet, btree_set::Iter}};
+use std::{fmt, collections::BTreeSet};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Label(pub Id);

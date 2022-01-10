@@ -10,6 +10,7 @@ parser = { path = "../parser" }
 typing = { path = "../typing" }
 ast = { path = "../ast" }
 knorm = { path = "../knorm" }
+closure = { path = "../closure" }
 mir = { path = "../mir" }
 clap = { version = "3.0.0-rc.4", features = [ "derive" ]}
 anyhow = "1.0"

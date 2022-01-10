@@ -60,22 +60,22 @@ fn is_tailrec(e: &Expr, f: &Id, is_inlet: bool, orig: &Vec<Decl>) -> (Option<Bit
     }
 }
 
-fn insert_continue(mut e: Box<Expr>, f: &Id, orig: &Vec<Decl>, mask: &BitVec) -> Box<Expr> {
+fn insert_continue(mut e: Box<Expr>, f: &Id, lvs: &Vec<Decl>, mask: &BitVec) -> Box<Expr> {
     use ExprKind::*;
     e.item = match e.item {
         App(func, args) if &func == f => {
             let args = args.into_iter().enumerate().filter_map(|(idx, x)|
-                if mask[idx] { None } else { Some((orig[idx].name.clone(), x)) }
+                if mask[idx] { None } else { Some((lvs[idx].name.clone(), x)) }
             ).collect();
             Continue(args)
         },
-        If(kind, x, y, e1, e2) => If(kind, x, y, insert_continue(e1, f, orig,  mask), insert_continue(e2, f, orig, mask)),
+        If(kind, x, y, e1, e2) => If(kind, x, y, insert_continue(e1, f, lvs,  mask), insert_continue(e2, f, lvs, mask)),
         Let(l) => Let(match l {
-            LetKind::Let(d, e1, e2) => LetKind::Let(d, e1, insert_continue(e2, f, orig, mask)),
+            LetKind::Let(d, e1, e2) => LetKind::Let(d, e1, insert_continue(e2, f, lvs, mask)),
             LetKind::LetRec(_, _) => panic!(),
-            LetKind::LetTuple(ds, x, e2) => LetKind::LetTuple(ds, x, insert_continue(e2, f, orig, mask)),
+            LetKind::LetTuple(ds, x, e2) => LetKind::LetTuple(ds, x, insert_continue(e2, f, lvs, mask)),
         }),
-        Loop { vars, loop_vars, init, body } => Loop { vars, loop_vars, init, body: insert_continue(body, f, orig, mask) },
+        Loop { vars, loop_vars, init, body } => Loop { vars, loop_vars, init, body: insert_continue(body, f, lvs, mask) },
         _ => e.item
     };
 
@@ -123,8 +123,6 @@ fn conv(mut e: Box<Expr>) -> Box<Expr> {
                         }
                     }
 
-                    let mut body = insert_continue(body, &fvar.name, &args, &mask);
-
                     let mut new_args = vec![];
                     let mut init = vec![];
                     let mut vars = vec![];
@@ -144,6 +142,7 @@ fn conv(mut e: Box<Expr>) -> Box<Expr> {
                         }
                     }
 
+                    let body = insert_continue(body, &fvar.name, &loop_vars, &mask);
                     let body = lift!(Loop { vars, loop_vars, init, body });
                     let fundef = Fundef {
                         fvar,
