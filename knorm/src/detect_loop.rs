@@ -1,7 +1,7 @@
 use bit_vec::BitVec;
 
 use util::{Spanned, Id, id};
-use ty::knormal::{ short, Ty };
+use ty::knormal::Ty;
 use ast::knormal::*;
 
 fn merge(p: (Option<BitVec>, bool), q: (Option<BitVec>, bool)) -> (Option<BitVec>, bool) {
@@ -128,7 +128,6 @@ fn conv(mut e: Box<Expr>) -> Box<Expr> {
                     let mut new_args = vec![];
                     let mut init = vec![];
                     let mut vars = vec![];
-                    let zero = id::gen_uniq_with(short(&Ty::Int));
                     for (idx, d) in args.into_iter().enumerate().rev() {
                         if mask[idx] {
                             new_args.push(d);
@@ -138,12 +137,12 @@ fn conv(mut e: Box<Expr>) -> Box<Expr> {
                             new_args.push(Decl::new(x.clone(), d.t.clone()));
                             init.push(x);
                             let v = id::distinguish(d.name.clone());
-                            let vt = Ty::Array(Box::new(d.t.clone()), Some(1));
+                            let vt = Ty::Ref(Box::new(d.t.clone()));
                             vars.push(Decl::new(v.clone(), vt));
 
                             body = lift!(Let(LetKind::Let(
                                 Decl::new(d.name, d.t),
-                                lift!(Get(v, zero.clone())),
+                                lift!(Load(v)),
                                 body
                                 )));
                         }
@@ -152,11 +151,6 @@ fn conv(mut e: Box<Expr>) -> Box<Expr> {
                     init.reverse();
                     vars.reverse();
 
-                    let body = lift!(Let(LetKind::Let(
-                        Decl::new(zero, Ty::Int),
-                        lift!(Const(0.into())),
-                        body
-                    )));
                     let body = lift!(Loop { vars, init, body });
                     let fundef = Fundef {
                         fvar,

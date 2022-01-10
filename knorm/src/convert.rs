@@ -2,7 +2,7 @@ use anyhow::Context;
 use anyhow::Result;
 
 use ast::{syntax, knormal};
-use ty::knormal::{short, Ty};
+use ty::knormal::Ty;
 use ty::syntax::Ty as SyntaxTy;
 use util::Id;
 use util::Map as FnvMap;
@@ -20,7 +20,7 @@ fn insert_let<F: FnOnce(Id) -> (ExprKind, Ty)>(e: Expr, t: Ty, loc: util::Span, 
     match e.item {
         ExprKind::Var(x) => k(x),
         _ => {
-            let x = util::id::gen_uniq_with(short(&t));
+            let x = util::id::gen_uniq_with(t.short());
             let (e2, t2) = k(x.clone());
             let kind = LetKind::Let(Decl::new(x, t), Box::new(e), Box::new(Spanned::new(e2, loc)));
             (ExprKind::Let(kind), t2)
@@ -59,7 +59,7 @@ fn conv(e: Box<syntax::Expr>, env: &mut Map, extenv: &SyntaxMap) -> Result<(Box<
             else {
                 // 外部配列の参照
                 let t = extenv.get(&x).unwrap().clone().into();
-                if let Ty::Array(_, _) = t {
+                if let Ty::Array(_) = t {
                     (ExprKind::ExtArray(x), t)
                 }
                 else {
@@ -321,7 +321,7 @@ fn conv(e: Box<syntax::Expr>, env: &mut Map, extenv: &SyntaxMap) -> Result<(Box<
             let (e1, t1) = conv(e1, env, extenv)?;
             let (e2, t2) = conv(e2, env, extenv)?;
 
-            let t = Ty::Array(Box::new(t2.clone().into()), None);
+            let t = Ty::Array(Box::new(t2.clone().into()));
 
             insert_let(*e1, t1, e.loc, |idx|
                 insert_let(*e2, t2, e.loc, |init|
@@ -334,7 +334,7 @@ fn conv(e: Box<syntax::Expr>, env: &mut Map, extenv: &SyntaxMap) -> Result<(Box<
             let (e2, t2) = conv(e2, env, extenv)?;
 
             let t = match &t1 {
-                Ty::Array(t, _) => (**t).clone(),
+                Ty::Array(t) => (**t).clone(),
                 _ => panic!()
             };
 

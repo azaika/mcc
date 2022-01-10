@@ -22,7 +22,8 @@ impl From<knormal::Ty> for Ty {
             knormal::Ty::Float => Float,
             knormal::Ty::Fun(args, r) => Fun(args.into_iter().map(|x| x.into()).collect(), Box::new((*r).into())),
             knormal::Ty::Tuple(ts) => Tuple(ts.into_iter().map(|x| x.into()).collect()),
-            knormal::Ty::Array(t, s) => MutArray(Box::new((*t).into()), s)
+            knormal::Ty::Array(t) => MutArray(Box::new((*t).into()), None),
+            knormal::Ty::Ref(t) => Ref(Box::new((*t).into()))
         }
     }
 }

@@ -72,7 +72,7 @@ impl Decl {
 
     pub fn gen_uniq(t: ty::Ty) -> Self {
         Self {
-            name: util::id::gen_uniq_with(ty::short(&t)),
+            name: util::id::gen_uniq_with(t.short()),
             t
         }
     }
@@ -136,6 +136,8 @@ pub enum ExprKind {
         body: Box<Expr>
     },
     Continue(Vec<(Id, Id)>), // only in Loop.body
+    Assign(Id, Id),
+    Load(Id),
 }
 
 pub type Expr = Spanned<ExprKind>;
@@ -202,7 +204,9 @@ pub fn rename(mut e: Box<Expr>, env: &Map) -> Box<Expr> {
             Loop { vars, init, body }
         },
         Continue(xs) => Continue(xs.into_iter().map(|x| (map!(x.0), map!(x.1))).collect()),
-        _ => e.item
+        Assign(x, y) => Assign(map!(x), map!(y)),
+        Load(x) => Load(map!(x)),
+        Const(_) | ExtArray(_) => e.item,
     };
 
     e
@@ -330,6 +334,8 @@ impl ExprKind {
                 util::format_vec(f, &xs.iter().map(|(_, x)| x).collect(), "[", ", ", "]")?;
                 write!(f, "\n")
             },
+            Assign(x, y) => write!(f, "Assign {}, {}\n", x, y),
+            Load(x) => write!(f, "Load {}\n", x),
         }
     }
 }

@@ -1,4 +1,4 @@
-use util::{Spanned, Id};
+use util::Id;
 
 use ast::knormal::*;
 
@@ -17,16 +17,17 @@ fn merge(f1: FuncInfo, f2: FuncInfo) -> FuncInfo {
 // 式の中に変数 `name` が出現するかを判定する
 // 関数呼び出しの中身までは見ない
 fn calc_info(e: &Expr, name: &Id) -> FuncInfo {
+    use ExprKind::*;
     match &e.item {
-        ExprKind::Const(_) => (false, 1),
-        ExprKind::Var(x) | ExprKind::UnOp(_, x) | ExprKind::ExtArray(x) => (x == name, 1),
-        ExprKind::BinOp(_, x, y) | ExprKind::CreateArray(x, y) | ExprKind::Get(x, y) =>
+        Const(_) => (false, 1),
+        Var(x) | UnOp(_, x) | ExtArray(x) | Load(x) => (x == name, 1),
+        BinOp(_, x, y) | CreateArray(x, y) | Get(x, y) | Assign(x, y) =>
             (x == name || y == name, 1),
-        ExprKind::If(_, x, y, e1, e2) => {
+        If(_, x, y, e1, e2) => {
             let (is_rec, size) = merge(calc_info(e1, name), calc_info(e2, name));
             (is_rec || x == name || y == name, size + 1)
         },
-        ExprKind::Let(l) => {
+        Let(l) => {
             match l {
                 LetKind::Let(_, e1, e2)
                 | LetKind::LetRec(Fundef { fvar: _, args: _, body: e1 }, e2) => {
@@ -39,24 +40,24 @@ fn calc_info(e: &Expr, name: &Id) -> FuncInfo {
                 },
             }
         },
-        ExprKind::Tuple(xs) => (xs.iter().any(|x| x == name), 1),
-        ExprKind::App(f, args) | ExprKind::ExtApp(f, args)=>
+        Tuple(xs) => (xs.iter().any(|x| x == name), 1),
+        App(f, args) | ExtApp(f, args)=>
             (f == name || args.iter().any(|x| x == name), 1),
-        ExprKind::Put(x, y, z) => ([x, y, z].iter().any(|x| *x == name), 1),
-        ExprKind::Loop { init, body, .. } => {
+        Put(x, y, z) => ([x, y, z].iter().any(|x| *x == name), 1),
+        Loop { init, body, .. } => {
             let (is_rec, size) = calc_info(body, name);
             (is_rec || init.iter().any(|x| x == name), size + 1)
         },
-        ExprKind::Continue(xs) => (xs.iter().any(|(_, x)| x == name), 1),
+        Continue(xs) => (xs.iter().any(|(_, x)| x == name), 1),        
     }
 }
 
 type Map = util::Map<Id, (Vec<Id>, Expr)>;
 
 // 変換の呼び出し
-fn conv(e: Box<Expr>, env: &mut Map, limit: usize) -> Box<Expr> {
+fn conv(mut e: Box<Expr>, env: &mut Map, limit: usize) -> Box<Expr> {
     use ExprKind::*;
-    let kind = match e.item {
+    e.item = match e.item {
         If(kind, x, y, e1, e2) => If(kind, x, y, conv(e1, env, limit), conv(e2, env, limit)),
         Let(l) => {
             use LetKind::*;
@@ -96,10 +97,10 @@ fn conv(e: Box<Expr>, env: &mut Map, limit: usize) -> Box<Expr> {
             }
         },
         Loop { vars, init, body } => Loop { vars, init, body: conv(body, env, limit) },
-        _ => return e
+        _ => e.item
     };
 
-    Box::new(Spanned::new(kind, e.loc))
+    e
 }
 
 pub fn inlining(e: Expr, limit: usize, tyenv: &mut TyMap) -> Expr {
