@@ -1,7 +1,7 @@
 use id_arena::Arena;
 
 use util::{Spanned, Id, Map};
-pub use ty::closure::Ty as Ty;
+pub use ty::mir::Ty as Ty;
 
 use std::{fmt, collections::{BTreeSet, btree_set::Iter}};
 

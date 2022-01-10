@@ -1,16 +1,16 @@
 use util::ToSpanned;
 use util::{ id, Id };
-use ast::{ knormal, closure };
-use ty::closure::Ty;
+use ast::{ knormal, mir };
+use ty::mir::Ty;
 
 type Set = util::Set<Id>;
 
-fn conv_simple(e : knormal::ExprKind, known: &mut Set) -> closure::InstKind {
-    use closure::InstKind;
+fn conv_simple(e : knormal::ExprKind, known: &mut Set) -> mir::InstKind {
+    use mir::InstKind;
     match e {
         knormal::ExprKind::Const(c) => {
             let c = match c {
-                knormal::ConstKind::CUnit => closure::ConstKind::CUnit,
+                knormal::ConstKind::CUnit => mir::ConstKind::CUnit,
                 knormal::ConstKind::CInt(i) => i.into(),
                 knormal::ConstKind::CFloat(x) => x.into(),
             };
@@ -20,14 +20,14 @@ fn conv_simple(e : knormal::ExprKind, known: &mut Set) -> closure::InstKind {
         knormal::ExprKind::Var(v) => InstKind::Var(v),
         knormal::ExprKind::UnOp(kind, x) => {
             let kind = match kind {
-                knormal::UnOpKind::Neg => closure::UnOpKind::Neg,
-                knormal::UnOpKind::FNeg => closure::UnOpKind::FNeg,
+                knormal::UnOpKind::Neg => mir::UnOpKind::Neg,
+                knormal::UnOpKind::FNeg => mir::UnOpKind::FNeg,
             };
 
             InstKind::UnOp(kind, x)
         },
         knormal::ExprKind::BinOp(kind, x, y) => {
-            use closure::BinOpKind::*;
+            use mir::BinOpKind::*;
             let kind = match kind {
                 knormal::BinOpKind::Add => Add,
                 knormal::BinOpKind::Sub => Sub,
@@ -45,22 +45,22 @@ fn conv_simple(e : knormal::ExprKind, known: &mut Set) -> closure::InstKind {
         knormal::ExprKind::App(f, args) => {
             if known.contains(&f) {
                 log::info!("directly applying {}.", f);
-                InstKind::CallDir(closure::Label(f), args)
+                InstKind::CallDir(mir::Label(f), args)
             }
             else {
                 InstKind::CallCls(f, args)
             }
         },
-        knormal::ExprKind::ExtApp(f, args) => InstKind::CallDir(closure::Label(f), args),
+        knormal::ExprKind::ExtApp(f, args) => InstKind::CallDir(mir::Label(f), args),
         knormal::ExprKind::Get(x, y) => InstKind::ArrayGet(x, y),
         knormal::ExprKind::Put(x, y, z) => InstKind::ArrayPut(x, y, z),
         _ => panic!("non-simple ExprKind has been passed: {}", e)
     }
 }
 
-fn gen_array_init(name: Id, num: Id, init: Id, span: util::Span, p: &mut closure::Program, bid: closure::BlockId) -> closure::BlockId {
-    use closure::InstKind;
-    use closure::TailKind;
+fn gen_array_init(name: Id, num: Id, init: Id, span: util::Span, p: &mut mir::Program, bid: mir::BlockId) -> mir::BlockId {
+    use mir::InstKind;
+    use mir::TailKind;
     // `let a = Array.make num init` を
     // ```
     // let a = Array.alloc num in
@@ -77,9 +77,9 @@ fn gen_array_init(name: Id, num: Id, init: Id, span: util::Span, p: &mut closure
 
     p.tymap.insert(idx_var.clone(), idx_t);
 
-    let loop_id = p.block_arena.alloc(closure::Block::with_name(id::gen_uniq_with(".FEEntry")));
-    let body_id = p.block_arena.alloc(closure::Block::with_name(id::gen_uniq_with(".FEBody")));
-    let cont_id = p.block_arena.alloc(closure::Block::new());
+    let loop_id = p.block_arena.alloc(mir::Block::with_name(id::gen_uniq_with(".FEEntry")));
+    let body_id = p.block_arena.alloc(mir::Block::with_name(id::gen_uniq_with(".FEBody")));
+    let cont_id = p.block_arena.alloc(mir::Block::new());
 
     *p.block_arena[bid].tail = TailKind::Jump(loop_id).with_span(span);
 
@@ -102,9 +102,9 @@ fn gen_array_init(name: Id, num: Id, init: Id, span: util::Span, p: &mut closure
     cont_id
 }
 
-fn conv_let(d: knormal::Decl, e1: Box<knormal::Expr>, tyenv: &knormal::TyMap, span: util::Span, p: &mut closure::Program, known: &mut Set, bid: id_arena::Id<closure::Block>) -> Option<closure::BlockId> {
-    use closure::InstKind;
-    use closure::TailKind;
+fn conv_let(d: knormal::Decl, e1: Box<knormal::Expr>, tyenv: &knormal::TyMap, span: util::Span, p: &mut mir::Program, known: &mut Set, bid: id_arena::Id<mir::Block>, is_top: bool) -> Option<mir::BlockId> {
+    use mir::InstKind;
+    use mir::TailKind;
     let body = &mut p.block_arena[bid].body;
 
     // unit 型の変数が必要な場合
@@ -113,7 +113,7 @@ fn conv_let(d: knormal::Decl, e1: Box<knormal::Expr>, tyenv: &knormal::TyMap, sp
         return None;
     }
     else if e1.item == knormal::ExprKind::Const(knormal::ConstKind::CUnit) {
-        body.push((Some(d.name), InstKind::Const(closure::ConstKind::CUnit).with_span(span)));
+        body.push((Some(d.name), InstKind::Const(mir::ConstKind::CUnit).with_span(span)));
         return None;
     };
 
@@ -122,11 +122,17 @@ fn conv_let(d: knormal::Decl, e1: Box<knormal::Expr>, tyenv: &knormal::TyMap, sp
     let name = d.name.clone();
     let is_unit = d.t == ty::knormal::Ty::Unit;
     let res = if is_unit { None } else { Some(name.clone()) };
+
+    // グローバル変数にする
+    if is_top {
+        todo!()
+    }
+
     match e1.item {
         knormal::ExprKind::If(_, _, _, _, _) => {
-            let cont_id = p.block_arena.alloc(closure::Block::new());
+            let cont_id = p.block_arena.alloc(mir::Block::new());
 
-            conv(e1, tyenv, p, known, bid, res, TailKind::Jump(cont_id), None);
+            conv(e1, tyenv, p, known, bid, res, TailKind::Jump(cont_id), None, is_top);
 
             return Some(cont_id);
         },
@@ -134,9 +140,9 @@ fn conv_let(d: knormal::Decl, e1: Box<knormal::Expr>, tyenv: &knormal::TyMap, sp
             return Some(gen_array_init(name, num, init, span, p, bid));
         },
         knormal::ExprKind::Loop { .. } => {
-            let cont_id = p.block_arena.alloc(closure::Block::new());
+            let cont_id = p.block_arena.alloc(mir::Block::new());
 
-            conv(e1, tyenv, p, known, bid, res, TailKind::Jump(cont_id), None);
+            conv(e1, tyenv, p, known, bid, res, TailKind::Jump(cont_id), None, is_top);
 
             return Some(cont_id);
         },
@@ -231,9 +237,9 @@ fn has_free_impl(func: &mut Set, e: &knormal::Expr, known: &mut Set) -> bool {
     }
 }
 
-fn has_free(fundef: &knormal::Fundef, p: &closure::Program, known: &Set) -> bool {
+fn has_free(fundef: &knormal::Fundef, p: &mir::Program, known: &Set) -> bool {
     let mut known = known.clone();
-    for closure::Global{ name, .. } in &p.globals {
+    for mir::Global{ name, .. } in &p.globals {
         known.insert(name.0.clone());
     }
     for knormal::Decl{ name, .. } in &fundef.args {
@@ -266,31 +272,31 @@ fn emerge(e: &knormal::Expr, name: &Id) -> bool {
 }
 
 // ToDo: グローバル変数への対応
-fn conv(e: Box<knormal::Expr>, tyenv: &knormal::TyMap, p: &mut closure::Program, known: &mut Set, bid: id_arena::Id<closure::Block>, res: Option<Id>, tail: closure::TailKind, loop_id: Option<closure::BlockId>) {
+fn conv(e: Box<knormal::Expr>, tyenv: &knormal::TyMap, p: &mut mir::Program, known: &mut Set, bid: id_arena::Id<mir::Block>, res: Option<Id>, tail: mir::TailKind, loop_id: Option<mir::BlockId>, is_top: bool) {
     use knormal::ExprKind;
-    use closure::InstKind;
-    use closure::TailKind;
+    use mir::InstKind;
+    use mir::TailKind;
 
     match e.item {
         ExprKind::If(kind, x, y, e1, e2) => {
-            let b1_id = p.block_arena.alloc(closure::Block::new());
-            let b2_id = p.block_arena.alloc(closure::Block::new());
+            let b1_id = p.block_arena.alloc(mir::Block::new());
+            let b2_id = p.block_arena.alloc(mir::Block::new());
 
-            conv(e1, tyenv, p, known, b1_id, res.clone(), tail.clone(), loop_id);
-            conv(e2, tyenv, p, known, b2_id, res, tail, loop_id);
+            conv(e1, tyenv, p, known, b1_id, res.clone(), tail.clone(), loop_id, is_top);
+            conv(e2, tyenv, p, known, b2_id, res, tail, loop_id, is_top);
 
             let kind = match kind {
-                knormal::IfKind::IfEq => closure::IfKind::IfEq,
-                knormal::IfKind::IfLE => closure::IfKind::IfLE,
+                knormal::IfKind::IfEq => mir::IfKind::IfEq,
+                knormal::IfKind::IfLE => mir::IfKind::IfLE,
             };
 
             p.block_arena[bid].tail = Box::new(TailKind::If(kind, x, y, b1_id, b2_id).with_span(e.loc));
         },
         ExprKind::Let(l) => match l {
             knormal::LetKind::Let(d, e1, e2) => {
-                let bid = conv_let(d, e1, tyenv, e.loc, p, known, bid).unwrap_or(bid);
+                let bid = conv_let(d, e1, tyenv, e.loc, p, known, bid, is_top).unwrap_or(bid);
 
-                conv(e2, tyenv, p, known, bid, res, tail, loop_id);
+                conv(e2, tyenv, p, known, bid, res, tail, loop_id, is_top);
             },
             knormal::LetKind::LetRec(fundef, e2) => {
                 // 自由変数が無いなら自身は CallDir で呼ぶようにする
@@ -298,18 +304,17 @@ fn conv(e: Box<knormal::Expr>, tyenv: &knormal::TyMap, p: &mut closure::Program,
                     known.insert(fundef.fvar.name.clone());
                 }
 
-                let entry_id = p.block_arena.alloc(closure::Block::with_name(format!(".Entry@{}", fundef.fvar.name)));
+                let entry_id = p.block_arena.alloc(mir::Block::with_name(format!(".Entry@{}", fundef.fvar.name)));
 
                 // convert function body
                 if let ty::knormal::Ty::Fun(_, t) = tyenv.get(&fundef.fvar.name).unwrap() {
                     let is_unit = *t.as_ref() == ty::knormal::Ty::Unit;
-
                     if is_unit {
-                        conv(fundef.body, tyenv, p, known, entry_id, None, TailKind::Return(None), None);
+                        conv(fundef.body, tyenv, p, known, entry_id, None, TailKind::Return(None), None, false);
                     }
                     else {
                         let ret_var = id::gen_uniq_with(ty::knormal::short(t));
-                        conv(fundef.body, tyenv, p, known, entry_id, Some(ret_var.clone()), TailKind::Return(Some(ret_var.clone())), None);
+                        conv(fundef.body, tyenv, p, known, entry_id, Some(ret_var.clone()), TailKind::Return(Some(ret_var.clone())), None, false);
                     }
                 }
                 else {
@@ -319,7 +324,7 @@ fn conv(e: Box<knormal::Expr>, tyenv: &knormal::TyMap, p: &mut closure::Program,
                 // free variables which are contained in converted function body
                 let fvs = {
                     let mut known = Set::default();
-                    for closure::Global { name, .. } in &p.globals {
+                    for mir::Global { name, .. } in &p.globals {
                         known.insert(name.0.clone());
                     }
                     for knormal::Decl { name, .. } in &fundef.args {
@@ -335,8 +340,8 @@ fn conv(e: Box<knormal::Expr>, tyenv: &knormal::TyMap, p: &mut closure::Program,
                     p.tymap.insert(name.clone(), t.clone().into());
                 }
                 
-                p.fundefs.push(closure::Fundef {
-                    name: closure::Label(fundef.fvar.name.clone()),
+                p.fundefs.push(mir::Fundef {
+                    name: mir::Label(fundef.fvar.name.clone()),
                     args: fundef.args.into_iter().map(|d| d.name).collect(),
                     formal_fv: fvs.iter().map(|x| x.clone()).collect(),
                     entry: entry_id,
@@ -347,13 +352,13 @@ fn conv(e: Box<knormal::Expr>, tyenv: &knormal::TyMap, p: &mut closure::Program,
                     let f = fundef.fvar.name.clone();
                     p.tymap.insert(f.clone(), fundef.fvar.t.into());
                     p.block_arena[bid].body.push((Some(f), InstKind::MakeCls(
-                        closure::Label(fundef.fvar.name),
+                        mir::Label(fundef.fvar.name),
                         fvs.into_iter().map(|x| x.clone()).collect()
                     ).with_span(e.loc)));
                 }
 
                 // convert following programs
-                conv(e2, tyenv, p, known, bid, res, tail, loop_id);
+                conv(e2, tyenv, p, known, bid, res, tail, loop_id, is_top);
             },
             knormal::LetKind::LetTuple(ds, x, e2) => {
                 // `let (x1, ..., xn) = x in e2` を
@@ -370,7 +375,7 @@ fn conv(e: Box<knormal::Expr>, tyenv: &knormal::TyMap, p: &mut closure::Program,
                     p.tymap.insert(name, t.into());
                 }
                 
-                conv(e2, tyenv, p, known, bid, res, tail, loop_id);
+                conv(e2, tyenv, p, known, bid, res, tail, loop_id, is_top);
             },
         },
         ExprKind::Loop { vars, init, body: e1 } => {
@@ -396,8 +401,8 @@ fn conv(e: Box<knormal::Expr>, tyenv: &knormal::TyMap, p: &mut closure::Program,
             }
 
             // create loop block and convert
-            let loop_id = p.block_arena.alloc(closure::Block::with_name(id::gen_uniq_with(".loop")));
-            conv(e1, tyenv, p, known, loop_id, res, tail, Some(loop_id));
+            let loop_id = p.block_arena.alloc(mir::Block::with_name(id::gen_uniq_with(".loop")));
+            conv(e1, tyenv, p, known, loop_id, res, tail, Some(loop_id), false);
         },
         ExprKind::Continue(xs) => {
             let body = &mut p.block_arena[bid].body;
@@ -411,7 +416,7 @@ fn conv(e: Box<knormal::Expr>, tyenv: &knormal::TyMap, p: &mut closure::Program,
             p.block_arena[bid].tail = Box::new(TailKind::Jump(loop_id.unwrap()).with_span(e.loc));
         },
         ExprKind::CreateArray(num, init) => {
-            assert!(res.is_some(), "result does not have type Unit");
+            assert!(res.is_some(), "result cannot have type Unit");
             let res = res.unwrap();
             
             let bid = gen_array_init(res, num, init, e.loc, p, bid);
@@ -426,12 +431,26 @@ fn conv(e: Box<knormal::Expr>, tyenv: &knormal::TyMap, p: &mut closure::Program,
     }
 }
 
-pub fn convert(e: knormal::Expr, tyenv: knormal::TyMap) -> closure::Program {
-    let mut arena = id_arena::Arena::new();
-    let entry = arena.alloc(closure::Block::with_name("_min_caml_start".to_string()));
-    let mut p = closure::Program::new(arena, entry);
+fn has_func(e: &knormal::Expr) -> bool {
+    match &e.item {
+        knormal::ExprKind::If(_, _, _, e1, e2) => has_func(e1) || has_func(e2),
+        knormal::ExprKind::Let(l) => match l {
+            knormal::LetKind::Let(_, e1, e2) => has_func(e1) || has_func(e2),
+            knormal::LetKind::LetRec(_, _) => true,
+            knormal::LetKind::LetTuple(_, _, e2) => has_func(e2),
+        },
+        knormal::ExprKind::Loop { body, .. } => has_func(body),
+        _ => false,
+    }
+}
 
-    conv(Box::new(e), &tyenv, &mut p, &mut Set::default(), entry, None, closure::TailKind::Return(None), None);
+pub fn convert(e: knormal::Expr, tyenv: knormal::TyMap) -> mir::Program {
+    let mut arena = id_arena::Arena::new();
+    let entry = arena.alloc(mir::Block::with_name("_min_caml_start".to_string()));
+    let mut p = mir::Program::new(arena, entry);
+
+    let is_top = !has_func(&e);
+    conv(Box::new(e), &tyenv, &mut p, &mut Set::default(), entry, None, mir::TailKind::Return(None), None, is_top);
 
     p
 }
