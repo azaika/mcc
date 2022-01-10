@@ -75,7 +75,7 @@ fn insert_continue(mut e: Box<Expr>, f: &Id, orig: &Vec<Decl>, mask: &BitVec) ->
             LetKind::LetRec(_, _) => panic!(),
             LetKind::LetTuple(ds, x, e2) => LetKind::LetTuple(ds, x, insert_continue(e2, f, orig, mask)),
         }),
-        Loop { vars, init, body } => Loop { vars, init, body: insert_continue(body, f, orig, mask) },
+        Loop { vars, loop_vars, init, body } => Loop { vars, loop_vars, init, body: insert_continue(body, f, orig, mask) },
         _ => e.item
     };
 
@@ -128,7 +128,8 @@ fn conv(mut e: Box<Expr>) -> Box<Expr> {
                     let mut new_args = vec![];
                     let mut init = vec![];
                     let mut vars = vec![];
-                    for (idx, d) in args.into_iter().enumerate().rev() {
+                    let mut loop_vars = vec![];
+                    for (idx, d) in args.into_iter().enumerate() {
                         if mask[idx] {
                             new_args.push(d);
                         }
@@ -138,20 +139,12 @@ fn conv(mut e: Box<Expr>) -> Box<Expr> {
                             init.push(x);
                             let v = id::distinguish(d.name.clone());
                             let vt = Ty::Ref(Box::new(d.t.clone()));
-                            vars.push(Decl::new(v.clone(), vt));
-
-                            body = lift!(Let(LetKind::Let(
-                                Decl::new(d.name, d.t),
-                                lift!(Load(v)),
-                                body
-                                )));
+                            loop_vars.push(Decl::new(v.clone(), vt));
+                            vars.push(d);
                         }
                     }
-                    new_args.reverse();
-                    init.reverse();
-                    vars.reverse();
 
-                    let body = lift!(Loop { vars, init, body });
+                    let body = lift!(Loop { vars, loop_vars, init, body });
                     let fundef = Fundef {
                         fvar,
                         args: new_args,
@@ -162,7 +155,7 @@ fn conv(mut e: Box<Expr>) -> Box<Expr> {
             },
             LetKind::LetTuple(ds, x, e2) => LetKind::LetTuple(ds, x, conv(e2)),
         }),
-        Loop { vars, init, body } => Loop { vars, init, body: conv(body) },
+        Loop { vars, loop_vars, init, body } => Loop { vars, loop_vars, init, body: conv(body) },
         _ => e.item
     };
 

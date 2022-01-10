@@ -96,7 +96,7 @@ fn conv(mut e: Box<Expr>, env: &mut Map, limit: usize) -> Box<Expr> {
                 App(f, args)
             }
         },
-        Loop { vars, init, body } => Loop { vars, init, body: conv(body, env, limit) },
+        Loop { vars, loop_vars, init, body } => Loop { vars, loop_vars, init, body: conv(body, env, limit) },
         _ => e.item
     };
 

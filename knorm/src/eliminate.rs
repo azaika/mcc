@@ -119,12 +119,12 @@ fn conv(mut e: Box<Expr>, used: &mut Set) -> Box<Expr> {
             used.insert(z.clone());
             Put(x, y, z)
         },
-        Loop { vars, init, body } => {
+        Loop { vars, loop_vars, init, body } => {
             let body = conv(body, used);
             for x in &init {
                 used.insert(x.clone());
             };
-            Loop { vars, init, body }
+            Loop { vars, loop_vars, init, body }
         },
         Continue(xs) => {
             for (_, x) in &xs {
@@ -138,6 +138,7 @@ fn conv(mut e: Box<Expr>, used: &mut Set) -> Box<Expr> {
     e
 }
 
+// 不要定義削除を行う
 pub fn eliminate(e: Expr) -> Expr {
     *conv(Box::new(e), &mut Set::default())
 }

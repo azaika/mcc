@@ -96,24 +96,27 @@ pub fn conv(mut e: Box<Expr>, env: &mut Map) -> Box<Expr> {
         CreateArray(num, init) => CreateArray(map!(num), map!(init)),
         Get(x, y) => Get(map!(x), map!(y)),
         Put(x, y, z) => Put(map!(x), map!(y), map!(z)),
-        Loop { vars, init, body }  => {
-            let new_names: Vec<_> = vars.iter().map(|d| id::distinguish(d.name.clone())).collect();
+        Loop { vars, loop_vars, init, body }  => {
+            let new_names: Vec<_> = loop_vars.iter().map(|d| id::distinguish(d.name.clone())).collect();
+
+            loop_vars.iter().map(|d| id::distinguish(d.name.clone())).collect();
 
             let mut old_vars = vec![];
-            for (Decl{ name, t: _ }, x) in vars.iter().zip(&new_names) {
+            for (Decl{ name, t: _ }, x) in loop_vars.iter().zip(&new_names) {
                 old_vars.push(env.insert(name.clone(), x.clone()));
             }
 
             let body = conv(body, env);
 
-            for (x, d) in old_vars.into_iter().zip(&vars) {
+            for (x, d) in old_vars.into_iter().zip(&loop_vars) {
                 util::restore(env, &d.name, x);
             }
 
-            let vars = new_names.into_iter().zip(vars).map(|(x, d)| Decl::new(x, d.t)).collect();
+            let vars = vars.into_iter().map(|x| map!(x)).collect();
+            let loop_vars = new_names.into_iter().zip(loop_vars).map(|(x, d)| Decl::new(x, d.t)).collect();
             let init = init.into_iter().map(|x| map!(x)).collect();
             
-            Loop { vars, init, body }
+            Loop { vars, loop_vars, init, body }
         },
         Continue(xs) => Continue(xs.into_iter().map(|(x, y)| (map!(x), map!(y))).collect()),
         _ => e.item

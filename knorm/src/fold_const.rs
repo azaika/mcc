@@ -170,7 +170,7 @@ fn conv(mut e: Box<Expr>, tyenv: &mut TyMap, consts: &mut ConstMap) -> Box<Expr>
                 _ => l.map(|e| conv(e, tyenv, consts))
             }
         ),
-        ExprKind::Loop { vars, init, body } => ExprKind::Loop { vars, init, body: conv(body, tyenv, consts) },
+        ExprKind::Loop { vars, loop_vars, init, body } => ExprKind::Loop { vars, loop_vars, init, body: conv(body, tyenv, consts) },
         _ => e.item
     };
 
@@ -178,7 +178,6 @@ fn conv(mut e: Box<Expr>, tyenv: &mut TyMap, consts: &mut ConstMap) -> Box<Expr>
 }
 
 // 定数畳み込みを行う
-// CreateArray が定数で呼ばれていることが分かる場合, 型変換を行う
 pub fn fold_const(e: Expr, tyenv: &mut TyMap) -> Expr {
     *conv(Box::new(e), tyenv, &mut ConstMap::default())
 }

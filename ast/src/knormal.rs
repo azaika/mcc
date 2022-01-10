@@ -132,6 +132,7 @@ pub enum ExprKind {
     Put(Id, Id, Id),
     Loop {
         vars: Vec<Decl>,
+        loop_vars: Vec<Decl>,
         init: Vec<Id>,
         body: Box<Expr>
     },
@@ -196,12 +197,13 @@ pub fn rename(mut e: Box<Expr>, env: &Map) -> Box<Expr> {
         CreateArray(num, init) => CreateArray(map!(num), map!(init)),
         Get(x, y) => Get(map!(x), map!(y)),
         Put(x, y, z) => Put(map!(x), map!(y), map!(z)),
-        Loop { vars, init, body } => {
+        Loop { vars, loop_vars, init, body } => {
             let vars = vars.into_iter().map(|d| Decl::new(map!(d.name), d.t)).collect();
+            let loop_vars = loop_vars.into_iter().map(|d| Decl::new(map!(d.name), d.t)).collect();
             let init = init.into_iter().map(|x| map!(x)).collect();
             let body = rename(body, env);
 
-            Loop { vars, init, body }
+            Loop { vars, loop_vars, init, body }
         },
         Continue(xs) => Continue(xs.into_iter().map(|x| (map!(x.0), map!(x.1))).collect()),
         Assign(x, y) => Assign(map!(x), map!(y)),
@@ -251,7 +253,7 @@ pub fn make_tymap(e: &Expr, env: &mut TyMap) {
                 },
             }
         },
-        ExprKind::Loop { vars, body, .. } => {
+        ExprKind::Loop { loop_vars: vars, body, .. } => {
             for d in vars {
                 push!(d);
             }
@@ -321,7 +323,7 @@ impl ExprKind {
             CreateArray(num, init) => write!(f, "CreateArray {}, {}\n", num, init),
             Get(arr, idx) => write!(f, "Get {}, {}\n", arr, idx),
             Put(arr, idx, e) => write!(f, "Put {}, {}, {}\n", arr, idx, e),
-            Loop { vars, init, body } => {
+            Loop { loop_vars: vars, init, body } => {
                 write!(f, "Loop:\n{}vars = ", indent(level + 1))?;
                 util::format_vec(f, vars, "[", ", ", "]")?;
                 write!(f, "\n{}init = ", indent(level + 1))?;
