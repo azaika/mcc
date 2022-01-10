@@ -97,23 +97,29 @@ pub fn conv(mut e: Box<Expr>, env: &mut Map) -> Box<Expr> {
         Get(x, y) => Get(map!(x), map!(y)),
         Put(x, y, z) => Put(map!(x), map!(y), map!(z)),
         Loop { vars, loop_vars, init, body }  => {
-            let new_names: Vec<_> = loop_vars.iter().map(|d| id::distinguish(d.name.clone())).collect();
-
-            loop_vars.iter().map(|d| id::distinguish(d.name.clone())).collect();
+            let new_names: Vec<_> = vars.iter().map(|d| id::distinguish(d.name.clone())).collect();
+            let new_lvnames: Vec<_> = loop_vars.iter().map(|d| id::distinguish(d.name.clone())).collect();
 
             let mut old_vars = vec![];
-            for (Decl{ name, t: _ }, x) in loop_vars.iter().zip(&new_names) {
+            for (Decl{ name, .. }, x) in vars.iter().zip(&new_names) {
                 old_vars.push(env.insert(name.clone(), x.clone()));
+            }
+            let mut old_lvs = vec![];
+            for (Decl{ name, .. }, x) in loop_vars.iter().zip(&new_lvnames) {
+                old_lvs.push(env.insert(name.clone(), x.clone()));
             }
 
             let body = conv(body, env);
 
-            for (x, d) in old_vars.into_iter().zip(&loop_vars) {
+            for (x, d) in old_lvs.into_iter().zip(&loop_vars) {
+                util::restore(env, &d.name, x);
+            }
+            for (x, d) in old_vars.into_iter().zip(&vars) {
                 util::restore(env, &d.name, x);
             }
 
-            let vars = vars.into_iter().map(|x| map!(x)).collect();
-            let loop_vars = new_names.into_iter().zip(loop_vars).map(|(x, d)| Decl::new(x, d.t)).collect();
+            let vars = new_names.into_iter().zip(vars).map(|(x, d)| Decl::new(x, d.t)).collect();
+            let loop_vars = new_lvnames.into_iter().zip(loop_vars).map(|(x, d)| Decl::new(x, d.t)).collect();
             let init = init.into_iter().map(|x| map!(x)).collect();
             
             Loop { vars, loop_vars, init, body }

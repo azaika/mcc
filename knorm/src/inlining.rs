@@ -20,8 +20,8 @@ fn calc_info(e: &Expr, name: &Id) -> FuncInfo {
     use ExprKind::*;
     match &e.item {
         Const(_) => (false, 1),
-        Var(x) | UnOp(_, x) | ExtArray(x) | Load(x) => (x == name, 1),
-        BinOp(_, x, y) | CreateArray(x, y) | Get(x, y) | Assign(x, y) =>
+        Var(x) | UnOp(_, x) | ExtArray(x) => (x == name, 1),
+        BinOp(_, x, y) | CreateArray(x, y) | Get(x, y) =>
             (x == name || y == name, 1),
         If(_, x, y, e1, e2) => {
             let (is_rec, size) = merge(calc_info(e1, name), calc_info(e2, name));

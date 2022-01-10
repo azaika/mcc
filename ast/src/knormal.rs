@@ -137,8 +137,6 @@ pub enum ExprKind {
         body: Box<Expr>
     },
     Continue(Vec<(Id, Id)>), // only in Loop.body
-    Assign(Id, Id),
-    Load(Id),
 }
 
 pub type Expr = Spanned<ExprKind>;
@@ -206,8 +204,6 @@ pub fn rename(mut e: Box<Expr>, env: &Map) -> Box<Expr> {
             Loop { vars, loop_vars, init, body }
         },
         Continue(xs) => Continue(xs.into_iter().map(|x| (map!(x.0), map!(x.1))).collect()),
-        Assign(x, y) => Assign(map!(x), map!(y)),
-        Load(x) => Load(map!(x)),
         Const(_) | ExtArray(_) => e.item,
     };
 
@@ -323,9 +319,11 @@ impl ExprKind {
             CreateArray(num, init) => write!(f, "CreateArray {}, {}\n", num, init),
             Get(arr, idx) => write!(f, "Get {}, {}\n", arr, idx),
             Put(arr, idx, e) => write!(f, "Put {}, {}, {}\n", arr, idx, e),
-            Loop { loop_vars: vars, init, body } => {
+            Loop { vars, loop_vars, init, body } => {
                 write!(f, "Loop:\n{}vars = ", indent(level + 1))?;
                 util::format_vec(f, vars, "[", ", ", "]")?;
+                write!(f, "\n{}loop_vars = ", indent(level + 1))?;
+                util::format_vec(f, loop_vars, "[", ", ", "]")?;
                 write!(f, "\n{}init = ", indent(level + 1))?;
                 util::format_vec(f, init, "[", ", ", "]")?;
                 write!(f, "\n{}body =\n", indent(level + 1))?;
@@ -336,8 +334,6 @@ impl ExprKind {
                 util::format_vec(f, &xs.iter().map(|(_, x)| x).collect(), "[", ", ", "]")?;
                 write!(f, "\n")
             },
-            Assign(x, y) => write!(f, "Assign {}, {}\n", x, y),
-            Load(x) => write!(f, "Load {}\n", x),
         }
     }
 }

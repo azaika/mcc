@@ -62,7 +62,7 @@ fn hash_impl<H: std::hash::Hasher>(e: &Expr, state: &mut H, num_let: usize) {
     use ExprKind::*;
     match &e.item {
         Const(c) => c.hash(state),
-        Var(x) | ExtArray(x) | Load(x) => x.hash(state),
+        Var(x) | ExtArray(x) => x.hash(state),
         UnOp(op, x) => {
             op.hash(state);
             x.hash(state)
@@ -116,7 +116,7 @@ fn hash_impl<H: std::hash::Hasher>(e: &Expr, state: &mut H, num_let: usize) {
             f.hash(state);
             args.hash(state)
         }
-        CreateArray(x, y) | Get(x, y) | Assign(x, y) => {
+        CreateArray(x, y) | Get(x, y) => {
             x.hash(state);
             y.hash(state)
         }
@@ -160,7 +160,7 @@ fn is_impure(e: &Expr, effects: &mut Set) -> bool {
             LetKind::LetTuple(_, _, e2) => is_impure(e2, effects),
         },
         App(f, _) => effects.contains(f),
-        ExtApp(_, _) | CreateArray(_, _) | ExtArray(_) | Put(_, _, _) | Get(_, _) | Loop { .. } | Assign(_, _) | Load(_) => {
+        ExtApp(_, _) | CreateArray(_, _) | ExtArray(_) | Put(_, _, _) | Get(_, _) | Loop { .. } => {
             true
         }
         _ => false,
