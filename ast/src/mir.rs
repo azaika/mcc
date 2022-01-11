@@ -171,9 +171,7 @@ impl Block {
     fn format_indented(&self, f: &mut fmt::Formatter, level: usize, arena: &Arena<Block>) -> fmt::Result {
         // print indentation
         let indent = |level: usize| "    ".repeat(level);
-        write!(f, "{}Block {}\n", indent(level), self.name)?;
-        write!(f, "{}tail: ", indent(level + 1))?;
-        self.tail.item.format(f, arena)?;
+        write!(f, "{}Block {}", indent(level), self.name)?;
         write!(f, "\n{}body:\n", indent(level + 1))?;
         for (x, inst) in &self.body {
             if let Some(x) = x {
@@ -183,7 +181,10 @@ impl Block {
                 write!(f, "{}{}\n", indent(level + 2), inst)?;
             }
         }
-        Ok(())
+
+        write!(f, "\n{}tail: ", indent(level + 1))?;
+        self.tail.item.format(f, arena)?;
+        write!(f, "\n")
     }
 }
 
@@ -229,6 +230,33 @@ impl Program {
             entry,
         }
     }
+
+    fn collect_used_impl(&self, bid: BlockId, used: &mut util::Set<BlockId>) {
+        if used.contains(&bid) {
+            return;
+        }
+        used.insert(bid);
+
+        match self.block_arena[bid].tail.item {
+            TailKind::If(_, _, _, b1, b2) | TailKind::ForEach(_, _, _, b1, b2) => {
+                self.collect_used_impl(b1, used);
+                self.collect_used_impl(b2, used);
+            },
+            TailKind::Jump(b) => self.collect_used_impl(b, used),
+            TailKind::Return(_) => {},
+        }
+    }
+
+    pub fn collect_used(&self) -> util::Set<BlockId> {
+        let mut used = util::Set::default();
+
+        self.collect_used_impl(self.entry, &mut used);
+        for f in &self.fundefs {
+            self.collect_used_impl(f.entry, &mut used);
+        }
+
+        used
+    }
 }
 
 impl fmt::Display for Program {
@@ -247,8 +275,8 @@ impl fmt::Display for Program {
         }
 
         write!(f, "Blocks:\n")?;
-        for (_, block) in &self.block_arena {
-            block.format_indented(f, 1, &self.block_arena)?;
+        for bid in &self.collect_used() {
+            self.block_arena[*bid].format_indented(f, 1, &self.block_arena)?;
             write!(f, "\n")?;
         }
 

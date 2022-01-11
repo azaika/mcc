@@ -73,8 +73,7 @@ fn conv(bid: BlockId, p: &mut Program, arrived: &mut Set) {
 
 pub fn compress_jump(mut p: Program) -> Program {
     let mut arrived = Set::default();
-    let bids: Vec<_> = p.block_arena.iter().map(|(bid, _)| bid).collect();
-    for bid in bids {
+    for bid in p.collect_used() {
         conv(bid, &mut p, &mut arrived);
     }
 
