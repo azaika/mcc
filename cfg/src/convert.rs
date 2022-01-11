@@ -2,8 +2,6 @@ use util::{ ToSpanned, id, Id };
 use ast::{ closure, mir };
 use ty::mir::Ty;
 
-type Set = util::Set<Id>;
-
 fn conv_simple(e : closure::ExprKind) -> mir::InstKind {
     use mir::InstKind;
     match e {
@@ -43,8 +41,10 @@ fn conv_simple(e : closure::ExprKind) -> mir::InstKind {
         closure::ExprKind::Tuple(xs) => InstKind::Tuple(xs),
         closure::ExprKind::CallDir(l, args) => InstKind::CallDir(mir::Label(l.0), args),
         closure::ExprKind::CallCls(f, args) => InstKind::CallCls(f, args),
-        closure::ExprKind::Get(x, y) => InstKind::ArrayGet(x, y),
-        closure::ExprKind::Put(x, y, z) => InstKind::ArrayPut(x, y, z),
+        closure::ExprKind::ArrayGet(x, y) => InstKind::ArrayGet(x, y),
+        closure::ExprKind::ArrayPut(x, y, z) => InstKind::ArrayPut(x, y, z),
+        closure::ExprKind::TupleGet(x, i) => InstKind::TupleGet(x, i),
+        closure::ExprKind::MakeCls(l, xs) => InstKind::MakeCls(mir::Label(l.0), xs),
         _ => panic!("non-simple ExprKind has been passed: {}", e)
     }
 }
@@ -114,6 +114,8 @@ fn conv_let(d: closure::Decl, e1: Box<closure::Expr>, span: util::Span, p: &mut 
     let is_unit = d.t == ty::knormal::Ty::Unit;
     let res = if is_unit { None } else { Some(name.clone()) };
 
+    p.tymap.insert(d.name, d.t.into());
+
     match e1.item {
         closure::ExprKind::If(_, _, _, _, _) => {
             let cont_id = p.block_arena.alloc(mir::Block::new());
@@ -132,7 +134,7 @@ fn conv_let(d: closure::Decl, e1: Box<closure::Expr>, span: util::Span, p: &mut 
 
             return Some(cont_id);
         },
-        closure::ExprKind::Let(_, _, _) | closure::ExprKind::LetTuple(_, _, _) => panic!("knormal::Expr should be let-flattened"),
+        closure::ExprKind::Let(_, _, _) => panic!("knormal::Expr should be let-flattened"),
         closure::ExprKind::Continue(_) => unreachable!(),
         _ => body.push((res.clone(), conv_simple(e1.item).with_span(span)))
     }
@@ -164,23 +166,6 @@ fn conv(e: Box<closure::Expr>, p: &mut mir::Program, bid: id_arena::Id<mir::Bloc
         closure::ExprKind::Let(d, e1, e2) => {
             let bid = conv_let(d, e1, e.loc, p, bid).unwrap_or(bid);
 
-            conv(e2, p, bid, res, tail, loop_id);
-        },
-        closure::ExprKind::LetTuple(ds, x, e2) => {
-            // `let (x1, ..., xn) = x in e2` を
-            // ```
-            // let x1 = x.0 in
-            // ...
-            // let xn = x.(n-1) in
-            // e2
-            // ```
-            // に変換する
-            let body = &mut p.block_arena[bid].body;
-            for (idx, closure::Decl { name, t }) in ds.into_iter().enumerate() {
-                body.push((Some(name.clone()), InstKind::TupleGet(x.clone(), idx).with_span(e.loc)));
-                p.tymap.insert(name, t.into());
-            }
-                
             conv(e2, p, bid, res, tail, loop_id);
         },
         ExprKind::Loop { vars, loop_vars, init, body: e1 } => {
@@ -231,12 +216,25 @@ fn init_global(globals: Vec<closure::Global>, p: &mut mir::Program) -> mir::Bloc
         use mir::TailKind::Jump;
         use mir::InstKind::Assign;
 
-        p.globals.push(mir::Label(g.name.0.clone()));
-        p.tymap.insert(g.name.0.clone(), g.t.into());
+        let can_skip = g.t == ty::knormal::Ty::Unit && {
+            match g.init.item {
+                closure::ExprKind::Const(_) | closure::ExprKind::Var(_) => false,
+                _ => true
+            }
+        };
+
+        let res = if !can_skip {
+            p.globals.push(mir::Label(g.name.0.clone()));
+            p.tymap.insert(g.name.0.clone(), g.t.into());
+            Some(g.name.0.clone())
+        }
+        else {
+            None
+        };
 
         let cont_id = p.block_arena.alloc(mir::Block::with_name(format!(".Init@{}", g.name.0)));
         let span = g.init.loc;
-        conv(g.init, p, cur_id, Some(g.name.0.clone()), Jump(cont_id), None);
+        conv(g.init, p, cur_id, res, Jump(cont_id), None);
         p.block_arena[cont_id].body.push((
             None,
             Assign(mir::Label(g.name.0.clone()), g.name.0).with_span(span)
@@ -274,13 +272,13 @@ fn convert_fundef(fundefs: Vec<closure::Fundef>, p: &mut mir::Program) {
         }
 
         if let ty::knormal::Ty::Fun(_, rt) = fvar.t {
-            let is_none = rt.as_ref() == &ty::knormal::Ty::Unit;
-            if is_none {
+            let is_unit = rt.as_ref() == &ty::knormal::Ty::Unit;
+            if is_unit {
                 conv(body, p, entry_id, None, mir::TailKind::Return(None), None);
             }
             else {
-                let ret_var = util::id::gen_uniq_with(Ty::Unit.short());
-                p.tymap.insert(ret_var.clone(), Ty::Unit);
+                let ret_var = util::id::gen_uniq_with(rt.short());
+                p.tymap.insert(ret_var.clone(), (*rt).into());
 
                 conv(body, p, entry_id, Some(ret_var.clone()), mir::TailKind::Return(Some(ret_var.clone())), None);
             }

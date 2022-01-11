@@ -36,7 +36,7 @@ impl Fundef {
         util::format_vec(f, &self.args, "[", ", ", "]")?;
         write!(f, "\n{}formal_fv: ", indent(level + 1))?;
         util::format_vec(f, &self.formal_fv, "[", ", ", "]")?;
-        write!(f, "\n{}body:", indent(level + 1))?;
+        write!(f, "\n{}body:\n", indent(level + 1))?;
         self.body.item.format_indented(f, level + 2)
     }
 }
@@ -49,14 +49,14 @@ pub enum ExprKind {
     BinOp(BinOpKind, Id, Id),
     If(IfKind, Id, Id, Box<Expr>, Box<Expr>),
     Let(Decl, Box<Expr>, Box<Expr>),
-    LetTuple(Vec<Decl>, Id, Box<Expr>),
     Tuple(Vec<Id>),
     CallDir(Label, Vec<Id>),
     CallCls(Id, Vec<Id>),
     CreateArray(Id, Id),
     ExtArray(Label),
-    Get(Id, Id),
-    Put(Id, Id, Id),
+    ArrayGet(Id, Id),
+    ArrayPut(Id, Id, Id),
+    TupleGet(Id, usize),
     Loop {
         vars: Vec<Decl>,
         loop_vars: Vec<Decl>,
@@ -80,26 +80,20 @@ impl ExprKind {
         use ExprKind::*;
         match self {
             Const(c) => write!(f, "{:?}\n", c),
-            Var(v) => write!(f, "Var {}\n", v),
-            ExtArray(x) => write!(f, "ExtArray {}\n", x),
-            UnOp(op, x) => write!(f, "{:?} {}\n", op, x),
-            BinOp(op, x, y) => write!(f, "{:?} {}, {}\n", op, x, y),
+            Var(v) => write!(f, "Var {v}\n"),
+            ExtArray(x) => write!(f, "ExtArray {x}\n"),
+            UnOp(op, x) => write!(f, "{:?} {x}\n", op),
+            BinOp(op, x, y) => write!(f, "{:?} {x}, {y}\n", op),
             If(kind, x, y, e1, e2) => {
-                write!(f, "{:?} {}, {}:\n", kind, x, y)?;
+                write!(f, "{:?} {x}, {y}:\n", kind)?;
                 e1.item.format_indented(f, level + 1)?;
                 write!(f, "{}Else:\n", indent(level))?;
                 e2.item.format_indented(f, level + 1)
             },
             Let(d, e1, e2) => {
-                write!(f, "Let: {}\n", d)?;
+                write!(f, "Let: {d}\n")?;
                 e1.item.format_indented(f, level + 1)?;
                 e2.item.format_indented(f, level)
-            },
-            LetTuple(decls, x, e) => {
-                write!(f, "LetTuple ")?;
-                util::format_vec(f, &decls, "(", ", ", ")")?;
-                write!(f, ":\n{}{}\n", indent(level + 1), x)?;
-                e.item.format_indented(f, level)
             },
             Tuple(xs) => {
                 write!(f, "Tuple ")?;
@@ -107,18 +101,19 @@ impl ExprKind {
                 write!(f, "\n")
             },
             CallDir(func, args) => {
-                write!(f, "CallDir {}", func)?;
+                write!(f, "CallDir {func}")?;
                 util::format_vec(f, args, "(", ", ", ")")?;
                 write!(f, "\n")
             },
             CallCls(func, args) => {
-                write!(f, "CallCls {}", func)?;
+                write!(f, "CallCls {func}")?;
                 util::format_vec(f, args, "(", ", ", ")")?;
                 write!(f, "\n")
             },
-            CreateArray(num, init) => write!(f, "CreateArray {}, {}\n", num, init),
-            Get(arr, idx) => write!(f, "Get {}, {}\n", arr, idx),
-            Put(arr, idx, e) => write!(f, "Put {}, {}, {}\n", arr, idx, e),
+            CreateArray(num, init) => write!(f, "CreateArray {num}, {init}\n"),
+            ArrayGet(arr, idx) => write!(f, "ArrayGet {arr}, {idx}\n"),
+            ArrayPut(arr, idx, x) => write!(f, "ArrayPut {arr}, {idx}, {x}\n"),
+            TupleGet(arr, idx) => write!(f, "TupleGet {arr}.{idx}\n"),
             Loop { vars, loop_vars, init, body } => {
                 write!(f, "Loop:\n{}vars = ", indent(level + 1))?;
                 util::format_vec(f, vars, "[", ", ", "]")?;
@@ -139,8 +134,8 @@ impl ExprKind {
                 util::format_vec(f, actual_fv, "[", ", ", "]")?;
                 write!(f, "\n")
             },
-            Assign(x, y) => write!(f, "Assign {}, {}", x, y),
-            Load(x) => write!(f, "Load {}", x),
+            Assign(x, y) => write!(f, "Assign {x}, {y}"),
+            Load(x) => write!(f, "Load {x}"),
         }
     }
 }
@@ -162,7 +157,7 @@ impl Global {
     fn format_indented(&self, f: &mut fmt::Formatter, level: usize) -> fmt::Result {
         let indent = |level: usize| "    ".repeat(level);
 
-        write!(f, "{}Global: ({}, {})", indent(level), self.name, self.t)?;
+        write!(f, "{}Global: ({}, {})\n", indent(level), self.name, self.t)?;
         self.init.item.format_indented(f, level + 1)
     }
 }
@@ -194,6 +189,7 @@ impl fmt::Display for Program {
         write!(f, "\n[Fundefs]\n")?;
         for fundef in &self.fundefs {
             fundef.format_indented(f, 1)?;
+            write!(f, "\n")?;
         }
         write!(f, "\n[main]\n")?;
         self.main.item.format_indented(f, 1)

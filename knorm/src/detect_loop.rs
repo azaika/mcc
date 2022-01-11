@@ -64,8 +64,16 @@ fn insert_continue(mut e: Box<Expr>, f: &Id, lvs: &Vec<Decl>, mask: &BitVec) -> 
     use ExprKind::*;
     e.item = match e.item {
         App(func, args) if &func == f => {
+            let mut lvs_idx = 0;
             let args = args.into_iter().enumerate().filter_map(|(idx, x)|
-                if mask[idx] { None } else { Some((lvs[idx].name.clone(), x)) }
+                if mask[idx] {
+                    None
+                }
+                else {
+                    let r = Some((lvs[lvs_idx].name.clone(), x));
+                    lvs_idx += 1;
+                    r
+                }
             ).collect();
             Continue(args)
         },

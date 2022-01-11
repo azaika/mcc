@@ -101,8 +101,8 @@ fn collect_free(e: &closure::Expr, known: &mut Set, fv: &mut Set) {
 
     let mut push = |x: &Id| if !known.contains(x) { fv.insert(x.clone()); };
     match &e.item {
-        Var(x) | UnOp(_, x) | Assign(_, x) => push(x),
-        BinOp(_, x, y) | CreateArray(x, y) | Get(x, y) => {
+        Var(x) | UnOp(_, x) | Assign(_, x) | TupleGet(x, _) => push(x),
+        BinOp(_, x, y) | CreateArray(x, y) | ArrayGet(x, y) => {
             push(x); push(y);
         },
         If(_, x, y, e1, e2) => {
@@ -117,21 +117,14 @@ fn collect_free(e: &closure::Expr, known: &mut Set, fv: &mut Set) {
             known.insert(d.name.clone());
             collect_free(e2, known, fv);
         },
-        LetTuple(ds, x, e2) => {
-            push(x);
-            for closure::Decl{ name, .. } in ds {
-                known.insert(name.clone());
-            }
-            collect_free(e2, known, fv);
-        },
         Tuple(xs) | CallDir(_, xs) | MakeCls(_, xs) => xs.iter().for_each(|x| push(x)),
         CallCls(x, ys) => {
             push(x);
             ys.iter().for_each(|x| push(x));
         },
-        Put(x, y, z) => {
+        ArrayPut(x, y, z) => {
             push(x); push(y); push(z);
-        },        
+        },
         Loop { vars, loop_vars, init, body } => {
             init.iter().for_each(|x| push(x));
             for closure::Decl{ name, .. } in vars.iter().chain(loop_vars) {
@@ -139,7 +132,7 @@ fn collect_free(e: &closure::Expr, known: &mut Set, fv: &mut Set) {
             }
             collect_free(body, known, fv);
         },
-        Continue(ps) => ps.iter().for_each(|(x, y)|{ push(x); push(y) }),
+        Continue(ps) => ps.iter().for_each(|(x, y)| { push(x); push(y) }),
         Const(_) | ExtArray(_) | Load(_) => { /* no vars */ },
     }
 }
@@ -242,7 +235,30 @@ fn conv(e: Box<knormal::Expr>, tyenv: &knormal::TyMap, known: &mut Set, global: 
                     conv(e2, tyenv, known, global, p)
                 }
             },
-            knormal::LetKind::LetTuple(ds, x, e2) => lift(ExprKind::LetTuple(ds, x, conv(e2, tyenv, known, global, p))),
+            knormal::LetKind::LetTuple(ds, x, e2) => {
+                assert!(!ds.is_empty());
+                let is_global = global.contains(&ds[0].name);
+
+                if is_global {
+                    for (idx, d) in ds.into_iter().enumerate() {
+                        p.globals.push(closure::Global{
+                            name: closure::Label(d.name),
+                            t: d.t,
+                            init: lift(ExprKind::TupleGet(x.clone(), idx)),
+                        });
+                    }
+                    conv(e2, tyenv, known, global, p)
+                }
+                else {
+                    let mut e2 = conv(e2, tyenv, known, global, p);
+                    for (idx, d) in ds.into_iter().enumerate().rev() {
+                        let name = d.name.clone();
+                        e2 = lift(ExprKind::Let(d, lift(ExprKind::TupleGet(name, idx)), e2));
+                    }
+
+                    e2
+                }
+            },
         },
         knormal::ExprKind::Tuple(xs) => lift(ExprKind::Tuple(xs)),
         knormal::ExprKind::App(func, args) => {
@@ -256,8 +272,8 @@ fn conv(e: Box<knormal::Expr>, tyenv: &knormal::TyMap, known: &mut Set, global: 
         knormal::ExprKind::ExtApp(func, args) => lift(ExprKind::CallDir(closure::Label(func), args)),
         knormal::ExprKind::CreateArray(x, y) => lift(ExprKind::CreateArray(x, y)),
         knormal::ExprKind::ExtArray(x) => lift(ExprKind::ExtArray(closure::Label(x))),
-        knormal::ExprKind::Get(x, y) => lift(ExprKind::Get(x, y)),
-        knormal::ExprKind::Put(x, y, z) => lift(ExprKind::Put(x, y, z)),
+        knormal::ExprKind::Get(x, y) => lift(ExprKind::ArrayGet(x, y)),
+        knormal::ExprKind::Put(x, y, z) => lift(ExprKind::ArrayPut(x, y, z)),
         knormal::ExprKind::Loop { vars, loop_vars, init, body } => {
             lift(ExprKind::Loop {
                 vars,
@@ -277,7 +293,7 @@ fn find_last_letrec(e: &knormal::Expr) -> Option<Id> {
             knormal::LetKind::LetRec(fundef, e2) => {
                 find_last_letrec(e2).or_else(|| Some(fundef.fvar.name.clone()))
             },
-            knormal::LetKind::LetTuple(_, _, _) => None
+            knormal::LetKind::LetTuple(_, _, e2) => find_last_letrec(e2),
         },
         _ => None,
     }
@@ -296,7 +312,12 @@ fn collect_global(e: &knormal::Expr, last: &Id, res: &mut Set) {
                 }
                 collect_global(&e2, last, res);
             },
-            knormal::LetKind::LetTuple(_, _, _) => return,
+            knormal::LetKind::LetTuple(xs, _, e2) => {
+                for d in xs {
+                    res.insert(d.name.clone());
+                }
+                collect_global(e2, last, res);
+            },
         },
         _ => return,
     }
@@ -311,7 +332,6 @@ pub fn convert(e: knormal::Expr, tyenv: knormal::TyMap) -> closure::Program {
     }
 
     p.main = conv(Box::new(e), &tyenv, &mut Set::default(), &global, &mut p);
-    p.globals.reverse();
     p.fundefs.reverse();
 
     p

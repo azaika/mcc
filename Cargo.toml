@@ -7,5 +7,6 @@ members = [
     "parser",
     "typing",
     "knorm",
-    "mir"
+    "cls",
+    "cfg"
 ]

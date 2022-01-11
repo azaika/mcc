@@ -1,7 +1,7 @@
 use anyhow::{Result, Context};
 use clap::Parser;
 
-use ast::*;
+use ast::{ syntax, knormal };
 use ariadne;
 
 #[derive(Debug, Parser)]
@@ -124,27 +124,37 @@ pub fn compile(args : Args) -> Result<()> {
     let knormed = knorm::convert(typed, &extenv)?;
 
     if args.verbose {
-        println!("[[knormed]]\n{}", knormed);
+        println!("\n[[knormed]]\n{}", knormed);
     }
 
     let (alpha, mut tyenv) = knorm::to_alpha_form(knormed);
 
     if args.verbose {
-        println!("[[alpha]]\n{}", alpha);
+        println!("\n[[alpha]]\n{}", alpha);
     }
 
-    let _opt_knorm = if args.optimize {
+    let opt_knorm = if args.optimize {
         let r = optimize_knorm(alpha, &mut tyenv, &args);
 
         if args.verbose {
-            println!("[[optimized_knorm]]\n{}", r);
+            println!("\n[[optimized_knorm]]\n{}", r);
         }
         
         r
     }
     else {
-        alpha
+        knorm::flatten_let(alpha)
     };
+
+    let closured = cls::convert(opt_knorm, tyenv);
+    if args.verbose {
+        println!("\n[[closured]]\n{}", closured);
+    }
+
+    let mir = cfg::convert(closured);
+    if args.verbose {
+        println!("\n[[cfg]]\n{}", mir);
+    }
 
     Ok(())
 }
