@@ -101,6 +101,21 @@ fn optimize_knorm(mut e: knormal::Expr, tyenv: &mut knorm::TyMap, config: &Args)
     e
 }
 
+fn optimize_mir(mut p: ast::mir::Program) -> ast::mir::Program {
+    let mut prev = p.clone();
+    for i in 0..100 {
+        log::info!("mir opt loop: {i}");
+        p = cfg::compress_jump(p);
+
+        if p == prev {
+            break;
+        }
+        prev = p.clone();
+    }
+
+    p
+}
+
 pub fn compile(args : Args) -> Result<()> {
     let parsed_libs = match &args.lib {
         None => vec![],
@@ -158,6 +173,19 @@ pub fn compile(args : Args) -> Result<()> {
     if args.verbose {
         println!("\n[[cfg]]\n{}", mir);
     }
+
+    let _opt_mir = if args.optimize {
+        let r = optimize_mir(mir);
+
+        if args.verbose {
+            println!("\n[[optimized_cfg]]\n{}", r);
+        }
+        
+        r
+    }
+    else {
+        mir
+    };
 
     Ok(())
 }

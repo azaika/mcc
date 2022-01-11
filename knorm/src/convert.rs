@@ -20,7 +20,7 @@ fn insert_let<F: FnOnce(Id) -> (ExprKind, Ty)>(e: Expr, t: Ty, loc: util::Span, 
     match e.item {
         ExprKind::Var(x) => k(x),
         _ => {
-            let x = util::id::gen_uniq_with(t.short());
+            let x = util::id::gen_tmp_var_with(t.short());
             let (e2, t2) = k(x.clone());
             let kind = LetKind::Let(Decl::new(x, t), Box::new(e), Box::new(Spanned::new(e2, loc)));
             (ExprKind::Let(kind), t2)
