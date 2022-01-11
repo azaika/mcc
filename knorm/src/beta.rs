@@ -1,20 +1,14 @@
 use util::Map as FnvMap;
 use util::Id;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-enum Saved {
-    Var(Id),
-    Tup(Vec<Id>)
-}
-
-type Map = FnvMap<Id, Saved>;
+type Map = FnvMap<Id, Id>;
 
 use ast::knormal::*;
 
 fn conv(mut e: Box<Expr>, env: &mut Map, tyenv: &mut super::TyMap) -> Box<Expr> {
     macro_rules! map {
         ($name: expr) => {
-            if let Some(Saved::Var(x)) = env.get(&$name) { x.clone() } else { $name }
+            if let Some(x) = env.get(&$name) { x.clone() } else { $name }
         }
     }
 
@@ -34,9 +28,9 @@ fn conv(mut e: Box<Expr>, env: &mut Map, tyenv: &mut super::TyMap) -> Box<Expr> 
                     let e1 = conv(e1, env, tyenv);
                     match e1.item {
                         Var(x) => {
-                            log::info!("beta-reducing `{}` to `{}`", decl.name, x);
+                            log::debug!("beta-reducing `{}` to `{}`", decl.name, x);
                             tyenv.remove(&decl.name);
-                            env.insert(decl.name.clone(), Saved::Var(x));
+                            env.insert(decl.name.clone(), x);
                             return conv(e2, env, tyenv);
                         },
                         _ => {
@@ -56,26 +50,6 @@ fn conv(mut e: Box<Expr>, env: &mut Map, tyenv: &mut super::TyMap) -> Box<Expr> 
                     };
 
                     LetKind::LetRec(fundef, e2)
-                },
-                LetKind::LetTuple(ds, x, e2) => {
-                    let x = map!(x);
-                    if let Some(Saved::Tup(xs)) = env.get(&x).cloned() {
-                        assert!(ds.len() == xs.len());
-
-                        log::info!("beta-reducing {:?} to {:?}", ds.iter().map(|d| &d.name).collect::<Vec<_>>(), xs);
-
-                        for (Decl { name, t: _ }, x) in ds.into_iter().zip(xs) {
-                            tyenv.remove(&name);
-                            env.insert(name, Saved::Var(x));
-                        }
-
-                        return conv(e2, env, tyenv);
-                    }
-                    else {
-                        env.insert(x.clone(), Saved::Tup(ds.iter().map(|d| d.name.clone()).collect()));
-                        let e2 = conv(e2, env, tyenv);
-                        LetKind::LetTuple(ds, x, e2)
-                    }
                 }
             };
 
@@ -85,8 +59,9 @@ fn conv(mut e: Box<Expr>, env: &mut Map, tyenv: &mut super::TyMap) -> Box<Expr> 
         App(f, args) => App(map!(f), args.into_iter().map(|x| map!(x)).collect()),
         ExtApp(f, args) => ExtApp(f, args.into_iter().map(|x| map!(x)).collect()),
         CreateArray(num, init) => CreateArray(map!(num), map!(init)),
-        Get(x, y) => Get(map!(x), map!(y)),
-        Put(x, y, z) => Put(map!(x), map!(y), map!(z)),
+        ArrayGet(x, y) => ArrayGet(map!(x), map!(y)),
+        ArrayPut(x, y, z) => ArrayPut(map!(x), map!(y), map!(z)),
+        TupleGet(x, idx) => TupleGet(map!(x), idx),
         Loop { vars, loop_vars, init, body } => {
             let init = init.into_iter().map(|x| map!(x)).collect();
             let body = conv(body, env, tyenv);

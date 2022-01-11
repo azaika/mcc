@@ -1,33 +1,20 @@
-use util::{Spanned, Id};
+use util::Id;
 
 use ast::knormal::*;
 use crate::TyMap;
 
-#[derive(Debug, Clone)]
-enum Const {
-    Val(ConstKind),
-    Tup(Vec<Id>)
-}
-
-type ConstMap = util::Map<Id, Const>;
+type ConstMap = util::Map<Id, ConstKind>;
 
 fn get_int(consts: &ConstMap, x: &Id) -> Option<i32> {
     match consts.get(x) {
-        Some(Const::Val(ConstKind::CInt(i))) => Some(*i),
+        Some(ConstKind::CInt(i)) => Some(*i),
         _ => None
     }
 }
 
 fn get_float(consts: &ConstMap, x: &Id) -> Option<f32> {
     match consts.get(x) {
-        Some(Const::Val(ConstKind::CFloat(d))) => Some(*d),
-        _ => None
-    }
-}
-
-fn get_tup<'a>(consts: &'a ConstMap, x: &Id) -> Option<&'a Vec<Id>> {
-    match consts.get(x) {
-        Some(Const::Tup(ys)) => Some(ys),
+        Some(ConstKind::CFloat(d)) => Some(*d),
         _ => None
     }
 }
@@ -117,7 +104,7 @@ fn conv(mut e: Box<Expr>, tyenv: &mut TyMap, consts: &mut ConstMap) -> Box<Expr>
                     match &e1.item {
                         ExprKind::Const(CUnit) => (),
                         ExprKind::Const(c) => {
-                            consts.insert(d.name.clone(), Const::Val(c.clone()));
+                            consts.insert(d.name.clone(), c.clone());
                         },
                         ExprKind::Var(x) => {
                             // 変数の定数性を伝播
@@ -125,47 +112,11 @@ fn conv(mut e: Box<Expr>, tyenv: &mut TyMap, consts: &mut ConstMap) -> Box<Expr>
                                 consts.insert(d.name.clone(), c);
                             }
                         },
-                        ExprKind::Tuple(xs) => {
-                            consts.insert(d.name.clone(), Const::Tup(xs.clone()));
-                        },
                         _ => ()
                     };
                     
                     let e2 = conv(e2, tyenv, consts);
                     LetKind::Let(d, e1, e2)
-                },
-                LetKind::LetTuple(ds, x, e2) => {
-                    if let Some(xs) = get_tup(consts, &x) {
-                        // `let (d1, ..., dn) = x in e2` で `x = (x1, ..., xn)` と分かっているとき
-                        // ```
-                        // let x1 = y1 in
-                        // ...
-                        // let xn = yn in
-                        // e2
-                        // ```
-                        // に式を置き換える
-                        assert!(ds.len() == xs.len());
-                        let v: Vec<_> = ds.into_iter().zip(xs.clone()).collect();
-                        let new_e = v.into_iter().rev().fold(
-                            e2,
-                            |cont, (d, x)| {
-                                Box::new(Spanned::new(
-                                    ExprKind::Let(LetKind::Let(
-                                        d,
-                                        Box::new(Spanned::new(ExprKind::Var(x), e.loc)),
-                                        cont
-                                    )),
-                                    e.loc
-                                ))
-                            }
-                        );
-
-                        return conv(new_e, tyenv, consts);
-                    }
-                    else {
-                        let e2 = conv(e2, tyenv, consts);
-                        LetKind::LetTuple(ds, x, e2)
-                    }
                 },
                 _ => l.map(|e| conv(e, tyenv, consts))
             }

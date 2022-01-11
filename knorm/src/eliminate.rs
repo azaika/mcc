@@ -11,11 +11,11 @@ fn has_effect(e: &Expr) -> bool {
         Let(l) => {
             match l {
                 LetKind::Let(_, e1, e2) => has_effect(&e1) || has_effect(&e2),
-                LetKind::LetRec(_, e2) | LetKind::LetTuple(_, _, e2) => has_effect(&e2),
+                LetKind::LetRec(_, e2) => has_effect(&e2),
             }
         },
         Loop { body, .. } => has_effect(&body),
-        App(_, _) | ExtApp(_, _) | Put(_, _, _) => true,
+        App(_, _) | ExtApp(_, _) | ArrayPut(_, _, _) => true,
         _ => false,
     }
 }
@@ -49,7 +49,7 @@ fn conv(mut e: Box<Expr>, used: &mut Set) -> Box<Expr> {
                 LetKind::Let(d, e1, e2) => {
                     let e2 = conv(e2, used);
                     if !used.contains(&d.name) && !has_effect(&e1) {
-                        log::info!("eliminating variable `{}`.", d.name);
+                        log::debug!("eliminating variable `{}`.", d.name);
                         return e2;
                     }
 
@@ -64,17 +64,6 @@ fn conv(mut e: Box<Expr>, used: &mut Set) -> Box<Expr> {
                     
                     let body = conv(body, used);
                     LetKind::LetRec(Fundef{ fvar, args, body }, e2)
-                },
-                LetKind::LetTuple(ds, x, e2) => {
-                    let e2 = conv(e2, used);
-                    let necessary = ds.iter().any(|d| used.contains(&d.name));
-                    if !necessary {
-                        log::info!("eliminating variables {:?}.", ds.iter().map(|d| &d.name).collect::<Vec<_>>());
-                        return e2;
-                    }
-
-                    used.insert(x.clone());
-                    LetKind::LetTuple(ds, x, e2)
                 },
             };
 
@@ -108,16 +97,16 @@ fn conv(mut e: Box<Expr>, used: &mut Set) -> Box<Expr> {
             used.insert(x.clone());
             ExtArray(x)
         },
-        Get(x, y) => {
+        ArrayGet(x, y) => {
             used.insert(x.clone());
             used.insert(y.clone());
-            Get(x, y)
+            ArrayGet(x, y)
         },
-        Put(x, y, z) => {
+        ArrayPut(x, y, z) => {
             used.insert(x.clone());
             used.insert(y.clone());
             used.insert(z.clone());
-            Put(x, y, z)
+            ArrayPut(x, y, z)
         },
         Loop { vars, loop_vars, init, body } => {
             let body = conv(body, used);

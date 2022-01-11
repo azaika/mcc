@@ -76,6 +76,7 @@ fn optimize_knorm(mut e: knormal::Expr, tyenv: &mut knorm::TyMap, config: &Args)
 
     for i in 0..config.loop_opt {
         log::info!("knorm opt loop: {}", i);
+        e = knorm::eliminate(e);
         e = knorm::flatten_let(e);
         e = knorm::fold_const(e, tyenv);
         e = knorm::beta_reduction(e, tyenv);

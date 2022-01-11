@@ -22,7 +22,7 @@ fn is_tailrec(e: &Expr, f: &Id, is_inlet: bool, orig: &Vec<Decl>) -> (Option<Bit
     match &e.item {
         Var(x) => (None, x != f),
         UnOp(_, x) => (None, x != f),
-        BinOp(_, x, y) | CreateArray(x, y) | Get(x, y) => (None, x != f && y != f),
+        BinOp(_, x, y) | CreateArray(x, y) | ArrayGet(x, y) => (None, x != f && y != f),
         If(_, x, y, e1, e2) => {
             if x != f && y != f {
                 merge(is_tailrec(&e1, f, is_inlet, orig), is_tailrec(&e2, f, is_inlet, orig))
@@ -38,7 +38,6 @@ fn is_tailrec(e: &Expr, f: &Id, is_inlet: bool, orig: &Vec<Decl>) -> (Option<Bit
                 },
                 // when nested let rec found, assume that outer let rec is not tail recursive (for simplicity)
                 LetKind::LetRec(_, _) => (None, false),
-                LetKind::LetTuple(_, x, e2) => merge((None, x != f), is_tailrec(&e2, f, is_inlet, orig)),
             }
         },
         Tuple(xs) | ExtApp(_, xs) => (None, xs.iter().all(|x| x != f)),
@@ -51,7 +50,7 @@ fn is_tailrec(e: &Expr, f: &Id, is_inlet: bool, orig: &Vec<Decl>) -> (Option<Bit
                 (None, args.iter().all(|x| x != f))
             }
         },
-        Put(x, y, z) => (None, x != f && y != f && z != f),
+        ArrayPut(x, y, z) => (None, x != f && y != f && z != f),
         Loop { init, body, .. } => {
             merge((None, init.iter().all(|x| x != f)), is_tailrec(&body, f, is_inlet, orig))
         },
@@ -81,7 +80,6 @@ fn insert_continue(mut e: Box<Expr>, f: &Id, lvs: &Vec<Decl>, mask: &BitVec) -> 
         Let(l) => Let(match l {
             LetKind::Let(d, e1, e2) => LetKind::Let(d, e1, insert_continue(e2, f, lvs, mask)),
             LetKind::LetRec(_, _) => panic!(),
-            LetKind::LetTuple(ds, x, e2) => LetKind::LetTuple(ds, x, insert_continue(e2, f, lvs, mask)),
         }),
         Loop { vars, loop_vars, init, body } => Loop { vars, loop_vars, init, body: insert_continue(body, f, lvs, mask) },
         _ => e.item
@@ -119,7 +117,7 @@ fn conv(mut e: Box<Expr>) -> Box<Expr> {
                     // e2
                     // ```
                     // に変換する
-                    log::info!("converting function `{}` to loop", fvar.name);
+                    log::debug!("converting function `{}` to loop", fvar.name);
 
                     let mask = called.unwrap();
                     assert!(mask.len() == args.len());
@@ -160,7 +158,6 @@ fn conv(mut e: Box<Expr>) -> Box<Expr> {
                     LetKind::LetRec(fundef, conv(e2))
                 }
             },
-            LetKind::LetTuple(ds, x, e2) => LetKind::LetTuple(ds, x, conv(e2)),
         }),
         Loop { vars, loop_vars, init, body } => Loop { vars, loop_vars, init, body: conv(body) },
         _ => e.item

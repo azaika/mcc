@@ -89,7 +89,6 @@ pub struct Fundef {
 pub enum LetKind {
     Let(Decl, Box<Expr>, Box<Expr>),
     LetRec(Fundef, Box<Expr>),
-    LetTuple(Vec<Decl>, Id, Box<Expr>)
 }
 
 impl LetKind {
@@ -104,7 +103,6 @@ impl LetKind {
 
                 LetKind::LetRec(Fundef { fvar, args, body }, e2)
             },
-            LetKind::LetTuple(ds, x, e2) => LetKind::LetTuple(ds, x, f(e2)),
         }
     }
 }
@@ -128,8 +126,9 @@ pub enum ExprKind {
     ExtApp(Id, Vec<Id>),
     CreateArray(Id, Id),
     ExtArray(Id),
-    Get(Id, Id),
-    Put(Id, Id, Id),
+    ArrayGet(Id, Id),
+    ArrayPut(Id, Id, Id),
+    TupleGet(Id, usize),
     Loop {
         vars: Vec<Decl>,
         loop_vars: Vec<Decl>,
@@ -181,10 +180,6 @@ pub fn rename(mut e: Box<Expr>, env: &Map) -> Box<Expr> {
                     };
                     LetKind::LetRec(fundef, e2)
                 },
-                LetKind::LetTuple(ds, x, e2) => {
-                    let ds = ds.into_iter().map(|d| Decl::new(map!(d.name), d.t)).collect();
-                    LetKind::LetTuple(ds, map!(x), rename(e2, env))
-                }
             };
 
             Let(kind)
@@ -193,8 +188,9 @@ pub fn rename(mut e: Box<Expr>, env: &Map) -> Box<Expr> {
         App(f, args) => App(map!(f), args.into_iter().map(|x| map!(x)).collect()),
         ExtApp(f, args) => ExtApp(f, args.into_iter().map(|x| map!(x)).collect()),
         CreateArray(num, init) => CreateArray(map!(num), map!(init)),
-        Get(x, y) => Get(map!(x), map!(y)),
-        Put(x, y, z) => Put(map!(x), map!(y), map!(z)),
+        ArrayGet(x, y) => ArrayGet(map!(x), map!(y)),
+        ArrayPut(x, y, z) => ArrayPut(map!(x), map!(y), map!(z)),
+        TupleGet(x, idx) => TupleGet(map!(x), idx),
         Loop { vars, loop_vars, init, body } => {
             let vars = vars.into_iter().map(|d| Decl::new(map!(d.name), d.t)).collect();
             let loop_vars = loop_vars.into_iter().map(|d| Decl::new(map!(d.name), d.t)).collect();
@@ -241,16 +237,10 @@ pub fn make_tymap(e: &Expr, env: &mut TyMap) {
                     make_tymap(&fundef.body, env);
                     make_tymap(e2, env);
                 },
-                LetKind::LetTuple(ds, _, e2) => {
-                    for d in ds {
-                        push!(d);
-                    }
-                    make_tymap(e2, env);
-                },
             }
         },
-        ExprKind::Loop { loop_vars: vars, body, .. } => {
-            for d in vars {
+        ExprKind::Loop { vars, loop_vars, body, .. } => {
+            for d in vars.iter().chain(loop_vars) {
                 push!(d);
             }
             make_tymap(body, env);
@@ -292,12 +282,6 @@ impl ExprKind {
                         write!(f, "\n{}body =\n", indent(level + 1))?;
                         fundef.body.item.format_indented(f, level + 2)?;
                         e.item.format_indented(f, level)
-                    },
-                    LetTuple(decls, x, e) => {
-                        write!(f, "LetTuple ")?;
-                        util::format_vec(f, &decls, "(", ", ", ")")?;
-                        write!(f, ":\n{}{}\n", indent(level + 1), x)?;
-                        e.item.format_indented(f, level)
                     }
                 } 
             },
@@ -307,18 +291,19 @@ impl ExprKind {
                 write!(f, "\n")
             },
             App(func, args) => {
-                write!(f, "App {}", func)?;
+                write!(f, "App {func}")?;
                 util::format_vec(f, args, "(", ", ", ")")?;
                 write!(f, "\n")
             },
             ExtApp(func, args) => {
-                write!(f, "ExtApp {}", func)?;
+                write!(f, "ExtApp {func}")?;
                 util::format_vec(f, args, "(", ", ", ")")?;
                 write!(f, "\n")
             },
-            CreateArray(num, init) => write!(f, "CreateArray {}, {}\n", num, init),
-            Get(arr, idx) => write!(f, "Get {}, {}\n", arr, idx),
-            Put(arr, idx, e) => write!(f, "Put {}, {}, {}\n", arr, idx, e),
+            CreateArray(num, init) => write!(f, "CreateArray {num}, {init}\n"),
+            ArrayGet(arr, idx) => write!(f, "ArrayGet {arr}, {idx}\n"),
+            ArrayPut(arr, idx, e) => write!(f, "ArrayPut {arr}, {idx}, {e}\n"),
+            TupleGet(arr, idx) => write!(f, "TupleGet {arr}, {idx}\n"),
             Loop { vars, loop_vars, init, body } => {
                 write!(f, "Loop:\n{}vars = ", indent(level + 1))?;
                 util::format_vec(f, vars, "[", ", ", "]")?;

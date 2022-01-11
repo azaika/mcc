@@ -20,8 +20,8 @@ fn calc_info(e: &Expr, name: &Id) -> FuncInfo {
     use ExprKind::*;
     match &e.item {
         Const(_) => (false, 1),
-        Var(x) | UnOp(_, x) | ExtArray(x) => (x == name, 1),
-        BinOp(_, x, y) | CreateArray(x, y) | Get(x, y) =>
+        Var(x) | UnOp(_, x) | ExtArray(x) | TupleGet(x, _) => (x == name, 1),
+        BinOp(_, x, y) | CreateArray(x, y) | ArrayGet(x, y) =>
             (x == name || y == name, 1),
         If(_, x, y, e1, e2) => {
             let (is_rec, size) = merge(calc_info(e1, name), calc_info(e2, name));
@@ -34,16 +34,12 @@ fn calc_info(e: &Expr, name: &Id) -> FuncInfo {
                     let (is_rec, size) = merge(calc_info(e1, name), calc_info(e2, name));
                     (is_rec, size + 1)
                 },
-                LetKind::LetTuple(_, x, e2) => {
-                    let (is_rec, size) = calc_info(e2, name);
-                    (is_rec || x == name, size + 1)
-                },
             }
         },
         Tuple(xs) => (xs.iter().any(|x| x == name), 1),
         App(f, args) | ExtApp(f, args)=>
             (f == name || args.iter().any(|x| x == name), 1),
-        Put(x, y, z) => ([x, y, z].iter().any(|x| *x == name), 1),
+        ArrayPut(x, y, z) => ([x, y, z].iter().any(|x| *x == name), 1),
         Loop { init, body, .. } => {
             let (is_rec, size) = calc_info(body, name);
             (is_rec || init.iter().any(|x| x == name), size + 1)
@@ -76,7 +72,6 @@ fn conv(mut e: Box<Expr>, env: &mut Map, limit: usize) -> Box<Expr> {
                     let body = conv(body, env, limit);
                     LetRec(Fundef { fvar, args, body }, conv(e2, env, limit))
                 },
-                LetTuple(ds, x, e2) => LetTuple(ds, x, conv(e2, env, limit))
             };
 
             ExprKind::Let(kind)

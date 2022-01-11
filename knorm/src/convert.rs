@@ -229,9 +229,26 @@ fn conv(e: Box<syntax::Expr>, env: &mut Map, extenv: &SyntaxMap) -> Result<(Box<
                         restore(env, &d.name, t);
                     }
 
-                    let ds = ds.into_iter().map(decl_conv).collect();
+                    // `let (x1, ..., xn) = x in e2` を
+                    // ```
+                    // let x1 = x.0 in
+                    // ...
+                    // let xn = x.(n-1) in
+                    // e2
+                    // ```
+                    // に変換
+                    insert_let(*e1, t1, e.loc, |x| {
+                        let mut e2 = e2;
+                        for (idx, d) in ds.into_iter().enumerate() {
+                            e2 = lift!(ExprKind::Let(LetKind::Let(
+                                decl_conv(d),
+                                lift!(ExprKind::TupleGet(x.clone(), idx)),
+                                e2
+                            )));
+                        }
 
-                    insert_let(*e1, t1, e.loc, |x| (ExprKind::Let(LetKind::LetTuple(ds, x, e2)), t2))
+                        (e2.item, t2)
+                    })
                 },
             }
         },
@@ -340,7 +357,7 @@ fn conv(e: Box<syntax::Expr>, env: &mut Map, extenv: &SyntaxMap) -> Result<(Box<
 
             insert_let(*e1, t1, e.loc, |arr|
                 insert_let(*e2, t2, e.loc, |idx|
-                    (ExprKind::Get(arr, idx), t)
+                    (ExprKind::ArrayGet(arr, idx), t)
                 )
             )
         },
@@ -354,7 +371,7 @@ fn conv(e: Box<syntax::Expr>, env: &mut Map, extenv: &SyntaxMap) -> Result<(Box<
             insert_let(*e1, t1, e.loc, |arr|
                 insert_let(*e2, t2, e.loc, |idx|
                     insert_let(*e3, t3, e.loc, |v|
-                        (ExprKind::Put(arr, idx, v), t)
+                        (ExprKind::ArrayPut(arr, idx, v), t)
                     )
                 )
             )

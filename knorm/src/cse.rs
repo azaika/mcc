@@ -105,26 +105,25 @@ fn hash_impl<H: std::hash::Hasher>(e: &Expr, state: &mut H, num_let: usize) {
                 hash_impl(&body, state, num_let);
                 hash_impl(&e2, state, num_let);
             }
-            LetKind::LetTuple(ds, x, e2) => {
-                ds.hash(state);
-                x.hash(state);
-                hash_impl(&e2, state, num_let);
-            }
         },
         Tuple(xs) => xs.hash(state),
         App(f, args) | ExtApp(f, args) => {
             f.hash(state);
             args.hash(state)
         }
-        CreateArray(x, y) | Get(x, y) => {
+        CreateArray(x, y) | ArrayGet(x, y) => {
             x.hash(state);
             y.hash(state)
         }
-        Put(x, y, z) => {
+        ArrayPut(x, y, z) => {
             x.hash(state);
             y.hash(state);
             z.hash(state)
-        }
+        },
+        TupleGet(x, idx) => {
+            x.hash(state);
+            idx.hash(state);
+        },
         Loop { .. } | Continue(_) => {
             // do nothing because loop is not target of CSE
         },
@@ -157,10 +156,9 @@ fn is_impure(e: &Expr, effects: &mut Set) -> bool {
 
                 r
             }
-            LetKind::LetTuple(_, _, e2) => is_impure(e2, effects),
         },
         App(f, _) => effects.contains(f),
-        ExtApp(_, _) | CreateArray(_, _) | ExtArray(_) | Put(_, _, _) | Get(_, _) | Loop { .. } => {
+        ExtApp(_, _) | CreateArray(_, _) | ExtArray(_) | ArrayPut(_, _, _) | ArrayGet(_, _) | Loop { .. } => {
             true
         }
         _ => false,
@@ -182,7 +180,7 @@ fn conv(mut e: Box<Expr>, effects: &mut Set, saved: &mut Map) -> Box<Expr> {
                 LetKind::Let(d, e1, e2) => {
                     let key = ExprInVal(e1);
                     if let Some(x) = saved.get(&key) {
-                        log::info!("found common sub-expressions `{}` and `{}`.", d.name, x);
+                        log::debug!("found common sub-expressions `{}` and `{}`.", d.name, x);
                         let mut m = util::Map::default();
                         m.insert(d.name.clone(), x.clone());
                         LetKind::Let(
@@ -214,7 +212,6 @@ fn conv(mut e: Box<Expr>, effects: &mut Set, saved: &mut Map) -> Box<Expr> {
                     let e2 = conv(e2, effects, saved);
                     LetKind::LetRec(Fundef { fvar, args, body }, e2)
                 }
-                LetKind::LetTuple(ds, x, e2) => LetKind::LetTuple(ds, x, conv(e2, effects, saved)),
             };
 
             Let(kind)

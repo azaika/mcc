@@ -68,24 +68,6 @@ pub fn conv(mut e: Box<Expr>, env: &mut Map) -> Box<Expr> {
 
                     LetKind::LetRec(fundef, e2)
                 },
-                LetKind::LetTuple(ds, x, e2) => {
-                    let new_names: Vec<_> = ds.iter().map(|d| id::distinguish(d.name.clone())).collect();
-
-                    let mut old_vars = vec![];
-                    for (Decl{ name, t: _ }, x) in ds.iter().zip(&new_names) {
-                        old_vars.push(env.insert(name.clone(), x.clone()));
-                    }
-
-                    let e2 = conv(e2, env);
-
-                    for (x, d) in old_vars.into_iter().zip(&ds) {
-                        util::restore(env, &d.name, x);
-                    }
-
-                    let ds = new_names.into_iter().zip(ds).map(|(x, d)| Decl::new(x, d.t)).collect();
-
-                    LetKind::LetTuple(ds, map!(x), e2)
-                }
             };
 
             Let(kind)
@@ -94,8 +76,9 @@ pub fn conv(mut e: Box<Expr>, env: &mut Map) -> Box<Expr> {
         App(f, args) => App(map!(f), args.into_iter().map(|x| map!(x)).collect()),
         ExtApp(f, args) => ExtApp(f, args.into_iter().map(|x| map!(x)).collect()),
         CreateArray(num, init) => CreateArray(map!(num), map!(init)),
-        Get(x, y) => Get(map!(x), map!(y)),
-        Put(x, y, z) => Put(map!(x), map!(y), map!(z)),
+        ArrayGet(x, y) => ArrayGet(map!(x), map!(y)),
+        ArrayPut(x, y, z) => ArrayPut(map!(x), map!(y), map!(z)),
+        TupleGet(x, idx) => TupleGet(map!(x), idx),
         Loop { vars, loop_vars, init, body }  => {
             let new_names: Vec<_> = vars.iter().map(|d| id::distinguish(d.name.clone())).collect();
             let new_lvnames: Vec<_> = loop_vars.iter().map(|d| id::distinguish(d.name.clone())).collect();
@@ -125,7 +108,7 @@ pub fn conv(mut e: Box<Expr>, env: &mut Map) -> Box<Expr> {
             Loop { vars, loop_vars, init, body }
         },
         Continue(xs) => Continue(xs.into_iter().map(|(x, y)| (map!(x), map!(y))).collect()),
-        _ => e.item
+        Const(_) | ExtArray(_) => e.item,
     };
 
     e
