@@ -15,6 +15,8 @@ pub struct Args {
     #[clap(short, long)]
     pub verbose: bool,
     #[clap(short, long)]
+    pub debug: bool,
+    #[clap(short, long)]
     pub lib: Option<Vec<String>>,
     pub source: String
 }

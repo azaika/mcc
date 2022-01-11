@@ -108,6 +108,10 @@ fn conv(mut e: Box<Expr>, used: &mut Set) -> Box<Expr> {
             used.insert(z.clone());
             ArrayPut(x, y, z)
         },
+        TupleGet(x, idx) => {
+            used.insert(x.clone());
+            TupleGet(x, idx)
+        }
         Loop { vars, loop_vars, init, body } => {
             let body = conv(body, used);
             for x in &init {
@@ -121,7 +125,7 @@ fn conv(mut e: Box<Expr>, used: &mut Set) -> Box<Expr> {
             };
             Continue(xs)
         },
-        _ => e.item
+        Const(_) => e.item,
     };
     
     e
