@@ -3,9 +3,9 @@ use id_arena::Arena;
 use util::{Spanned, Id, Map};
 pub use ty::mir::Ty as Ty;
 
-use std::{fmt, collections::BTreeSet};
+use std::fmt;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Hash)]
 pub struct Label(pub Id);
 
 impl fmt::Display for Label {
@@ -62,7 +62,8 @@ pub enum InstKind {
     CallDir(Label, Vec<Id>),
     CallCls(Id, Vec<Id>),
     AllocArray(Id, Ty),
-    Assign(Id, Id),
+    Assign(Label, Id),
+    Load(Label),
     ExtArray(Label),
     TupleGet(Id, usize),
     ArrayGet(Id, Id),
@@ -95,6 +96,7 @@ impl fmt::Display for InstKind {
             },
             AllocArray(num, t) => write!(f, "CreateArray ({}: {})", num, t),
             Assign(x, y) => write!(f, "Assign {} := {}", x, y),
+            Load(x) => write!(f, "Load {}", x),
             ArrayGet(arr, idx) => write!(f, "ArrayGet {}[{}]", arr, idx),
             ArrayPut(arr, idx, e) => write!(f, "ArrayPut {}[{}] <- {}", arr, idx, e),
             TupleGet(arr, idx) => write!(f, "TupleGet {}.{}", arr, idx),
@@ -130,7 +132,7 @@ impl TailKind {
                 write!(f, "{:?} {}, {} => {} | {}", kind, x, y, arena[*b1].name, arena[*b2].name)
             },
             ForEach(idx, arr, _, body, cont) => {
-                write!(f, "ForEach {}[{}] => {} ? {}", arr, idx, arena[*body].name, arena[*body].name)
+                write!(f, "ForEach {}[{}] => {} ? {}", arr, idx, arena[*body].name, arena[*cont].name)
             },
             Jump(block) => write!(f, "Jump {}", arena[*block].name),
             Return(r) => {
@@ -209,22 +211,10 @@ impl Fundef {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Global {
-    pub name: Label,
-    pub init: BlockId
-}
-
-impl Global {
-    fn format(&self, f: &mut fmt::Formatter, arena: &Arena<Block>) -> fmt::Result {
-        write!(f, "{} => {}", self.name, arena[self.init].name)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
 pub struct Program {
     pub tymap: Map<Id, Ty>,
     pub block_arena: Arena<Block>,
-    pub globals: Vec<Global>,
+    pub globals: Vec<Label>,
     pub fundefs: Vec<Fundef>,
     pub entry: BlockId
 }
@@ -239,100 +229,18 @@ impl Program {
             entry,
         }
     }
-
-    // use `BTreeSet` to decide the ordinary in fv
-    fn collect_fv_impl<'a>(&'a self, bid: BlockId, known: &mut util::Set<Id>, res: &mut BTreeSet<&'a Id>, searched: &mut util::Set<BlockId>) {
-        // DFS branching
-        if searched.contains(&bid) {
-            return;
-        }
-        searched.insert(bid);
-
-        let block = &self.block_arena[bid];
-
-        for (dest, inst) in &block.body {
-            if let Some(dest) = dest {
-                known.insert(dest.clone());
-            }
-
-            let mut add = |x: &'a Id| if !known.contains(x) { res.insert(x); };
-            use InstKind::*;
-            match &inst.item {
-                Var(x) | UnOp(_, x) | AllocArray(x, _) | TupleGet(x, _) => add(x),
-                BinOp(_, x, y) | Assign(x, y) | ArrayGet(x, y) => { add(x); add(y) },
-                Tuple(xs) | CallDir(_, xs) | MakeCls(_, xs) => xs.iter().map(|x| add(x)).collect(),
-                CallCls(func, args) => {
-                    add(func);
-                    for x in args {
-                        add(x);
-                    }
-                },
-                ArrayPut(x, y, z) => { add(x); add(y); add(z) },
-                ExtArray(_) | Const(_) => { /* do nothing */ },
-            };
-        }
-
-        match &block.tail.item {
-            TailKind::If(_, x, y, b1, b2) => {
-                if !known.contains(x) {
-                    res.insert(x);
-                }
-                if !known.contains(y) {
-                    res.insert(y);
-                }
-
-                // α 変換されてないとここでバグる
-                self.collect_fv_impl(*b1, known, res, searched);
-                self.collect_fv_impl(*b2, known, res, searched);
-            },
-            TailKind::ForEach(idx, arr, size, b, cont) => {
-                if !known.contains(arr) {
-                    res.insert(arr);
-                }
-                if let Some(size) = size {
-                    if !known.contains(size) {
-                        res.insert(size);
-                    }   
-                }
-
-                known.insert(idx.clone());
-
-                self.collect_fv_impl(*b, known, res, searched);
-                self.collect_fv_impl(*cont, known, res, searched);
-            },
-            TailKind::Jump(b) => {
-                self.collect_fv_impl(*b, known, res, searched);
-            },
-            TailKind::Return(x) => {
-                if let Some(x) = x {
-                    if !known.contains(x) { res.insert(x); }
-                }
-            },
-        }
-    }
-
-    pub fn collect_fv<'a>(&'a self, bid: BlockId, known: util::Set<Id>) -> Vec<&'a Id> {
-        let mut known = known;
-        let mut res = BTreeSet::default();
-        let mut searched = util::Set::default();
-        self.collect_fv_impl(bid, &mut known, &mut res, &mut searched);
-
-        res.into_iter().collect()
-    }
 }
 
 impl fmt::Display for Program {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Entry: {}\n\n", self.block_arena[self.entry].name)?;
 
-        write!(f, "Globals:\n")?;
-        for global in &self.globals {
-            write!(f, "    ")?;
-            global.format(f, &self.block_arena)?;
-            write!(f, "\n")?;
+        write!(f, "Globals: [\n")?;
+        for g in &self.globals {
+            write!(f, "    {},\n", g)?;
         }
 
-        write!(f, "Fundefs:\n")?;
+        write!(f, "]\n\nFundefs:\n")?;
         for fun in &self.fundefs {
             fun.format_indented(f, &self.tymap, 1, &self.block_arena)?;
             write!(f, "\n")?;

@@ -188,7 +188,7 @@ fn conv(e: Box<knormal::Expr>, tyenv: &knormal::TyMap, known: &mut Set, global: 
                     p.globals.push(closure::Global{
                         name: closure::Label(d.name),
                         t: d.t,
-                        init: e1
+                        init: e1,
                     });
 
                     conv(e2, tyenv, known, global, p)

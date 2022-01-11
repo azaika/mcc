@@ -9,8 +9,7 @@ pub enum Ty {
     Fun(Vec<Ty>, Box<Ty>),
     Tuple(Vec<Ty>),
     Array(Box<Ty>, Option<usize>),
-    MutArray(Box<Ty>, Option<usize>),
-    Ref(Box<Ty>),
+    Mut(Box<Ty>)
 }
 
 impl From<knormal::Ty> for Ty {
@@ -22,8 +21,8 @@ impl From<knormal::Ty> for Ty {
             knormal::Ty::Float => Float,
             knormal::Ty::Fun(args, r) => Fun(args.into_iter().map(|x| x.into()).collect(), Box::new((*r).into())),
             knormal::Ty::Tuple(ts) => Tuple(ts.into_iter().map(|x| x.into()).collect()),
-            knormal::Ty::Array(t) => MutArray(Box::new((*t).into()), None),
-            knormal::Ty::Ref(t) => Ref(Box::new((*t).into()))
+            knormal::Ty::Array(t) => Array(Box::new(Mut(Box::new((*t).into()))), None),
+            knormal::Ty::Ref(t) => Mut(Box::new((*t).into()))
         }
     }
 }
@@ -64,35 +63,38 @@ impl fmt::Display for Ty {
                 t.print_block(f)?;
                 write!(f, " array[{}]", s.map_or("?".to_string(), |x| x.to_string()))
             },
-            MutArray(t, s) => {
+            Mut(t) => {
                 t.print_block(f)?;
-                write!(f, " mut array[{}]", s.map_or("?".to_string(), |x| x.to_string()))
-            },
-            Ref(t) => {
-                t.print_block(f)?;
-                write!(f, " ref")
+                write!(f, " mut")
             }
         }
     }
 }
 
 impl Ty {
-    pub fn deref(&self) -> &Self {
+    pub fn is_mut(&self) -> bool {
         match self {
-            Ty::Ref(t) => t.deref(),
+            Ty::Mut(_) => true,
+            _ => false
+        }
+    }
+
+    pub fn demut(&self) -> &Self {
+        match self {
+            Ty::Mut(t) => t.demut(),
             _ => self
         }
     }
 
     pub fn short(&self) -> &'static str {
-        match self.deref() {
+        match self.demut() {
             Ty::Unit => "u",
             Ty::Int => "i",
             Ty::Float => "d",
             Ty::Fun(_, _) => "f",
             Ty::Tuple(_) => "t",
-            Ty::Array(_, _) | Ty::MutArray(_, _) => "a",
-            Ty::Ref(_) => unreachable!()
+            Ty::Array(_, _) => "a",
+            Ty::Mut(_) => unreachable!()
         }
     }
 }
@@ -104,7 +106,7 @@ mod tests {
     #[test]
     fn print_type() {
         let iarr = Array(Box::new(Int), Some(2));
-        let iiarr = MutArray(Box::new(iarr.clone()), None);
+        let iiarr = Array(Box::new(Mut(Box::new(iarr.clone()))), None);
 
         assert_eq!(iiarr.to_string(), "int array[2] mut array[?]");
 
@@ -117,7 +119,7 @@ mod tests {
         let tup1 = Tuple(vec![fun1.clone(), Unit]);
         assert_eq!(tup1.to_string(), "(unit -> int array[2] -> float) * unit");
 
-        let tup2 = Tuple(vec![iarr.clone(), Ref(Box::new(Float)), iiarr.clone()]);
-        assert_eq!(tup2.to_string(), "int array[2] * float ref * int array[2] mut array[?]");
+        let tup2 = Tuple(vec![iarr.clone(), Mut(Box::new(Float)), iiarr.clone()]);
+        assert_eq!(tup2.to_string(), "int array[2] * float mut * int array[2] mut array[?]");
     }
 }
