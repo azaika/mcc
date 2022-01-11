@@ -183,7 +183,7 @@ fn conv(e: Box<closure::Expr>, p: &mut mir::Program, bid: id_arena::Id<mir::Bloc
             }
 
             // create loop block and convert
-            let loop_id = p.block_arena.alloc(mir::Block::with_name(id::gen_uniq_with(".loop")));
+            let loop_id = p.block_arena.alloc(mir::Block::with_name(id::gen_tmp_var_with(".loop")));
             conv(e1, p, loop_id, res, tail, Some(loop_id));
         },
         ExprKind::Continue(xs) => {
@@ -277,7 +277,7 @@ fn convert_fundef(fundefs: Vec<closure::Fundef>, p: &mut mir::Program) {
                 conv(body, p, entry_id, None, mir::TailKind::Return(None), None);
             }
             else {
-                let ret_var = util::id::gen_uniq_with(rt.short());
+                let ret_var = util::id::gen_tmp_var_with(rt.short());
                 p.tymap.insert(ret_var.clone(), (*rt).into());
 
                 conv(body, p, entry_id, Some(ret_var.clone()), mir::TailKind::Return(Some(ret_var.clone())), None);

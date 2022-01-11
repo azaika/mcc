@@ -74,7 +74,7 @@ lexer! {
     "in" => Tok(Token::In),
     "rec" => Tok(Token::Rec),
     "," => Tok(Token::Comma),
-    "_" => Tok(Token::Ident(id::gen_uniq())),
+    "_" => Tok(Token::Ident(id::gen_tmp_var())),
     r"Array\.((create)|(make))" => Tok(Token::ArrayMake),
     r"\." => Tok(Token::Dot),
     r"<\-" => Tok(Token::LessMinus),

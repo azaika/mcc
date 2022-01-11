@@ -118,7 +118,7 @@ FactorOp : BinOpKind = {
 
 IdArgs: Id = {
     Ident => <>,
-    "(" ")" => id::gen_uniq()
+    "(" ")" => id::gen_tmp_var()
 };
 
 Literal: Box<Expr> = {

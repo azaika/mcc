@@ -78,30 +78,30 @@ impl fmt::Display for InstKind {
         use InstKind::*;
         match self {
             Const(c) => write!(f, "{:?}", c),
-            Var(v) => write!(f, "Var {}", v),
-            ExtArray(x) => write!(f, "ExtArray {}", x),
-            UnOp(op, x) => write!(f, "{:?} {}", op, x),
-            BinOp(op, x, y) => write!(f, "{:?} {}, {}", op, x, y),
+            Var(v) => write!(f, "Var {v}"),
+            ExtArray(x) => write!(f, "ExtArray {x}"),
+            UnOp(op, x) => write!(f, "{:?} {x}", op),
+            BinOp(op, x, y) => write!(f, "{:?} {x}, {y}", op),
             Tuple(xs) => {
                 write!(f, "Tuple ")?;
                 util::format_vec(f, xs, "(", ", ", ")")
             },
             CallDir(lab, args) => {
-                write!(f, "CallDir {}", lab)?;
+                write!(f, "CallDir {lab}")?;
                 util::format_vec(f, args, "(", ", ", ")")
             },
             CallCls(func, args) => {
-                write!(f, "CallCls {}", func)?;
+                write!(f, "CallCls {func}")?;
                 util::format_vec(f, args, "(", ", ", ")")
             },
-            AllocArray(num, t) => write!(f, "CreateArray ({}: {})", num, t),
-            Assign(x, y) => write!(f, "Assign {} := {}", x, y),
-            Load(x) => write!(f, "Load {}", x),
-            ArrayGet(arr, idx) => write!(f, "ArrayGet {}[{}]", arr, idx),
-            ArrayPut(arr, idx, e) => write!(f, "ArrayPut {}[{}] <- {}", arr, idx, e),
-            TupleGet(arr, idx) => write!(f, "TupleGet {}.{}", arr, idx),
+            AllocArray(num, t) => write!(f, "AllocArray<{t}>({num})"),
+            Assign(x, y) => write!(f, "Assign {x} := {y}"),
+            Load(x) => write!(f, "Load {x}"),
+            ArrayGet(arr, idx) => write!(f, "ArrayGet {arr}[{idx}]"),
+            ArrayPut(arr, idx, e) => write!(f, "ArrayPut {arr}[{idx}] <- {e}"),
+            TupleGet(arr, idx) => write!(f, "TupleGet {arr}.{idx}"),
             MakeCls(lab, actual_fv) => {
-                write!(f, "MakeCls {}", lab)?;
+                write!(f, "MakeCls {lab}")?;
                 util::format_vec(f, actual_fv, "[", ", ", "]")
             },
         }
@@ -172,18 +172,18 @@ impl Block {
         // print indentation
         let indent = |level: usize| "    ".repeat(level);
         write!(f, "{}Block {}\n", indent(level), self.name)?;
-        write!(f, "{}body:\n", indent(level))?;
-        for (x, inst) in &self.body {
-            if let Some(x) = x {
-                write!(f, "{}{} <- {}\n", indent(level + 1), x, inst)?;
-            }
-            else {
-                write!(f, "{}{}\n", indent(level + 1), inst)?;
-            }
-        }
         write!(f, "{}tail: ", indent(level + 1))?;
         self.tail.item.format(f, arena)?;
-        write!(f, "\n")
+        write!(f, "\n{}body:\n", indent(level + 1))?;
+        for (x, inst) in &self.body {
+            if let Some(x) = x {
+                write!(f, "{}{} <- {}\n", indent(level + 2), x, inst)?;
+            }
+            else {
+                write!(f, "{}{}\n", indent(level + 2), inst)?;
+            }
+        }
+        Ok(())
     }
 }
 

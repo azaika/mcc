@@ -4,18 +4,25 @@ pub type Id = String;
 
 static COUNTER : CounterUsize = CounterUsize::new(0);
 
-pub fn gen_uniq() -> Id {
+pub fn gen_tmp_var() -> Id {
     let n = COUNTER.get();
     COUNTER.inc();
 
     format!("T{}", n)
 }
 
-pub fn gen_uniq_with(s: &str) -> Id {
+pub fn gen_tmp_var_with(s: &str) -> Id {
     let n = COUNTER.get();
     COUNTER.inc();
 
     format!("T{}{}", s, n)
+}
+
+pub fn gen_uniq_with(s: &str) -> Id {
+    let n = COUNTER.get();
+    COUNTER.inc();
+
+    format!("{}{}", s, n)
 }
 
 // x を x.157 のようなユニークな形式に変換する

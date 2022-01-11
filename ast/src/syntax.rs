@@ -70,7 +70,7 @@ impl Decl {
 
     pub fn gen_uniq(t: ty::Ty) -> Self {
         Self {
-            name: util::id::gen_uniq_with(ty::short(&t)),
+            name: util::id::gen_tmp_var_with(ty::short(&t)),
             t
         }
     }
