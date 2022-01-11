@@ -174,6 +174,17 @@ pub struct Program {
     pub main: Box<Expr>
 }
 
+impl Program {
+    pub fn new() -> Self {
+        let dummy = Spanned::new(ExprKind::Var("!!dummy!!".to_string()), (0, 0));
+        Self {
+            globals: vec![],
+            fundefs: vec![],
+            main: Box::new(dummy),
+        }
+    }
+}
+
 impl fmt::Display for Program {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "[Globals]\n")?;
