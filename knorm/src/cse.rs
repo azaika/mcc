@@ -1,6 +1,7 @@
 use std::hash::Hash;
 
 use ast::knormal::*;
+use ty::knormal::Ty;
 use util::{Id, Spanned};
 
 // for comparison considering commutativity
@@ -131,6 +132,7 @@ impl Hash for ExprInVal {
 
 type Set = util::Set<Id>;
 type Map = util::Map<ExprInVal, Id>;
+type ArrayMap = util::Map<Ty, util::Map<(Id, Id), Id>>;
 
 fn is_impure(e: &Expr, effects: &mut Set) -> bool {
     use ExprKind::*;
@@ -159,38 +161,62 @@ fn is_impure(e: &Expr, effects: &mut Set) -> bool {
     }
 }
 
-fn conv(mut e: Box<Expr>, effects: &mut Set, saved: &mut Map) -> Box<Expr> {
+fn conv(
+    mut e: Box<Expr>,
+    tyenv: &TyMap,
+    effects: &mut Set,
+    saved: &mut Map,
+    arr_saved: &mut ArrayMap,
+) -> Box<Expr> {
     use ExprKind::*;
     e.item = match e.item {
         If(kind, x, y, e1, e2) => If(
             kind,
             x,
             y,
-            conv(e1, effects, saved),
-            conv(e2, effects, saved),
+            conv(e1, tyenv, effects, saved, arr_saved),
+            conv(e2, tyenv, effects, saved, arr_saved),
         ),
         Let(d, e1, e2) => {
             let key = ExprInVal(e1);
             if let Some(x) = saved.get(&key) {
                 log::debug!("found common sub-expressions `{}` and `{}`.", d.name, x);
-                let mut m = util::Map::default();
-                m.insert(d.name.clone(), x.clone());
                 Let(
                     d,
                     Box::new(Spanned::new(Var(x.clone()), e.loc)),
-                    conv(e2, effects, saved),
+                    conv(e2, tyenv, effects, saved, arr_saved),
                 )
             } else {
                 let e1 = key.0;
-                let e1 = conv(e1, effects, saved);
+                let e1 = conv(e1, tyenv, effects, saved, arr_saved);
                 if !is_impure(&e1, effects) {
                     let key = ExprInVal(e1.clone());
                     saved.insert(key.clone(), d.name.clone());
-                    let r = Let(d, e1, conv(e2, effects, saved));
+                    let r = Let(d, e1, conv(e2, tyenv, effects, saved, arr_saved));
                     saved.remove(&key);
                     r
+                } else if let ExprKind::ArrayGet(arr, idx) = &e1.item {
+                    let t = d.t.clone();
+
+                    let arrmap = arr_saved.entry(t.clone()).or_insert(util::Map::default());
+
+                    let key = (arr.clone(), idx.clone());
+                    if let Some(x) = arrmap.get(&key) {
+                        log::debug!("found common sub-expressions `{}` and `{}`.", d.name, x);
+                        Let(
+                            d,
+                            Box::new(Spanned::new(Var(x.clone()), e.loc)),
+                            conv(e2, tyenv, effects, saved, arr_saved),
+                        )
+                    } else {
+                        // register ArrayGet
+                        arrmap.insert(key.clone(), d.name.clone());
+                        let r = Let(d, e1, conv(e2, tyenv, effects, saved, arr_saved));
+                        arr_saved.entry(t).and_modify(|arrmap| { arrmap.remove(&key); });
+                        r
+                    }
                 } else {
-                    Let(d, e1, conv(e2, effects, saved))
+                    Let(d, e1, conv(e2, tyenv, effects, saved, arr_saved))
                 }
             }
         }
@@ -200,15 +226,31 @@ fn conv(mut e: Box<Expr>, effects: &mut Set, saved: &mut Map) -> Box<Expr> {
                 effects.insert(fvar.name.clone());
             }
 
-            let body = conv(body, effects, saved);
-            let e2 = conv(e2, effects, saved);
+            let body = conv(body, tyenv, effects, saved, arr_saved);
+            let e2 = conv(e2, tyenv, effects, saved, arr_saved);
             LetRec(Fundef { fvar, args, body }, e2)
         }
         Loop { vars, init, body } => Loop {
             vars,
             init,
-            body: conv(body, effects, saved),
+            body: conv(body, tyenv, effects, saved, arr_saved),
         },
+        ArrayPut(arr, idx, x) => {
+            let t = if let Ty::Array(t) = tyenv.get(&arr).unwrap() {
+                t.as_ref()
+            }
+            else {
+                unreachable!()
+            };
+
+            arr_saved.entry(t.clone()).and_modify(|m| m.clear());
+
+            ArrayPut(arr, idx, x)
+        }
+        App(func, args) => {
+            arr_saved.clear();
+            App(func, args)
+        }
         _ => e.item,
     };
 
@@ -217,6 +259,12 @@ fn conv(mut e: Box<Expr>, effects: &mut Set, saved: &mut Map) -> Box<Expr> {
 
 // common sub-expression elimination
 // assume `e` is alpha formed
-pub fn cse(e: Expr) -> Expr {
-    *conv(Box::new(e), &mut Set::default(), &mut Map::default())
+pub fn cse(e: Expr, tyenv: &TyMap) -> Expr {
+    *conv(
+        Box::new(e),
+        tyenv,
+        &mut Set::default(),
+        &mut Map::default(),
+        &mut ArrayMap::default(),
+    )
 }

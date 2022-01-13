@@ -89,7 +89,7 @@ fn optimize_knorm(mut e: knormal::Expr, tyenv: &mut knorm::TyMap, config: &Args)
         e = knorm::fold_const(e, tyenv);
         e = knorm::beta_reduction(e, tyenv);
         e = knorm::eliminate(e);
-        e = knorm::cse(e);
+        e = knorm::cse(e, tyenv);
         e = knorm::beta_reduction(e, tyenv);
         e = knorm::eliminate(e);
         e = knorm::inlining(e, config.inline, tyenv);
