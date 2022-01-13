@@ -45,9 +45,7 @@ fn has_free_impl(func: &mut Set, e: &knormal::Expr, known: &mut Set) -> bool {
             r || has_free_impl(func, &e2, known)
         }
         Tuple(xs) | ExtApp(_, xs) => !xs.iter().all(|x| known.contains(x)),
-        App(f, args) => {
-            !func.contains(f) || !args.iter().all(|x| known.contains(x))
-        }
+        App(f, args) => !func.contains(f) || !args.iter().all(|x| known.contains(x)),
         ArrayPut(x, y, z) => !known.contains(x) || !known.contains(y) || !known.contains(z),
         Loop { vars, init, body } => {
             if !init.iter().all(|x| known.contains(x)) {
@@ -130,6 +128,9 @@ fn collect_free(e: &closure::Expr, known: &mut Set, fv: &mut Set) {
             push(y)
         }),
         Const(_) | ExtArray(_) | Load(_) => { /* no vars */ }
+        IntLoop { .. } => {
+            unreachable!()
+        }
     }
 }
 

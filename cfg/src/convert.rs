@@ -101,18 +101,20 @@ fn gen_array_init(
     ];
     bl.tail = Box::new(TailKind::Jump(loop_id).with_span(span));
 
-    let size = if let Ty::Array(_, size) = p.tymap.get(&name).unwrap() {
-        if size.is_some() {
-            None
-        } else {
-            Some(num)
-        }
-    } else {
-        unreachable!()
-    };
+    let zero_var = id::gen_uniq_with("Idx");
+    p.tymap.insert(zero_var.clone(), Ty::Mut(Box::new(Ty::Int)));
+    let one_var = id::gen_uniq_with("Idx");
+    p.tymap.insert(one_var.clone(), Ty::Mut(Box::new(Ty::Int)));
 
-    *p.block_arena[loop_id].tail =
-        TailKind::ForEach(idx_var, name, size, body_id, cont_id).with_span(span);
+    *p.block_arena[loop_id].tail = TailKind::IntLoop {
+        idx: idx_var,
+        range: (zero_var, num),
+        delta: one_var,
+        element_wise: vec![name],
+        body: body_id,
+        cont: cont_id,
+    }
+    .with_span(span);
 
     cont_id
 }
@@ -219,7 +221,7 @@ fn conv(
             for i in 0..vars.len() {
                 let v = vars[i].clone();
 
-                p.tymap.insert(v.name.clone(), v.t.into());
+                p.tymap.insert(v.name.clone(), Ty::Mut(Box::new(v.t.into())));
 
                 body.push((
                     Some(v.name),

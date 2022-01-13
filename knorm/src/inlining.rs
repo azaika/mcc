@@ -89,7 +89,7 @@ fn conv(mut e: Box<Expr>, env: &mut Map, limit: usize) -> Box<Expr> {
                 // 展開する前に定義式が膨張して展開されなくなるのを防止
                 let xs = args.iter().map(|d| d.name.clone()).collect();
                 let body_cloned = body.as_ref().clone();
-                
+
                 env.insert(fvar.name.clone(), (xs, body_cloned));
                 body
             } else {

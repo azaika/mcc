@@ -25,7 +25,6 @@ impl From<knormal::Ty> for Ty {
             ),
             knormal::Ty::Tuple(ts) => Tuple(ts.into_iter().map(|x| x.into()).collect()),
             knormal::Ty::Array(t) => Array(Box::new(Mut(Box::new((*t).into()))), None),
-            knormal::Ty::Ref(t) => Mut(Box::new((*t).into())),
         }
     }
 }

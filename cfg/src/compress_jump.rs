@@ -29,7 +29,10 @@ fn conv(bid: BlockId, p: &mut Program, arrived: &mut Set) {
     arrived.insert(bid);
 
     let (o1, o2) = match p.block_arena[bid].tail.item {
-        TailKind::If(_, _, _, b1, b2) | TailKind::ForEach(_, _, _, b1, b2) => {
+        TailKind::If(_, _, _, b1, b2)
+        | TailKind::IntLoop {
+            body: b1, cont: b2, ..
+        } => {
             conv(b1, p, arrived);
             conv(b2, p, arrived);
             (can_skip(&p.block_arena[b1]), can_skip(&p.block_arena[b2]))
@@ -48,7 +51,7 @@ fn conv(bid: BlockId, p: &mut Program, arrived: &mut Set) {
             *b1 = o1.unwrap_or(*b1);
             *b2 = o2.unwrap_or(*b2);
         }
-        TailKind::ForEach(_, _, _, _, b2) => {
+        TailKind::IntLoop { cont: b2, .. } => {
             let b = o2.unwrap_or(*b2);
             if o1.is_some() {
                 // unnecessary loop

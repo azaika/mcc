@@ -9,7 +9,6 @@ pub enum Ty {
     Fun(Vec<Ty>, Box<Ty>),
     Tuple(Vec<Ty>),
     Array(Box<Ty>),
-    Ref(Box<Ty>),
 }
 
 impl From<syntax::Ty> for Ty {
@@ -48,7 +47,6 @@ impl Ty {
             Ty::Fun(_, _) => "f",
             Ty::Tuple(_) => "t",
             Ty::Array(_) => "a",
-            Ty::Ref(_) => "r",
         }
     }
 }
@@ -79,10 +77,6 @@ impl fmt::Display for Ty {
                 t.print_block(f)?;
                 write!(f, " array")
             }
-            Ref(t) => {
-                t.print_block(f)?;
-                write!(f, " ref")
-            }
         }
     }
 }
@@ -93,9 +87,9 @@ mod tests {
     #[test]
     fn print_type() {
         let iarr = Array(Box::new(Int));
-        let riarr = Ref(Box::new(iarr.clone()));
+        let riarr = Box::new(iarr.clone());
 
-        assert_eq!(riarr.to_string(), "int array ref");
+        assert_eq!(riarr.to_string(), "int array");
 
         let fun1 = Fun(vec![Unit, iarr.clone()], Box::new(Float));
         assert_eq!(fun1.to_string(), "unit -> int array -> float");
@@ -109,7 +103,7 @@ mod tests {
         let tup1 = Tuple(vec![fun1.clone(), Unit]);
         assert_eq!(tup1.to_string(), "(unit -> int array -> float) * unit");
 
-        let tup2 = Tuple(vec![iarr.clone(), Float, riarr.clone()]);
-        assert_eq!(tup2.to_string(), "int array * float * int array ref");
+        let tup2 = Tuple(vec![iarr.clone(), Float, iarr.clone()]);
+        assert_eq!(tup2.to_string(), "int array * float * int array");
     }
 }

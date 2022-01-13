@@ -118,7 +118,14 @@ pub enum IfKind {
 #[derive(Debug, Clone, PartialEq)]
 pub enum TailKind {
     If(IfKind, Id, Id, BlockId, BlockId),
-    ForEach(Id, Id, Option<Id>, BlockId, BlockId), // (idx, array_var, size?, body, cont)
+    IntLoop {
+        idx: Id,
+        range: (Id, Id),
+        delta: Id,
+        element_wise: Vec<Id>,
+        body: BlockId,
+        cont: BlockId,
+    },
     Jump(BlockId),
     Return(Option<Id>),
 }
@@ -134,12 +141,20 @@ impl TailKind {
                     kind, x, y, arena[*b1].name, arena[*b2].name
                 )
             }
-            ForEach(idx, arr, _, body, cont) => {
+            IntLoop {
+                idx,
+                range,
+                delta,
+                element_wise,
+                body,
+                cont,
+            } => {
                 write!(
                     f,
-                    "ForEach {}[{}] => {} ? {}",
-                    arr, idx, arena[*body].name, arena[*cont].name
-                )
+                    "IntLoop {idx}: ({}..{}).by({delta}) => {} ? {} ",
+                    range.0, range.1, arena[*body].name, arena[*cont].name
+                )?;
+                util::format_vec(f, element_wise, "(arr? = [", ", ", "])")
             }
             Jump(block) => write!(f, "Jump {}", arena[*block].name),
             Return(r) => {
@@ -265,7 +280,10 @@ impl Program {
         used.insert(bid);
 
         match self.block_arena[bid].tail.item {
-            TailKind::If(_, _, _, b1, b2) | TailKind::ForEach(_, _, _, b1, b2) => {
+            TailKind::If(_, _, _, b1, b2)
+            | TailKind::IntLoop {
+                body: b1, cont: b2, ..
+            } => {
                 self.collect_used_impl(b1, used);
                 self.collect_used_impl(b2, used);
             }

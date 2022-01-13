@@ -190,8 +190,6 @@ pub fn compile(args: Args) -> Result<()> {
         knorm::flatten_let(alpha)
     };
 
-    
-
     let closured = cls::convert(opt_knorm, tyenv);
     if args.verbose {
         debug_output(
