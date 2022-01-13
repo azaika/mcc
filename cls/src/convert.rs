@@ -260,7 +260,7 @@ fn collect_global(e: &knormal::Expr, last: &Id, res: &mut Set) {
     match &e.item {
         knormal::ExprKind::Let(l) => match l {
             knormal::LetKind::Let(d, _, e2) => {
-                log::info!("assumed {} as global.", d.name);
+                log::info!("assumed `{}` as global.", d.name);
                 res.insert(d.name.clone());
                 collect_global(e2, last, res);
             },

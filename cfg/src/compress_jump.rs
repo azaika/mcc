@@ -53,7 +53,8 @@ fn conv(bid: BlockId, p: &mut Program, arrived: &mut Set) {
         },
         TailKind::ForEach(_, _, _, _, b2) => {
             let b = o2.unwrap_or(*b2);
-            if let Some(b) = o1 {
+            if o1.is_some() {
+                // unnecessary loop
                 log::debug!("eliminating for-each `{name}`.");
                 *item = TailKind::Jump(b)
             }
