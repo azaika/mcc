@@ -178,17 +178,19 @@ pub fn compile(args: Args) -> Result<()> {
     let opt_knorm = if args.optimize {
         let r = optimize_knorm(alpha, &mut tyenv, &args);
 
+        if args.verbose {
+            debug_output(
+                Path::new("knorm_opt.txt"),
+                format!("[[optimized_knorm]]\n{}", r),
+            )?;
+        }
+
         r
     } else {
         knorm::flatten_let(alpha)
     };
 
-    if args.verbose {
-        debug_output(
-            Path::new("opt_knorm.txt"),
-            format!("[[optimized_knorm]]\n{}", opt_knorm),
-        )?;
-    }
+    
 
     let closured = cls::convert(opt_knorm, tyenv);
     if args.verbose {
@@ -208,7 +210,7 @@ pub fn compile(args: Args) -> Result<()> {
 
         if args.verbose {
             debug_output(
-                Path::new("opt_mir.txt"),
+                Path::new("mir_opt.txt"),
                 format!("[[optimized_mir]]\n{}", r),
             )?;
         }
