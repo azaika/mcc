@@ -226,8 +226,9 @@ fn conv(
                 effects.insert(fvar.name.clone());
             }
 
-            let body = conv(body, tyenv, effects, saved, arr_saved);
             let e2 = conv(e2, tyenv, effects, saved, arr_saved);
+            arr_saved.clear();
+            let body = conv(body, tyenv, effects, saved, arr_saved);
             LetRec(Fundef { fvar, args, body }, e2)
         }
         Loop { vars, init, body } => Loop {

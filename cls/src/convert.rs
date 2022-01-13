@@ -18,7 +18,7 @@ fn has_free_impl(func: &mut Set, e: &knormal::Expr, known: &mut Set) -> bool {
                 || has_free_impl(func, e2, known)
         }
         Let(d, e1, e2) => {
-            if !known.contains(&d.name) || has_free_impl(func, e1, known) {
+            if has_free_impl(func, e1, known) {
                 true
             } else {
                 known.insert(d.name.clone());
@@ -31,11 +31,13 @@ fn has_free_impl(func: &mut Set, e: &knormal::Expr, known: &mut Set) -> bool {
             for knormal::Decl { name, .. } in &fundef.args {
                 known.insert(name.clone());
             }
+            known.insert(fundef.fvar.name.clone());
             func.insert(fundef.fvar.name.clone());
 
             let r = has_free_impl(func, &fundef.body, known);
 
             func.remove(&fundef.fvar.name);
+            known.remove(&fundef.fvar.name);
             for knormal::Decl { name, .. } in &fundef.args {
                 known.remove(name);
             }
@@ -44,7 +46,10 @@ fn has_free_impl(func: &mut Set, e: &knormal::Expr, known: &mut Set) -> bool {
         }
         Tuple(xs) | ExtApp(_, xs) => !xs.iter().all(|x| known.contains(x)),
         App(f, args) => {
-            (!func.contains(f) && known.contains(f)) || !args.iter().all(|x| known.contains(x))
+            if !func.contains(f) {
+                panic!();
+            }
+            !func.contains(f) || !args.iter().all(|x| known.contains(x))
         }
         ArrayPut(x, y, z) => !known.contains(x) || !known.contains(y) || !known.contains(z),
         Loop { vars, init, body } => {
@@ -75,9 +80,9 @@ fn has_free(fundef: &knormal::Fundef, known: &Set, global: &Set) -> bool {
         known.insert(name.clone());
     }
 
-    let mut s = Set::default();
-    s.insert(fundef.fvar.name.clone());
-    has_free_impl(&mut s, &fundef.body, &mut known)
+    let mut func = known.clone();
+    func.insert(fundef.fvar.name.clone());
+    has_free_impl(&mut func, &fundef.body, &mut known)
 }
 
 fn collect_free(e: &closure::Expr, known: &mut Set, fv: &mut Set) {
@@ -189,7 +194,8 @@ fn conv(
         }
         knormal::ExprKind::LetRec(fundef, e2) => {
             // 自由変数が無いなら自身は CallDir で呼ぶようにする
-            if !has_free(&fundef, known, global) {
+            let is_closure = has_free(&fundef, known, global);
+            if !is_closure {
                 known.insert(fundef.fvar.name.clone());
             }
 
@@ -202,7 +208,10 @@ fn conv(
                 for knormal::Decl { name, .. } in &fundef.args {
                     known.insert(name.clone());
                 }
-
+                if !is_closure {
+                    known.insert(fundef.fvar.name.clone());
+                }
+                
                 let mut fvs = Set::default();
                 collect_free(&e1, &mut known, &mut fvs);
                 fvs.into_iter().collect()
@@ -300,7 +309,6 @@ pub fn convert(e: knormal::Expr, tyenv: knormal::TyMap) -> closure::Program {
     }
 
     p.main = conv(Box::new(e), &tyenv, &mut Set::default(), &global, &mut p);
-    p.fundefs.reverse();
 
     p
 }
