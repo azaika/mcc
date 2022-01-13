@@ -1,3 +1,6 @@
+use std::io::Write;
+use std::path::Path;
+
 use anyhow::{Context, Result};
 use clap::Parser;
 
@@ -122,6 +125,17 @@ fn optimize_mir(mut p: ast::mir::Program) -> ast::mir::Program {
     p
 }
 
+fn debug_output(path: &Path, s: String) -> Result<()> {
+    if !Path::new(&"debug").exists() {
+        std::fs::create_dir("debug")?;
+    }
+    let path = Path::new("debug").join(path);
+    std::fs::File::create(path)
+        .context("failed to open debug file")?
+        .write_all(s.as_bytes())
+        .context("failed to write debug infomation")
+}
+
 pub fn compile(args: Args) -> Result<()> {
     let parsed_libs = match &args.lib {
         None => vec![],
@@ -142,26 +156,26 @@ pub fn compile(args: Args) -> Result<()> {
     let (typed, extenv) = infer(parsed, &args.source)?;
 
     if args.verbose {
-        println!("[[typed]]\n{}", typed);
+        debug_output(Path::new("typed.txt"), format!("[[typed]]\n{}", typed))?;
     }
 
     let knormed = knorm::convert(typed, &extenv)?;
 
     if args.verbose {
-        println!("\n[[knormed]]\n{}", knormed);
+        debug_output(Path::new("knormed.txt"), format!("[[knormed]]\n{}", knormed))?;
     }
 
     let (alpha, mut tyenv) = knorm::to_alpha_form(knormed);
 
     if args.verbose {
-        println!("\n[[alpha]]\n{}", alpha);
+        debug_output(Path::new("alpha.txt"), format!("[[alpha]]\n{}", alpha))?;
     }
 
     let opt_knorm = if args.optimize {
         let r = optimize_knorm(alpha, &mut tyenv, &args);
 
         if args.verbose {
-            println!("\n[[optimized_knorm]]\n{}", r);
+            debug_output(Path::new("opt_knorm.txt"), format!("[[optimized_knorm]]\n{}", r))?;
         }
 
         r
@@ -171,19 +185,19 @@ pub fn compile(args: Args) -> Result<()> {
 
     let closured = cls::convert(opt_knorm, tyenv);
     if args.verbose {
-        println!("\n[[closured]]\n{}", closured);
+        debug_output(Path::new("closure.txt"), format!("[[closured]]\n{}", closured))?;
     }
 
     let mir = cfg::convert(closured);
     if args.verbose {
-        println!("\n[[cfg]]\n{}", mir);
+        debug_output(Path::new("mir.txt"), format!("[[mir]]\n{}", mir))?;
     }
 
     let _opt_mir = if args.optimize {
         let r = optimize_mir(mir);
 
         if args.verbose {
-            println!("\n[[optimized_cfg]]\n{}", r);
+            debug_output(Path::new("opt_mir.txt"), format!("[[optimized_mir]]\n{}", r))?;
         }
 
         r
