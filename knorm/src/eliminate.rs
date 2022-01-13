@@ -112,12 +112,12 @@ fn conv(mut e: Box<Expr>, used: &mut Set) -> Box<Expr> {
             used.insert(x.clone());
             TupleGet(x, idx)
         }
-        Loop { vars, loop_vars, init, body } => {
+        Loop { vars, init, body } => {
             let body = conv(body, used);
             for x in &init {
                 used.insert(x.clone());
             };
-            Loop { vars, loop_vars, init, body }
+            Loop { vars, init, body }
         },
         Continue(xs) => {
             for (_, x) in &xs {

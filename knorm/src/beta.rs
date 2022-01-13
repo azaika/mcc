@@ -62,10 +62,10 @@ fn conv(mut e: Box<Expr>, env: &mut Map, tyenv: &mut super::TyMap) -> Box<Expr> 
         ArrayGet(x, y) => ArrayGet(map!(x), map!(y)),
         ArrayPut(x, y, z) => ArrayPut(map!(x), map!(y), map!(z)),
         TupleGet(x, idx) => TupleGet(map!(x), idx),
-        Loop { vars, loop_vars, init, body } => {
+        Loop { vars, init, body } => {
             let init = init.into_iter().map(|x| map!(x)).collect();
             let body = conv(body, env, tyenv);
-            Loop { vars, loop_vars, init, body }
+            Loop { vars, init, body }
         },
         Continue(xs) => Continue(xs.into_iter().map(|(x, y)| (map!(x), map!(y))).collect()),
         _ => e.item

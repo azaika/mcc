@@ -1,7 +1,6 @@
 use bit_vec::BitVec;
 
 use util::{Spanned, Id, id};
-use ty::knormal::Ty;
 use ast::knormal::*;
 
 fn merge(p: (Option<BitVec>, bool), q: (Option<BitVec>, bool)) -> (Option<BitVec>, bool) {
@@ -52,36 +51,51 @@ fn is_tailrec(e: &Expr, f: &Id, is_inlet: bool, orig: &Vec<Decl>) -> (Option<Bit
         },
         ArrayPut(x, y, z) => (None, x != f && y != f && z != f),
         Loop { init, body, .. } => {
-            merge((None, init.iter().all(|x| x != f)), is_tailrec(&body, f, is_inlet, orig))
+            if init.iter().all(|x| x != f) {
+                let t = is_tailrec(&body, f, is_inlet, orig);
+                if t.0.is_some() {
+                    // if self-recursive in Loop, this function is not tail-recursive
+                    (None, false)
+                }
+                else {
+                    (None, true)
+                }
+            }
+            else {
+                (None, false)
+            }
         },
         Continue(xs) => (None, xs.iter().all(|(_, x)| x != f)),
         _ => (None, true)
     }
 }
 
-fn insert_continue(mut e: Box<Expr>, f: &Id, lvs: &Vec<Decl>, mask: &BitVec) -> Box<Expr> {
+fn insert_continue(mut e: Box<Expr>, f: &Id, loop_vars: &Vec<Decl>, mask: &BitVec) -> Box<Expr> {
     use ExprKind::*;
     e.item = match e.item {
         App(func, args) if &func == f => {
-            let mut lvs_idx = 0;
+            let mut vars_idx = 0;
             let args = args.into_iter().enumerate().filter_map(|(idx, x)|
                 if mask[idx] {
                     None
                 }
                 else {
-                    let r = Some((lvs[lvs_idx].name.clone(), x));
-                    lvs_idx += 1;
+                    let r = Some((loop_vars[vars_idx].name.clone(), x));
+                    vars_idx += 1;
                     r
                 }
             ).collect();
             Continue(args)
         },
-        If(kind, x, y, e1, e2) => If(kind, x, y, insert_continue(e1, f, lvs,  mask), insert_continue(e2, f, lvs, mask)),
+        If(kind, x, y, e1, e2) => If(kind, x, y, insert_continue(e1, f, loop_vars,  mask), insert_continue(e2, f, loop_vars, mask)),
         Let(l) => Let(match l {
-            LetKind::Let(d, e1, e2) => LetKind::Let(d, e1, insert_continue(e2, f, lvs, mask)),
+            LetKind::Let(d, e1, e2) => LetKind::Let(d, e1, insert_continue(e2, f, loop_vars, mask)),
             LetKind::LetRec(_, _) => panic!(),
         }),
-        Loop { vars, loop_vars, init, body } => Loop { vars, loop_vars, init, body: insert_continue(body, f, lvs, mask) },
+        Loop { .. } => {
+            // double loops CANNOT include self-recursion in this context
+            e.item
+        },
         _ => e.item
     };
 
@@ -104,13 +118,10 @@ fn conv(mut e: Box<Expr>) -> Box<Expr> {
                     // `let rec f x1 ... xn = e1 in e2` を
                     // ```
                     // let rec f x1' ... xn' =
-                    //   let x1'' = Array.make(1, x1') in
+                    //   let x1 = Mutable(x1') in
                     //   ...
-                    //   let xn'' = Array.make(1, xn') in
+                    //   let xn = Mutable(xn') in
                     //   loop {
-                    //     let x1 = x1''.(0) in
-                    //     ...
-                    //     let xn = xn''.(0) in
                     //     e1' (* e1 の自己再帰を continue に置換したもの *)
                     //   }
                     // in
@@ -132,7 +143,6 @@ fn conv(mut e: Box<Expr>) -> Box<Expr> {
                     let mut new_args = vec![];
                     let mut init = vec![];
                     let mut vars = vec![];
-                    let mut loop_vars = vec![];
                     for (idx, d) in args.into_iter().enumerate() {
                         if mask[idx] {
                             new_args.push(d);
@@ -141,15 +151,12 @@ fn conv(mut e: Box<Expr>) -> Box<Expr> {
                             let x = id::distinguish(d.name.clone());
                             new_args.push(Decl::new(x.clone(), d.t.clone()));
                             init.push(x);
-                            let v = id::distinguish(d.name.clone());
-                            let vt = Ty::Ref(Box::new(d.t.clone()));
-                            loop_vars.push(Decl::new(v.clone(), vt));
                             vars.push(d);
                         }
                     }
 
-                    let body = insert_continue(body, &fvar.name, &loop_vars, &mask);
-                    let body = lift!(Loop { vars, loop_vars, init, body });
+                    let body = insert_continue(body, &fvar.name, &vars, &mask);
+                    let body = lift!(Loop { vars, init, body });
                     let fundef = Fundef {
                         fvar,
                         args: new_args,
@@ -159,7 +166,7 @@ fn conv(mut e: Box<Expr>) -> Box<Expr> {
                 }
             },
         }),
-        Loop { vars, loop_vars, init, body } => Loop { vars, loop_vars, init, body: conv(body) },
+        Loop { vars, init, body } => Loop { vars, init, body: conv(body) },
         _ => e.item
     };
 

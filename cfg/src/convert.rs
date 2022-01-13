@@ -168,18 +168,16 @@ fn conv(e: Box<closure::Expr>, p: &mut mir::Program, bid: id_arena::Id<mir::Bloc
 
             conv(e2, p, bid, res, tail, loop_id);
         },
-        ExprKind::Loop { vars, loop_vars, init, body: e1 } => {
-            assert!(vars.len() == loop_vars.len() && vars.len() == init.len());
+        ExprKind::Loop { vars, init, body: e1 } => {
+            assert!(vars.len() == init.len());
 
             let body = &mut p.block_arena[bid].body;
             for i in 0..vars.len() {
                 let v = vars[i].clone();
-                let lv = loop_vars[i].clone();
 
                 p.tymap.insert(v.name.clone(), v.t.into());
-                p.tymap.insert(lv.name.clone(), lv.t.into());
 
-                body.push((Some(lv.name), InstKind::Var(init[i].clone()).with_span(e.loc)));
+                body.push((Some(v.name), InstKind::Var(init[i].clone()).with_span(e.loc)));
             }
 
             // create loop block and convert

@@ -190,15 +190,16 @@ fn conv(mut e: Box<Expr>, effects: &mut Set, saved: &mut Map) -> Box<Expr> {
                         )
                     } else {
                         let e1 = key.0;
+                        let e1 = conv(e1, effects, saved);
                         if !is_impure(&e1, effects) {
                             let key = ExprInVal(e1.clone());
                             saved.insert(key.clone(), d.name.clone());
                             let r =
-                                LetKind::Let(d, conv(e1, effects, saved), conv(e2, effects, saved));
+                                LetKind::Let(d, e1, conv(e2, effects, saved));
                             saved.remove(&key);
                             r
                         } else {
-                            LetKind::Let(d, conv(e1, effects, saved), conv(e2, effects, saved))
+                            LetKind::Let(d, e1, conv(e2, effects, saved))
                         }
                     }
                 }
@@ -216,9 +217,8 @@ fn conv(mut e: Box<Expr>, effects: &mut Set, saved: &mut Map) -> Box<Expr> {
 
             Let(kind)
         }
-        Loop { vars, loop_vars, init, body } => Loop {
+        Loop { vars, init, body } => Loop {
             vars,
-            loop_vars,
             init,
             body: conv(body, effects, saved),
         },

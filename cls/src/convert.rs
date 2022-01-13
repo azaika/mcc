@@ -45,18 +45,18 @@ fn has_free_impl(func: &mut Set, e: &knormal::Expr, known: &mut Set) -> bool {
             (!func.contains(f) && known.contains(f)) || !args.iter().all(|x| known.contains(x))
         },
         ArrayPut(x, y, z) => !known.contains(x) || !known.contains(y) || !known.contains(z),
-        Loop { vars, loop_vars, init, body } => {
+        Loop { vars, init, body } => {
             if !init.iter().all(|x| known.contains(x)) {
                 return true;
             }
             
-            for knormal::Decl{ name, .. } in vars.iter().chain(loop_vars) {
+            for knormal::Decl{ name, .. } in vars {
                 known.insert(name.clone());
             }
 
             let r = has_free_impl(func, &body, known);
 
-            for knormal::Decl{ name, .. } in vars.iter().chain(loop_vars) {
+            for knormal::Decl{ name, .. } in vars {
                 known.remove(name);
             }
 
@@ -107,9 +107,9 @@ fn collect_free(e: &closure::Expr, known: &mut Set, fv: &mut Set) {
         ArrayPut(x, y, z) => {
             push(x); push(y); push(z);
         },
-        Loop { vars, loop_vars, init, body } => {
+        Loop { vars, init, body } => {
             init.iter().for_each(|x| push(x));
-            for closure::Decl{ name, .. } in vars.iter().chain(loop_vars) {
+            for closure::Decl{ name, .. } in vars {
                 known.insert(name.clone());
             }
             collect_free(body, known, fv);
@@ -232,10 +232,9 @@ fn conv(e: Box<knormal::Expr>, tyenv: &knormal::TyMap, known: &mut Set, global: 
         knormal::ExprKind::ArrayGet(x, y) => lift(ExprKind::ArrayGet(x, y)),
         knormal::ExprKind::ArrayPut(x, y, z) => lift(ExprKind::ArrayPut(x, y, z)),
         knormal::ExprKind::TupleGet(x, idx) => lift(ExprKind::TupleGet(x, idx)),
-        knormal::ExprKind::Loop { vars, loop_vars, init, body } => {
+        knormal::ExprKind::Loop { vars, init, body } => {
             lift(ExprKind::Loop {
                 vars,
-                loop_vars,
                 init,
                 body: conv(body, tyenv, known, global, p)
             })

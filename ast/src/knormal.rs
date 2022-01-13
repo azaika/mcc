@@ -131,7 +131,6 @@ pub enum ExprKind {
     TupleGet(Id, usize),
     Loop {
         vars: Vec<Decl>,
-        loop_vars: Vec<Decl>,
         init: Vec<Id>,
         body: Box<Expr>
     },
@@ -191,13 +190,12 @@ pub fn rename(mut e: Box<Expr>, env: &Map) -> Box<Expr> {
         ArrayGet(x, y) => ArrayGet(map!(x), map!(y)),
         ArrayPut(x, y, z) => ArrayPut(map!(x), map!(y), map!(z)),
         TupleGet(x, idx) => TupleGet(map!(x), idx),
-        Loop { vars, loop_vars, init, body } => {
+        Loop { vars, init, body } => {
             let vars = vars.into_iter().map(|d| Decl::new(map!(d.name), d.t)).collect();
-            let loop_vars = loop_vars.into_iter().map(|d| Decl::new(map!(d.name), d.t)).collect();
             let init = init.into_iter().map(|x| map!(x)).collect();
             let body = rename(body, env);
 
-            Loop { vars, loop_vars, init, body }
+            Loop { vars, init, body }
         },
         Continue(xs) => Continue(xs.into_iter().map(|x| (map!(x.0), map!(x.1))).collect()),
         Const(_) | ExtArray(_) => e.item,
@@ -239,8 +237,8 @@ pub fn make_tymap(e: &Expr, env: &mut TyMap) {
                 },
             }
         },
-        ExprKind::Loop { vars, loop_vars, body, .. } => {
-            for d in vars.iter().chain(loop_vars) {
+        ExprKind::Loop { vars, body, .. } => {
+            for d in vars {
                 push!(d);
             }
             make_tymap(body, env);
@@ -304,11 +302,9 @@ impl ExprKind {
             ArrayGet(arr, idx) => write!(f, "ArrayGet {arr}, {idx}\n"),
             ArrayPut(arr, idx, e) => write!(f, "ArrayPut {arr}, {idx}, {e}\n"),
             TupleGet(arr, idx) => write!(f, "TupleGet {arr}, {idx}\n"),
-            Loop { vars, loop_vars, init, body } => {
+            Loop { vars, init, body } => {
                 write!(f, "Loop:\n{}vars = ", indent(level + 1))?;
                 util::format_vec(f, vars, "[", ", ", "]")?;
-                write!(f, "\n{}loop_vars = ", indent(level + 1))?;
-                util::format_vec(f, loop_vars, "[", ", ", "]")?;
                 write!(f, "\n{}init = ", indent(level + 1))?;
                 util::format_vec(f, init, "[", ", ", "]")?;
                 write!(f, "\n{}body =\n", indent(level + 1))?;

@@ -59,7 +59,6 @@ pub enum ExprKind {
     TupleGet(Id, usize),
     Loop {
         vars: Vec<Decl>,
-        loop_vars: Vec<Decl>,
         init: Vec<Id>,
         body: Box<Expr>
     },
@@ -114,11 +113,9 @@ impl ExprKind {
             ArrayGet(arr, idx) => write!(f, "ArrayGet {arr}, {idx}\n"),
             ArrayPut(arr, idx, x) => write!(f, "ArrayPut {arr}, {idx}, {x}\n"),
             TupleGet(arr, idx) => write!(f, "TupleGet {arr}.{idx}\n"),
-            Loop { vars, loop_vars, init, body } => {
+            Loop { vars, init, body } => {
                 write!(f, "Loop:\n{}vars = ", indent(level + 1))?;
                 util::format_vec(f, vars, "[", ", ", "]")?;
-                write!(f, "\n{}loop_vars = ", indent(level + 1))?;
-                util::format_vec(f, loop_vars, "[", ", ", "]")?;
                 write!(f, "\n{}init = ", indent(level + 1))?;
                 util::format_vec(f, init, "[", ", ", "]")?;
                 write!(f, "\n{}body =\n", indent(level + 1))?;
