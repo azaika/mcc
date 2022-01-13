@@ -1,6 +1,6 @@
 pub mod error;
-mod token;
 mod lexer;
+mod token;
 
 pub use error::ParseError as Error;
 
@@ -12,7 +12,7 @@ extern crate lalrpop_util;
 lalrpop_mod!(pub grammer);
 
 #[inline]
-pub fn parse<'input>(src : &'input str) -> Result<Expr, Error> {
+pub fn parse<'input>(src: &'input str) -> Result<Expr, Error> {
     let parser = grammer::ExprParser::new();
     let lex = lexer::Lexer::new(src);
 

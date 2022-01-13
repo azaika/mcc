@@ -1,6 +1,6 @@
 use std::fmt;
 
-use util::{Spanned, Id};
+use util::{Id, Spanned};
 
 use crate::knormal;
 
@@ -21,10 +21,10 @@ impl fmt::Display for Label {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Fundef {
-    pub fvar : Decl,
-    pub args : Vec<Decl>,
-    pub formal_fv : Vec<Decl>,
-    pub body : Box<Expr>
+    pub fvar: Decl,
+    pub args: Vec<Decl>,
+    pub formal_fv: Vec<Decl>,
+    pub body: Box<Expr>,
 }
 
 impl Fundef {
@@ -60,7 +60,7 @@ pub enum ExprKind {
     Loop {
         vars: Vec<Decl>,
         init: Vec<Id>,
-        body: Box<Expr>
+        body: Box<Expr>,
     },
     Continue(Vec<(Id, Id)>), // only in Loop.body
     MakeCls(Label, Vec<Id>), // (label, actual_fv)
@@ -88,27 +88,27 @@ impl ExprKind {
                 e1.item.format_indented(f, level + 1)?;
                 write!(f, "{}Else:\n", indent(level))?;
                 e2.item.format_indented(f, level + 1)
-            },
+            }
             Let(d, e1, e2) => {
                 write!(f, "Let: {d}\n")?;
                 e1.item.format_indented(f, level + 1)?;
                 e2.item.format_indented(f, level)
-            },
+            }
             Tuple(xs) => {
                 write!(f, "Tuple ")?;
                 util::format_vec(f, xs, "(", ", ", ")")?;
                 write!(f, "\n")
-            },
+            }
             CallDir(func, args) => {
                 write!(f, "CallDir {func}")?;
                 util::format_vec(f, args, "(", ", ", ")")?;
                 write!(f, "\n")
-            },
+            }
             CallCls(func, args) => {
                 write!(f, "CallCls {func}")?;
                 util::format_vec(f, args, "(", ", ", ")")?;
                 write!(f, "\n")
-            },
+            }
             CreateArray(num, init) => write!(f, "CreateArray {num}, {init}\n"),
             ArrayGet(arr, idx) => write!(f, "ArrayGet {arr}, {idx}\n"),
             ArrayPut(arr, idx, x) => write!(f, "ArrayPut {arr}, {idx}, {x}\n"),
@@ -120,17 +120,17 @@ impl ExprKind {
                 util::format_vec(f, init, "[", ", ", "]")?;
                 write!(f, "\n{}body =\n", indent(level + 1))?;
                 body.item.format_indented(f, level + 2)
-            },
+            }
             Continue(xs) => {
                 write!(f, "Continue ")?;
                 util::format_vec(f, &xs.iter().map(|(_, x)| x).collect(), "[", ", ", "]")?;
                 write!(f, "\n")
-            },
+            }
             MakeCls(l, actual_fv) => {
                 write!(f, "MakeCls {} @ ", l)?;
                 util::format_vec(f, actual_fv, "[", ", ", "]")?;
                 write!(f, "\n")
-            },
+            }
             Assign(x, y) => write!(f, "Assign {x}, {y}"),
             Load(x) => write!(f, "Load {x}"),
         }
@@ -147,7 +147,7 @@ impl fmt::Display for ExprKind {
 pub struct Global {
     pub name: Label,
     pub t: ty::knormal::Ty,
-    pub init: Box<Expr>
+    pub init: Box<Expr>,
 }
 
 impl Global {
@@ -163,7 +163,7 @@ impl Global {
 pub struct Program {
     pub globals: Vec<Global>,
     pub fundefs: Vec<Fundef>,
-    pub main: Box<Expr>
+    pub main: Box<Expr>,
 }
 
 impl Program {

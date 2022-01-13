@@ -1,20 +1,20 @@
-mod convert;
 mod alpha;
 mod beta;
+mod convert;
+mod cse;
+mod detect_loop;
+mod eliminate;
 mod flatten;
 mod fold_const;
 mod inlining;
-mod eliminate;
-mod cse;
-mod detect_loop;
 
-pub use convert::convert;
 pub use alpha::to_alpha_form;
 pub use alpha::TyMap;
 pub use beta::beta_reduction;
+pub use convert::convert;
+pub use cse::cse;
+pub use detect_loop::detect_loop;
+pub use eliminate::eliminate;
 pub use flatten::flatten_let;
 pub use fold_const::fold_const;
 pub use inlining::inlining;
-pub use eliminate::eliminate;
-pub use cse::cse;
-pub use detect_loop::detect_loop;

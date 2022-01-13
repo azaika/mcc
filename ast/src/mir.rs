@@ -1,7 +1,7 @@
 use id_arena::Arena;
 
-use util::{Spanned, Id, Map};
-pub use ty::mir::Ty as Ty;
+pub use ty::mir::Ty;
+use util::{Id, Map, Spanned};
 
 use std::fmt;
 
@@ -18,7 +18,7 @@ impl fmt::Display for Label {
 pub enum ConstKind {
     CUnit,
     CInt(i32),
-    CFloat(f32)
+    CFloat(f32),
 }
 
 impl From<i32> for ConstKind {
@@ -35,7 +35,7 @@ impl From<f32> for ConstKind {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum UnOpKind {
     Neg,
-    FNeg
+    FNeg,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -47,7 +47,7 @@ pub enum BinOpKind {
     Mul,
     Div,
     FMul,
-    FDiv
+    FDiv,
 }
 
 // SSA の右辺
@@ -85,15 +85,15 @@ impl fmt::Display for InstKind {
             Tuple(xs) => {
                 write!(f, "Tuple ")?;
                 util::format_vec(f, xs, "(", ", ", ")")
-            },
+            }
             CallDir(lab, args) => {
                 write!(f, "CallDir {lab}")?;
                 util::format_vec(f, args, "(", ", ", ")")
-            },
+            }
             CallCls(func, args) => {
                 write!(f, "CallCls {func}")?;
                 util::format_vec(f, args, "(", ", ", ")")
-            },
+            }
             AllocArray(num, t) => write!(f, "AllocArray<{t}>({num})"),
             Assign(x, y) => write!(f, "Assign {x} := {y}"),
             Load(x) => write!(f, "Load {x}"),
@@ -103,16 +103,15 @@ impl fmt::Display for InstKind {
             MakeCls(lab, actual_fv) => {
                 write!(f, "MakeCls {lab}")?;
                 util::format_vec(f, actual_fv, "[", ", ", "]")
-            },
+            }
         }
     }
 }
 
-
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum IfKind {
     IfEq,
-    IfLE
+    IfLE,
 }
 
 // basic block の末尾にあるもの
@@ -129,20 +128,27 @@ impl TailKind {
         use TailKind::*;
         match self {
             If(kind, x, y, b1, b2) => {
-                write!(f, "{:?} {}, {} => {} | {}", kind, x, y, arena[*b1].name, arena[*b2].name)
-            },
+                write!(
+                    f,
+                    "{:?} {}, {} => {} | {}",
+                    kind, x, y, arena[*b1].name, arena[*b2].name
+                )
+            }
             ForEach(idx, arr, _, body, cont) => {
-                write!(f, "ForEach {}[{}] => {} ? {}", arr, idx, arena[*body].name, arena[*cont].name)
-            },
+                write!(
+                    f,
+                    "ForEach {}[{}] => {} ? {}",
+                    arr, idx, arena[*body].name, arena[*cont].name
+                )
+            }
             Jump(block) => write!(f, "Jump {}", arena[*block].name),
             Return(r) => {
                 if let Some(r) = r {
                     write!(f, "Return {}", r)
-                }
-                else {
+                } else {
                     write!(f, "Return")
                 }
-            },
+            }
         }
     }
 }
@@ -153,7 +159,7 @@ pub type Tail = Spanned<TailKind>;
 pub struct Block {
     pub name: String,
     pub body: Vec<(Option<Id>, Inst)>,
-    pub tail: Box<Tail>
+    pub tail: Box<Tail>,
 }
 
 impl Block {
@@ -167,8 +173,13 @@ impl Block {
             tail: Box::new(Spanned::new(TailKind::Return(None), (0, 0))),
         }
     }
-    
-    fn format_indented(&self, f: &mut fmt::Formatter, level: usize, arena: &Arena<Block>) -> fmt::Result {
+
+    fn format_indented(
+        &self,
+        f: &mut fmt::Formatter,
+        level: usize,
+        arena: &Arena<Block>,
+    ) -> fmt::Result {
         // print indentation
         let indent = |level: usize| "    ".repeat(level);
         write!(f, "{}Block {}", indent(level), self.name)?;
@@ -176,8 +187,7 @@ impl Block {
         for (x, inst) in &self.body {
             if let Some(x) = x {
                 write!(f, "{}{} <- {}\n", indent(level + 2), x, inst)?;
-            }
-            else {
+            } else {
                 write!(f, "{}{}\n", indent(level + 2), inst)?;
             }
         }
@@ -195,19 +205,36 @@ pub struct Fundef {
     pub name: Label,
     pub args: Vec<Id>,
     pub formal_fv: Vec<Id>,
-    pub entry: BlockId
+    pub entry: BlockId,
 }
 
 impl Fundef {
-    fn format_indented(&self, f: &mut fmt::Formatter, tymap: &Map<Id, Ty>, level: usize, arena: &Arena<Block>) -> fmt::Result {
+    fn format_indented(
+        &self,
+        f: &mut fmt::Formatter,
+        tymap: &Map<Id, Ty>,
+        level: usize,
+        arena: &Arena<Block>,
+    ) -> fmt::Result {
         // print indentation
         let indent = |level: usize| "    ".repeat(level);
-        write!(f, "{}Fundef ({}, {})\n", indent(level), self.name, tymap.get(&self.name.0).unwrap())?;
+        write!(
+            f,
+            "{}Fundef ({}, {})\n",
+            indent(level),
+            self.name,
+            tymap.get(&self.name.0).unwrap()
+        )?;
         write!(f, "{}args: ", indent(level + 1))?;
         util::format_vec(f, &self.args, "[", ", ", "]")?;
         write!(f, "\n{}formal_fv: ", indent(level + 1))?;
         util::format_vec(f, &self.formal_fv, "[", ", ", "]")?;
-        write!(f, "\n{}entry: {}\n", indent(level + 1), arena[self.entry].name)
+        write!(
+            f,
+            "\n{}entry: {}\n",
+            indent(level + 1),
+            arena[self.entry].name
+        )
     }
 }
 
@@ -217,7 +244,7 @@ pub struct Program {
     pub block_arena: Arena<Block>,
     pub globals: Vec<Label>,
     pub fundefs: Vec<Fundef>,
-    pub entry: BlockId
+    pub entry: BlockId,
 }
 
 impl Program {
@@ -241,9 +268,9 @@ impl Program {
             TailKind::If(_, _, _, b1, b2) | TailKind::ForEach(_, _, _, b1, b2) => {
                 self.collect_used_impl(b1, used);
                 self.collect_used_impl(b2, used);
-            },
+            }
             TailKind::Jump(b) => self.collect_used_impl(b, used),
-            TailKind::Return(_) => {},
+            TailKind::Return(_) => {}
         }
     }
 

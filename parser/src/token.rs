@@ -34,7 +34,7 @@ pub enum Token {
     LessMinus,
     SemiColon,
     LPar,
-    RPar
+    RPar,
 }
 
 impl fmt::Display for Token {
@@ -72,7 +72,7 @@ impl fmt::Display for Token {
             LessMinus => write!(f, "<-"),
             SemiColon => write!(f, ";"),
             LPar => write!(f, "("),
-            RPar => write!(f, ")")
+            RPar => write!(f, ")"),
         }
     }
 }

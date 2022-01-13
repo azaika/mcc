@@ -1,12 +1,18 @@
-pub mod span;
 pub mod id;
+pub mod span;
 
-pub use span::*;
 pub use id::Id;
+pub use span::*;
 
 use std::fmt;
 
-pub fn format_vec<T: fmt::Display>(f: &mut fmt::Formatter, v: &Vec<T>, left: &str, sep: &str, right: &str) -> fmt::Result {
+pub fn format_vec<T: fmt::Display>(
+    f: &mut fmt::Formatter,
+    v: &Vec<T>,
+    left: &str,
+    sep: &str,
+    right: &str,
+) -> fmt::Result {
     write!(f, "{}", left)?;
     if !v.is_empty() {
         write!(f, "{}", v[0])?;
@@ -23,9 +29,6 @@ pub use fnv::FnvHashSet as Set;
 pub fn restore<V>(m: &mut Map<Id, V>, key: &str, t: Option<V>) {
     match t {
         Some(t) => m.insert(key.to_string(), t),
-        None => m.remove(key)
+        None => m.remove(key),
     };
 }
-
-
-

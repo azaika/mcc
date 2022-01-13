@@ -1,5 +1,5 @@
-use std::fmt;
 use crate::knormal;
+use std::fmt;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum Ty {
@@ -9,7 +9,7 @@ pub enum Ty {
     Fun(Vec<Ty>, Box<Ty>),
     Tuple(Vec<Ty>),
     Array(Box<Ty>, Option<usize>),
-    Mut(Box<Ty>)
+    Mut(Box<Ty>),
 }
 
 impl From<knormal::Ty> for Ty {
@@ -19,10 +19,13 @@ impl From<knormal::Ty> for Ty {
             knormal::Ty::Unit => Unit,
             knormal::Ty::Int => Int,
             knormal::Ty::Float => Float,
-            knormal::Ty::Fun(args, r) => Fun(args.into_iter().map(|x| x.into()).collect(), Box::new((*r).into())),
+            knormal::Ty::Fun(args, r) => Fun(
+                args.into_iter().map(|x| x.into()).collect(),
+                Box::new((*r).into()),
+            ),
             knormal::Ty::Tuple(ts) => Tuple(ts.into_iter().map(|x| x.into()).collect()),
             knormal::Ty::Array(t) => Array(Box::new(Mut(Box::new((*t).into()))), None),
-            knormal::Ty::Ref(t) => Mut(Box::new((*t).into()))
+            knormal::Ty::Ref(t) => Mut(Box::new((*t).into())),
         }
     }
 }
@@ -32,7 +35,7 @@ impl Ty {
         use Ty::*;
         match self {
             Fun(_, _) | Tuple(_) => write!(f, "({})", self),
-            _ => write!(f, "{}", self)
+            _ => write!(f, "{}", self),
         }
     }
 }
@@ -50,7 +53,7 @@ impl fmt::Display for Ty {
                     write!(f, " -> ")?;
                 }
                 write!(f, "{}", *ret)
-            },
+            }
             Tuple(ts) => {
                 // cannot use `util::format_vec` because it does not call print_block()
                 ts.first().map_or(Ok(()), |t| t.print_block(f))?;
@@ -58,11 +61,15 @@ impl fmt::Display for Ty {
                     write!(f, " * {}", t)?;
                 }
                 Ok(())
-            },
+            }
             Array(t, s) => {
                 t.print_block(f)?;
-                write!(f, " array[{}]", s.map_or("?".to_string(), |x| x.to_string()))
-            },
+                write!(
+                    f,
+                    " array[{}]",
+                    s.map_or("?".to_string(), |x| x.to_string())
+                )
+            }
             Mut(t) => {
                 t.print_block(f)?;
                 write!(f, " mut")
@@ -75,14 +82,14 @@ impl Ty {
     pub fn is_mut(&self) -> bool {
         match self {
             Ty::Mut(_) => true,
-            _ => false
+            _ => false,
         }
     }
 
     pub fn demut(&self) -> &Self {
         match self {
             Ty::Mut(t) => t.demut(),
-            _ => self
+            _ => self,
         }
     }
 
@@ -94,11 +101,10 @@ impl Ty {
             Ty::Fun(_, _) => "f",
             Ty::Tuple(_) => "t",
             Ty::Array(_, _) => "a",
-            Ty::Mut(_) => unreachable!()
+            Ty::Mut(_) => unreachable!(),
         }
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -114,12 +120,18 @@ mod tests {
         assert_eq!(fun1.to_string(), "unit -> int array[2] -> float");
 
         let fun2 = Fun(vec![Float, fun1.clone()], Box::new(fun1.clone()));
-        assert_eq!(fun2.to_string(), "float -> (unit -> int array[2] -> float) -> unit -> int array[2] -> float");
+        assert_eq!(
+            fun2.to_string(),
+            "float -> (unit -> int array[2] -> float) -> unit -> int array[2] -> float"
+        );
 
         let tup1 = Tuple(vec![fun1.clone(), Unit]);
         assert_eq!(tup1.to_string(), "(unit -> int array[2] -> float) * unit");
 
         let tup2 = Tuple(vec![iarr.clone(), Mut(Box::new(Float)), iiarr.clone()]);
-        assert_eq!(tup2.to_string(), "int array[2] * float mut * int array[2] mut array[?]");
+        assert_eq!(
+            tup2.to_string(),
+            "int array[2] * float mut * int array[2] mut array[?]"
+        );
     }
 }

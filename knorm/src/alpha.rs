@@ -1,5 +1,5 @@
 use util::Map as FnvMap;
-use util::{Id, id};
+use util::{id, Id};
 
 use ty::knormal::Ty;
 
@@ -11,8 +11,12 @@ use ast::knormal::*;
 pub fn conv(mut e: Box<Expr>, env: &mut Map) -> Box<Expr> {
     macro_rules! map {
         ($name: expr) => {
-            if let Some(x) = env.get(&$name) { x.clone() } else { $name }
-        }
+            if let Some(x) = env.get(&$name) {
+                x.clone()
+            } else {
+                $name
+            }
+        };
     }
 
     use ExprKind::*;
@@ -24,54 +28,56 @@ pub fn conv(mut e: Box<Expr>, env: &mut Map) -> Box<Expr> {
             let e1 = conv(e1, env);
             let e2 = conv(e2, env);
             If(kind, map!(x), map!(y), e1, e2)
-        },
-        Let(l) => {
-            let kind = match l {
-                LetKind::Let(decl, e1, e2) => {
-                    let e1 = conv(e1, env);
+        }
+        Let(decl, e1, e2) => {
+            let e1 = conv(e1, env);
 
-                    let new_name = id::distinguish(decl.name.clone());
-                    let s = env.insert(decl.name.clone(), new_name.clone());
-                    let e2 = conv(e2, env);
-                    util::restore(env, &decl.name, s);
-                    
-                    LetKind::Let(Decl::new(new_name, decl.t), e1, e2)
-                },
-                LetKind::LetRec(fundef, e2) => {
-                    let decl = fundef.fvar;
-                    let new_name = id::distinguish(decl.name.clone());
-                    let new_args: Vec<_> = fundef.args.iter().map(|d| id::distinguish(d.name.clone())).collect();
+            let new_name = id::distinguish(decl.name.clone());
+            let s = env.insert(decl.name.clone(), new_name.clone());
+            let e2 = conv(e2, env);
+            util::restore(env, &decl.name, s);
 
-                    let old_f = env.insert(decl.name.clone(), new_name.clone());
+            Let(Decl::new(new_name, decl.t), e1, e2)
+        }
+        LetRec(fundef, e2) => {
+            let decl = fundef.fvar;
+            let new_name = id::distinguish(decl.name.clone());
+            let new_args: Vec<_> = fundef
+                .args
+                .iter()
+                .map(|d| id::distinguish(d.name.clone()))
+                .collect();
 
-                    let e2 =  conv(e2, env);
+            let old_f = env.insert(decl.name.clone(), new_name.clone());
 
-                    let mut old_args = vec![];
-                    for (Decl{ name, t: _ }, x) in fundef.args.iter().zip(&new_args) {
-                        old_args.push(env.insert(name.clone(), x.clone()));
-                    }
+            let e2 = conv(e2, env);
 
-                    let body =  conv(fundef.body, env);
+            let mut old_args = vec![];
+            for (Decl { name, t: _ }, x) in fundef.args.iter().zip(&new_args) {
+                old_args.push(env.insert(name.clone(), x.clone()));
+            }
 
-                    for (x, d) in old_args.into_iter().zip(&fundef.args) {
-                        util::restore(env, &d.name, x);
-                    }
-                    util::restore(env, &decl.name, old_f);
+            let body = conv(fundef.body, env);
 
-                    let args = new_args.into_iter().zip(fundef.args).map(|(x, d)| Decl::new(x, d.t)).collect();
+            for (x, d) in old_args.into_iter().zip(&fundef.args) {
+                util::restore(env, &d.name, x);
+            }
+            util::restore(env, &decl.name, old_f);
 
-                    let fundef = Fundef {
-                        fvar: Decl::new(new_name, decl.t),
-                        args,
-                        body
-                    };
+            let args = new_args
+                .into_iter()
+                .zip(fundef.args)
+                .map(|(x, d)| Decl::new(x, d.t))
+                .collect();
 
-                    LetKind::LetRec(fundef, e2)
-                },
+            let fundef = Fundef {
+                fvar: Decl::new(new_name, decl.t),
+                args,
+                body,
             };
 
-            Let(kind)
-        },
+            LetRec(fundef, e2)
+        }
         Tuple(xs) => Tuple(xs.into_iter().map(|x| map!(x)).collect()),
         App(f, args) => App(map!(f), args.into_iter().map(|x| map!(x)).collect()),
         ExtApp(f, args) => ExtApp(f, args.into_iter().map(|x| map!(x)).collect()),
@@ -79,11 +85,14 @@ pub fn conv(mut e: Box<Expr>, env: &mut Map) -> Box<Expr> {
         ArrayGet(x, y) => ArrayGet(map!(x), map!(y)),
         ArrayPut(x, y, z) => ArrayPut(map!(x), map!(y), map!(z)),
         TupleGet(x, idx) => TupleGet(map!(x), idx),
-        Loop { vars, init, body }  => {
-            let new_names: Vec<_> = vars.iter().map(|d| id::distinguish(d.name.clone())).collect();
+        Loop { vars, init, body } => {
+            let new_names: Vec<_> = vars
+                .iter()
+                .map(|d| id::distinguish(d.name.clone()))
+                .collect();
 
             let mut old_vars = vec![];
-            for (Decl{ name, .. }, x) in vars.iter().zip(&new_names) {
+            for (Decl { name, .. }, x) in vars.iter().zip(&new_names) {
                 old_vars.push(env.insert(name.clone(), x.clone()));
             }
 
@@ -93,11 +102,15 @@ pub fn conv(mut e: Box<Expr>, env: &mut Map) -> Box<Expr> {
                 util::restore(env, &d.name, x);
             }
 
-            let vars = new_names.into_iter().zip(vars).map(|(x, d)| Decl::new(x, d.t)).collect();
+            let vars = new_names
+                .into_iter()
+                .zip(vars)
+                .map(|(x, d)| Decl::new(x, d.t))
+                .collect();
             let init = init.into_iter().map(|x| map!(x)).collect();
-            
+
             Loop { vars, init, body }
-        },
+        }
         Continue(xs) => Continue(xs.into_iter().map(|(x, y)| (map!(x), map!(y))).collect()),
         Const(_) | ExtArray(_) => e.item,
     };

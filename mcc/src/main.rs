@@ -15,7 +15,7 @@ fn main() -> Result<()> {
                 simplelog::LevelFilter::Debug,
                 simplelog::Config::default(),
                 simplelog::TerminalMode::Mixed,
-                simplelog::ColorChoice::Auto
+                simplelog::ColorChoice::Auto,
             ),
             // ファイルsimplelog.logにはInfo以上を表示する。
             // simplelog::WriteLogger::new(
@@ -25,19 +25,18 @@ fn main() -> Result<()> {
             // ),
         ])
         .unwrap();
-    }
-    else {
+    } else {
         simplelog::CombinedLogger::init(vec![
             // 標準出力にはWarn以上を表示する。
             simplelog::TermLogger::new(
                 simplelog::LevelFilter::Info,
                 simplelog::Config::default(),
                 simplelog::TerminalMode::Mixed,
-                simplelog::ColorChoice::Auto
+                simplelog::ColorChoice::Auto,
             ),
         ])
         .unwrap();
     }
-    
+
     compile(args)
 }

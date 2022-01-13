@@ -1,6 +1,6 @@
-use plex::lexer;
-use crate::token::*;
 use crate::error::{LexError, LexErrorKind};
+use crate::token::*;
+use plex::lexer;
 use util::{id, Spanned};
 
 pub type Result = std::result::Result<(usize, Token, usize), LexError>;
@@ -10,7 +10,7 @@ enum LexToken {
     Tok(Token),
     Space,
     CommentBegin,
-    Error(LexErrorKind)
+    Error(LexErrorKind),
 }
 
 use LexToken::*;
@@ -18,12 +18,12 @@ use LexToken::*;
 enum CommentState {
     ReOpen,
     End,
-    Continue
+    Continue,
 }
 
 lexer! {
     fn consume_comment(_text: 'input) -> CommentState;
-    
+
     r"\(\*" => CommentState::ReOpen,
     r"\*\)" => CommentState::End,
     r"." => CommentState::Continue
@@ -85,7 +85,7 @@ lexer! {
 
 pub struct Lexer<'input> {
     original: &'input str,
-    remaining: &'input str
+    remaining: &'input str,
 }
 
 impl<'input> Lexer<'input> {
@@ -102,20 +102,20 @@ impl<'input> Lexer<'input> {
             use CommentState::*;
             if let Some((stat, remaining)) = consume_comment(self.remaining) {
                 self.remaining = remaining;
-                
+
                 match stat {
                     ReOpen => {
                         self.skip_comment()?;
-                        continue
-                    },
+                        continue;
+                    }
                     End => {
                         return Some(());
-                    },
-                    Continue => continue
+                    }
+                    Continue => continue,
                 }
-            }
-            else { // EOF
-                return None
+            } else {
+                // EOF
+                return None;
             }
         }
     }
@@ -133,23 +133,21 @@ impl<'input> Iterator for Lexer<'input> {
 
                 match tok {
                     Space => continue,
-                    Tok(tok) => {
-                        return Some(Ok((lo, tok, hi)))
-                    },
+                    Tok(tok) => return Some(Ok((lo, tok, hi))),
                     CommentBegin => {
                         if let Some(_) = self.skip_comment() {
-                            continue
+                            continue;
+                        } else {
+                            return Some(Err(Spanned::new(
+                                LexErrorKind::UnclosedComment,
+                                (lo, hi),
+                            )));
                         }
-                        else {
-                            return Some(Err(Spanned::new(LexErrorKind::UnclosedComment, (lo, hi))));
-                        }
-                    },
-                    Error(e) => {
-                        return Some(Err(Spanned::new(e, (lo, hi))))
                     }
+                    Error(e) => return Some(Err(Spanned::new(e, (lo, hi)))),
                 }
-            }
-            else { // EOF
+            } else {
+                // EOF
                 return None;
             };
         }

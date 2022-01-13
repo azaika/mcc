@@ -1,13 +1,13 @@
 use std::{fmt, hash::Hash};
 
-use util::{Spanned, Id};
 use ty::knormal as ty;
+use util::{Id, Spanned};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ConstKind {
     CUnit,
     CInt(i32),
-    CFloat(f32)
+    CFloat(f32),
 }
 
 impl From<i32> for ConstKind {
@@ -27,7 +27,7 @@ impl Hash for ConstKind {
         match self {
             ConstKind::CInt(i) => i.hash(state),
             ConstKind::CFloat(d) => d.to_bits().hash(state),
-            _ => ()
+            _ => (),
         }
     }
 }
@@ -35,7 +35,7 @@ impl Hash for ConstKind {
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum UnOpKind {
     Neg,
-    FNeg
+    FNeg,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
@@ -47,13 +47,13 @@ pub enum BinOpKind {
     Mul,
     Div,
     FMul,
-    FDiv
+    FDiv,
 }
 
 #[derive(Debug, Clone, PartialEq, Hash)]
 pub struct Decl {
-    pub name : Id,
-    pub t : ty::Ty
+    pub name: Id,
+    pub t: ty::Ty,
 }
 
 impl fmt::Display for Decl {
@@ -63,54 +63,29 @@ impl fmt::Display for Decl {
 }
 
 impl Decl {
-    pub fn new(name : Id, t : ty::Ty) -> Self {
-        Self {
-            name,
-            t
-        }
+    pub fn new(name: Id, t: ty::Ty) -> Self {
+        Self { name, t }
     }
 
     pub fn gen_uniq(t: ty::Ty) -> Self {
         Self {
             name: util::id::gen_tmp_var_with(t.short()),
-            t
+            t,
         }
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Fundef {
-    pub fvar : Decl,
-    pub args : Vec<Decl>,
-    pub body : Box<Expr>
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum LetKind {
-    Let(Decl, Box<Expr>, Box<Expr>),
-    LetRec(Fundef, Box<Expr>),
-}
-
-impl LetKind {
-    pub fn map<F>(self, mut f: F) -> Self
-        where F: FnMut(Box<Expr>) -> Box<Expr>
-    {
-        match self {
-            LetKind::Let(d, e1, e2) => LetKind::Let(d, f(e1), f(e2)),
-            LetKind::LetRec(Fundef { fvar, args, body }, e2) => {
-                let body = f(body);
-                let e2 = f(e2);
-
-                LetKind::LetRec(Fundef { fvar, args, body }, e2)
-            },
-        }
-    }
+    pub fvar: Decl,
+    pub args: Vec<Decl>,
+    pub body: Box<Expr>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum IfKind {
     IfEq,
-    IfLE
+    IfLE,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -120,7 +95,8 @@ pub enum ExprKind {
     UnOp(UnOpKind, Id),
     BinOp(BinOpKind, Id, Id),
     If(IfKind, Id, Id, Box<Expr>, Box<Expr>),
-    Let(LetKind),
+    Let(Decl, Box<Expr>, Box<Expr>),
+    LetRec(Fundef, Box<Expr>),
     Tuple(Vec<Id>),
     App(Id, Vec<Id>),
     ExtApp(Id, Vec<Id>),
@@ -132,7 +108,7 @@ pub enum ExprKind {
     Loop {
         vars: Vec<Decl>,
         init: Vec<Id>,
-        body: Box<Expr>
+        body: Box<Expr>,
     },
     Continue(Vec<(Id, Id)>), // only in Loop.body
 }
@@ -145,8 +121,12 @@ type Map = util::Map<Id, Id>;
 pub fn rename(mut e: Box<Expr>, env: &Map) -> Box<Expr> {
     macro_rules! map {
         ($name: expr) => {
-            if let Some(_x) = env.get(&$name) { _x.clone() } else { $name.clone() }
-        }
+            if let Some(_x) = env.get(&$name) {
+                _x.clone()
+            } else {
+                $name.clone()
+            }
+        };
     }
 
     use ExprKind::*;
@@ -158,31 +138,29 @@ pub fn rename(mut e: Box<Expr>, env: &Map) -> Box<Expr> {
             let e1 = rename(e1, env);
             let e2 = rename(e2, env);
             If(kind, map!(x), map!(y), e1, e2)
-        },
-        Let(l) => {
-            let kind = match l {
-                LetKind::Let(decl, e1, e2) => {
-                    let e1 = rename(e1, env);
-                    let e2 = rename(e2, env);
-                    LetKind::Let(Decl::new(map!(decl.name), decl.t), e1, e2)
-                },
-                LetKind::LetRec(fundef, e2) => {
-                    let decl = fundef.fvar;
-                    let body =  rename(fundef.body, env);
-                    let args = fundef.args.into_iter().map(|d| Decl::new(map!(d.name), d.t)).collect();
-                    let e2 =  rename(e2, env);
+        }
+        Let(decl, e1, e2) => {
+            let e1 = rename(e1, env);
+            let e2 = rename(e2, env);
+            Let(Decl::new(map!(decl.name), decl.t), e1, e2)
+        }
+        LetRec(fundef, e2) => {
+            let decl = fundef.fvar;
+            let body = rename(fundef.body, env);
+            let args = fundef
+                .args
+                .into_iter()
+                .map(|d| Decl::new(map!(d.name), d.t))
+                .collect();
+            let e2 = rename(e2, env);
 
-                    let fundef = Fundef {
-                        fvar: Decl::new(map!(decl.name), decl.t),
-                        args,
-                        body
-                    };
-                    LetKind::LetRec(fundef, e2)
-                },
+            let fundef = Fundef {
+                fvar: Decl::new(map!(decl.name), decl.t),
+                args,
+                body,
             };
-
-            Let(kind)
-        },
+            LetRec(fundef, e2)
+        }
         Tuple(xs) => Tuple(xs.into_iter().map(|x| map!(x)).collect()),
         App(f, args) => App(map!(f), args.into_iter().map(|x| map!(x)).collect()),
         ExtApp(f, args) => ExtApp(f, args.into_iter().map(|x| map!(x)).collect()),
@@ -191,12 +169,15 @@ pub fn rename(mut e: Box<Expr>, env: &Map) -> Box<Expr> {
         ArrayPut(x, y, z) => ArrayPut(map!(x), map!(y), map!(z)),
         TupleGet(x, idx) => TupleGet(map!(x), idx),
         Loop { vars, init, body } => {
-            let vars = vars.into_iter().map(|d| Decl::new(map!(d.name), d.t)).collect();
+            let vars = vars
+                .into_iter()
+                .map(|d| Decl::new(map!(d.name), d.t))
+                .collect();
             let init = init.into_iter().map(|x| map!(x)).collect();
             let body = rename(body, env);
 
             Loop { vars, init, body }
-        },
+        }
         Continue(xs) => Continue(xs.into_iter().map(|x| (map!(x.0), map!(x.1))).collect()),
         Const(_) | ExtArray(_) => e.item,
     };
@@ -211,39 +192,35 @@ pub fn make_tymap(e: &Expr, env: &mut TyMap) {
     macro_rules! push {
         ($decl: expr) => {
             env.insert($decl.name.clone(), $decl.t.clone().into())
-        }
+        };
     }
-    
+
     match &e.item {
         ExprKind::If(_, _, _, e1, e2) => {
             make_tymap(e1, env);
             make_tymap(e2, env);
-        },
-        ExprKind::Let(l) => {
-            match l {
-                LetKind::Let(decl, e1, e2) => {
-                    push!(decl);
-                    make_tymap(e1, env);
-                    make_tymap(e2, env);
-                },
-                LetKind::LetRec(fundef, e2) => {
-                    push!(fundef.fvar);
-                    for d in &fundef.args {
-                        push!(d);
-                    }
-
-                    make_tymap(&fundef.body, env);
-                    make_tymap(e2, env);
-                },
+        }
+        ExprKind::Let(decl, e1, e2) => {
+            push!(decl);
+            make_tymap(e1, env);
+            make_tymap(e2, env);
+        }
+        ExprKind::LetRec(fundef, e2) => {
+            push!(fundef.fvar);
+            for d in &fundef.args {
+                push!(d);
             }
-        },
+
+            make_tymap(&fundef.body, env);
+            make_tymap(e2, env);
+        }
         ExprKind::Loop { vars, body, .. } => {
             for d in vars {
                 push!(d);
             }
             make_tymap(body, env);
         }
-        _ => ()
+        _ => (),
     }
 }
 
@@ -265,39 +242,34 @@ impl ExprKind {
                 e1.item.format_indented(f, level + 1)?;
                 write!(f, "{}Else:\n", indent(level))?;
                 e2.item.format_indented(f, level + 1)
-            },
-            Let(l) => {
-                use LetKind::*;
-                match l {
-                    Let(d, e1, e2) => {
-                        write!(f, "Let: {}\n", d)?;
-                        e1.item.format_indented(f, level + 1)?;
-                        e2.item.format_indented(f, level)
-                    }
-                    LetRec(fundef, e) => {
-                        write!(f, "LetRec: {}\n{}args = ", fundef.fvar, indent(level + 1))?;
-                        util::format_vec(f, &fundef.args, "[", ", ", "]")?;
-                        write!(f, "\n{}body =\n", indent(level + 1))?;
-                        fundef.body.item.format_indented(f, level + 2)?;
-                        e.item.format_indented(f, level)
-                    }
-                } 
-            },
+            }
+            Let(d, e1, e2) => {
+                write!(f, "Let: {}\n", d)?;
+                e1.item.format_indented(f, level + 1)?;
+                e2.item.format_indented(f, level)
+            }
+            LetRec(fundef, e) => {
+                write!(f, "LetRec: {}\n{}args = ", fundef.fvar, indent(level + 1))?;
+                util::format_vec(f, &fundef.args, "[", ", ", "]")?;
+                write!(f, "\n{}body =\n", indent(level + 1))?;
+                fundef.body.item.format_indented(f, level + 2)?;
+                e.item.format_indented(f, level)
+            }
             Tuple(xs) => {
                 write!(f, "Tuple ")?;
                 util::format_vec(f, xs, "(", ", ", ")")?;
                 write!(f, "\n")
-            },
+            }
             App(func, args) => {
                 write!(f, "App {func}")?;
                 util::format_vec(f, args, "(", ", ", ")")?;
                 write!(f, "\n")
-            },
+            }
             ExtApp(func, args) => {
                 write!(f, "ExtApp {func}")?;
                 util::format_vec(f, args, "(", ", ", ")")?;
                 write!(f, "\n")
-            },
+            }
             CreateArray(num, init) => write!(f, "CreateArray {num}, {init}\n"),
             ArrayGet(arr, idx) => write!(f, "ArrayGet {arr}, {idx}\n"),
             ArrayPut(arr, idx, e) => write!(f, "ArrayPut {arr}, {idx}, {e}\n"),
@@ -309,12 +281,12 @@ impl ExprKind {
                 util::format_vec(f, init, "[", ", ", "]")?;
                 write!(f, "\n{}body =\n", indent(level + 1))?;
                 body.item.format_indented(f, level + 2)
-            },
+            }
             Continue(xs) => {
                 write!(f, "Continue ")?;
                 util::format_vec(f, &xs.iter().map(|(_, x)| x).collect(), "[", ", ", "]")?;
                 write!(f, "\n")
-            },
+            }
         }
     }
 }

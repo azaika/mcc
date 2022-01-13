@@ -1,14 +1,14 @@
-use anyhow::{Result, Context};
+use anyhow::{Context, Result};
 use clap::Parser;
 
-use ast::{ syntax, knormal };
 use ariadne;
+use ast::{knormal, syntax};
 
 #[derive(Debug, Parser)]
 pub struct Args {
-    #[clap(long, default_value_t=100)]
+    #[clap(long, default_value_t = 100)]
     pub inline: usize,
-    #[clap(long, default_value_t=100)]
+    #[clap(long, default_value_t = 100)]
     pub loop_opt: usize,
     #[clap(short, long)]
     pub optimize: bool,
@@ -18,14 +18,14 @@ pub struct Args {
     pub debug: bool,
     #[clap(short, long)]
     pub lib: Option<Vec<String>>,
-    pub source: String
+    pub source: String,
 }
 
 fn parse_file(path: &str) -> Result<syntax::Expr> {
     let src = std::fs::read_to_string(path).context(format!("failed to open file: {}", path))?;
 
     parser::parse(&src).map_err(|err| {
-        use ariadne::{Report, ReportKind, Label, Source, ColorGenerator, Fmt};
+        use ariadne::{ColorGenerator, Fmt, Label, Report, ReportKind, Source};
 
         let mut colors = ColorGenerator::new();
 
@@ -35,22 +35,26 @@ fn parse_file(path: &str) -> Result<syntax::Expr> {
         Report::build(ReportKind::Error, path, err.loc.0)
             .with_code(3)
             .with_message(err.item.to_string())
-            .with_label(Label::new((path, err.into()))
-                .with_message(format!("error found {}", "here".fg(a)))
-                .with_color(a))
+            .with_label(
+                Label::new((path, err.into()))
+                    .with_message(format!("error found {}", "here".fg(a)))
+                    .with_color(a),
+            )
             .finish()
             .print((path, Source::from(src)))
             .unwrap();
-        
+
         anyhow::Error::msg("aborting due to the error above")
     })
 }
 
 fn infer(e: syntax::Expr, path: &str) -> Result<(syntax::Expr, typing::TypeMap)> {
-    typing::infer(e).map_err(|err|{
-        use ariadne::{Report, ReportKind, Label, Source, ColorGenerator, Fmt};
+    typing::infer(e).map_err(|err| {
+        use ariadne::{ColorGenerator, Fmt, Label, Report, ReportKind, Source};
 
-        let src = std::fs::read_to_string(path).context(format!("failed to open file: {}", path)).unwrap();
+        let src = std::fs::read_to_string(path)
+            .context(format!("failed to open file: {}", path))
+            .unwrap();
 
         let mut colors = ColorGenerator::new();
 
@@ -60,13 +64,15 @@ fn infer(e: syntax::Expr, path: &str) -> Result<(syntax::Expr, typing::TypeMap)>
         Report::build(ReportKind::Error, path, err.span.0)
             .with_code(3)
             .with_message(err.to_string())
-            .with_label(Label::new((path, err.span.0 .. err.span.1))
-                .with_message(format!("error found {}", "here".fg(a)))
-                .with_color(a))
+            .with_label(
+                Label::new((path, err.span.0..err.span.1))
+                    .with_message(format!("error found {}", "here".fg(a)))
+                    .with_color(a),
+            )
             .finish()
             .print((path, Source::from(src)))
             .unwrap();
-        
+
         anyhow::Error::msg("aborting due to the error above")
     })
 }
@@ -91,13 +97,13 @@ fn optimize_knorm(mut e: knormal::Expr, tyenv: &mut knorm::TyMap, config: &Args)
         e = knorm::fold_const(e, tyenv);
         e = knorm::beta_reduction(e, tyenv);
         e = knorm::eliminate(e);
-        
+
         if e == prev {
             break;
         }
         prev = e.clone();
     }
-    
+
     e
 }
 
@@ -116,20 +122,20 @@ fn optimize_mir(mut p: ast::mir::Program) -> ast::mir::Program {
     p
 }
 
-pub fn compile(args : Args) -> Result<()> {
+pub fn compile(args: Args) -> Result<()> {
     let parsed_libs = match &args.lib {
         None => vec![],
-        Some(libs) => {
-            libs.iter().map(|x| parse_file(x)).collect::<Result<Vec<syntax::Expr>>>()?
-        }
+        Some(libs) => libs
+            .iter()
+            .map(|x| parse_file(x))
+            .collect::<Result<Vec<syntax::Expr>>>()?,
     };
     let parsed_src = parse_file(&args.source)?;
 
     // ライブラリを連結
     let parsed = if let Some(libs) = parsed_libs.into_iter().reduce(|x, y| *syntax::concat(x, y)) {
-        *syntax::concat(libs,parsed_src)
-    }
-    else {
+        *syntax::concat(libs, parsed_src)
+    } else {
         parsed_src
     };
 
@@ -157,10 +163,9 @@ pub fn compile(args : Args) -> Result<()> {
         if args.verbose {
             println!("\n[[optimized_knorm]]\n{}", r);
         }
-        
+
         r
-    }
-    else {
+    } else {
         knorm::flatten_let(alpha)
     };
 
@@ -180,10 +185,9 @@ pub fn compile(args : Args) -> Result<()> {
         if args.verbose {
             println!("\n[[optimized_cfg]]\n{}", r);
         }
-        
+
         r
-    }
-    else {
+    } else {
         mir
     };
 

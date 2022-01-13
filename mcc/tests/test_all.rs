@@ -4,9 +4,9 @@ use std::fs;
 
 fn read_dir(path: &str) -> Vec<String> {
     let dir = fs::read_dir(path).unwrap();
-    dir.into_iter().map(|x| 
-        x.unwrap().path().into_os_string().into_string().unwrap()
-    ).collect()
+    dir.into_iter()
+        .map(|x| x.unwrap().path().into_os_string().into_string().unwrap())
+        .collect()
 }
 
 fn dummy_arg(path: &str) -> Args {
@@ -17,7 +17,7 @@ fn dummy_arg(path: &str) -> Args {
         verbose: false,
         debug: false,
         lib: Some(vec!["../tests/libs/stdlib.ml".to_string()]),
-        source: path.to_string()
+        source: path.to_string(),
     }
 }
 
@@ -28,8 +28,11 @@ fn dummy_arg_minrt(path: &str) -> Args {
         optimize: true,
         verbose: false,
         debug: false,
-        lib: Some(vec!["../tests/minrt/globals.ml".to_string(), "../tests/libs/stdlib.ml".to_string()]),
-        source: path.to_string()
+        lib: Some(vec![
+            "../tests/minrt/globals.ml".to_string(),
+            "../tests/libs/stdlib.ml".to_string(),
+        ]),
+        source: path.to_string(),
     }
 }
 

@@ -1,5 +1,5 @@
-use std::{fmt, panic};
 use crate::syntax;
+use std::{fmt, panic};
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum Ty {
@@ -9,7 +9,7 @@ pub enum Ty {
     Fun(Vec<Ty>, Box<Ty>),
     Tuple(Vec<Ty>),
     Array(Box<Ty>),
-    Ref(Box<Ty>)
+    Ref(Box<Ty>),
 }
 
 impl From<syntax::Ty> for Ty {
@@ -20,7 +20,10 @@ impl From<syntax::Ty> for Ty {
             syntax::Ty::Bool => Int,
             syntax::Ty::Int => Int,
             syntax::Ty::Float => Float,
-            syntax::Ty::Fun(args, r) => Fun(args.into_iter().map(|x| x.into()).collect(), Box::new((*r).into())),
+            syntax::Ty::Fun(args, r) => Fun(
+                args.into_iter().map(|x| x.into()).collect(),
+                Box::new((*r).into()),
+            ),
             syntax::Ty::Tuple(ts) => Tuple(ts.into_iter().map(|x| x.into()).collect()),
             syntax::Ty::Array(t) => Array(Box::new((*t).into())),
             syntax::Ty::Var(_) => panic!("Var(_) is not allowed in this context"),
@@ -33,7 +36,7 @@ impl Ty {
         use Ty::*;
         match self {
             Fun(_, _) | Tuple(_) => write!(f, "({})", self),
-            _ => write!(f, "{}", self)
+            _ => write!(f, "{}", self),
         }
     }
 
@@ -63,7 +66,7 @@ impl fmt::Display for Ty {
                     write!(f, " -> ")?;
                 }
                 write!(f, "{}", *ret)
-            },
+            }
             Tuple(ts) => {
                 // cannot use `util::format_vec` because it does not call print_block()
                 ts.first().map_or(Ok(()), |t| t.print_block(f))?;
@@ -71,15 +74,15 @@ impl fmt::Display for Ty {
                     write!(f, " * {}", t)?;
                 }
                 Ok(())
-            },
+            }
             Array(t) => {
                 t.print_block(f)?;
                 write!(f, " array")
-            },
+            }
             Ref(t) => {
                 t.print_block(f)?;
                 write!(f, " ref")
-            },
+            }
         }
     }
 }
@@ -98,7 +101,10 @@ mod tests {
         assert_eq!(fun1.to_string(), "unit -> int array -> float");
 
         let fun2 = Fun(vec![Float, fun1.clone()], Box::new(fun1.clone()));
-        assert_eq!(fun2.to_string(), "float -> (unit -> int array -> float) -> unit -> int array -> float");
+        assert_eq!(
+            fun2.to_string(),
+            "float -> (unit -> int array -> float) -> unit -> int array -> float"
+        );
 
         let tup1 = Tuple(vec![fun1.clone(), Unit]);
         assert_eq!(tup1.to_string(), "(unit -> int array -> float) * unit");

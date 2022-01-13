@@ -1,14 +1,14 @@
 use std::fmt;
 
-use util::{Spanned, Id};
 use ty::syntax as ty;
+use util::{Id, Spanned};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ConstKind {
     CUnit,
     CBool(bool),
     CInt(i32),
-    CFloat(f32)
+    CFloat(f32),
 }
 
 impl From<bool> for ConstKind {
@@ -31,7 +31,7 @@ impl From<f32> for ConstKind {
 pub enum UnOpKind {
     Neg,
     FNeg,
-    Not
+    Not,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
@@ -45,13 +45,13 @@ pub enum BinOpKind {
     FMul,
     FDiv,
     Eq,
-    LE
+    LE,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Decl {
-    pub name : Id,
-    pub t : ty::Ty
+    pub name: Id,
+    pub t: ty::Ty,
 }
 
 impl fmt::Display for Decl {
@@ -61,33 +61,30 @@ impl fmt::Display for Decl {
 }
 
 impl Decl {
-    pub fn new(name : Id, t : ty::Ty) -> Self {
-        Self {
-            name,
-            t
-        }
+    pub fn new(name: Id, t: ty::Ty) -> Self {
+        Self { name, t }
     }
 
     pub fn gen_uniq(t: ty::Ty) -> Self {
         Self {
             name: util::id::gen_tmp_var_with(ty::short(&t)),
-            t
+            t,
         }
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Fundef {
-    pub fvar : Decl,
-    pub args : Vec<Decl>,
-    pub body : Box<Expr>
+    pub fvar: Decl,
+    pub args: Vec<Decl>,
+    pub body: Box<Expr>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum LetKind {
     Let(Decl, Box<Expr>, Box<Expr>),
     LetRec(Fundef, Box<Expr>),
-    LetTuple(Vec<Decl>, Box<Expr>, Box<Expr>)
+    LetTuple(Vec<Decl>, Box<Expr>, Box<Expr>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -102,7 +99,7 @@ pub enum ExprKind {
     App(Box<Expr>, Vec<Expr>),
     Array(Box<Expr>, Box<Expr>),
     Get(Box<Expr>, Box<Expr>),
-    Put(Box<Expr>, Box<Expr>, Box<Expr>)
+    Put(Box<Expr>, Box<Expr>, Box<Expr>),
 }
 
 pub type Expr = Spanned<ExprKind>;
@@ -117,8 +114,8 @@ pub fn concat(e1: Expr, e2: Expr) -> Box<Expr> {
                 LetKind::LetTuple(ds, e1, e2_) => LetKind::LetTuple(ds, e1, concat(*e2_, e2)),
             };
             Box::new(util::Spanned::new(Let(l), e1.loc))
-        },
-        _ => Box::new(e2)
+        }
+        _ => Box::new(e2),
     }
 }
 
@@ -135,12 +132,12 @@ impl ExprKind {
             UnOp(op, e) => {
                 write!(f, "{:?}\n", op)?;
                 e.item.format_indented(f, level + 1)
-            },
+            }
             BinOp(op, e1, e2) => {
                 write!(f, "{:?}\n", op)?;
                 e1.item.format_indented(f, level + 1)?;
                 e2.item.format_indented(f, level + 1)
-            },
+            }
             If(cond, e1, e2) => {
                 write!(f, "If:\n")?;
                 cond.item.format_indented(f, level + 1)?;
@@ -148,7 +145,7 @@ impl ExprKind {
                 e1.item.format_indented(f, level + 1)?;
                 write!(f, "{}Else:\n", indent(level))?;
                 e2.item.format_indented(f, level + 1)
-            },
+            }
             Let(l) => {
                 use LetKind::*;
                 match l {
@@ -163,7 +160,7 @@ impl ExprKind {
                         write!(f, "\n{}body =\n", indent(level + 1))?;
                         fundef.body.item.format_indented(f, level + 2)?;
                         e.item.format_indented(f, level)
-                    },
+                    }
                     LetTuple(decls, e1, e2) => {
                         write!(f, "LetTuple: ")?;
                         util::format_vec(f, &decls, "[", ", ", "]")?;
@@ -171,8 +168,8 @@ impl ExprKind {
                         e1.item.format_indented(f, level + 1)?;
                         e2.item.format_indented(f, level)
                     }
-                } 
-            },
+                }
+            }
             Tuple(es) => {
                 write!(f, "Tuple:\n")?;
                 for (i, e) in es.iter().enumerate() {
@@ -180,7 +177,7 @@ impl ExprKind {
                     e.item.format_indented(f, level + 1)?;
                 }
                 Ok(())
-            },
+            }
             App(func, args) => {
                 write!(f, "App:\n{}func =\n", indent(level + 1))?;
                 func.item.format_indented(f, level + 2)?;
@@ -190,19 +187,19 @@ impl ExprKind {
                     e.item.format_indented(f, level + 2)?;
                 }
                 Ok(())
-            },
+            }
             Array(num, init) => {
                 write!(f, "Array:\n{}func =\n", indent(level + 1))?;
                 num.item.format_indented(f, level + 2)?;
                 write!(f, "{}init =\n", indent(level + 1))?;
                 init.item.format_indented(f, level + 2)
-            },
+            }
             Get(arr, idx) => {
                 write!(f, "Get:\n{}dest =\n", indent(level + 1))?;
                 arr.item.format_indented(f, level + 2)?;
                 write!(f, "{}idx =\n", indent(level + 1))?;
                 idx.item.format_indented(f, level + 2)
-            },
+            }
             Put(arr, idx, e) => {
                 write!(f, "Put:\n{}dest =\n", indent(level + 1))?;
                 arr.item.format_indented(f, level + 2)?;

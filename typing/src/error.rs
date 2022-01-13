@@ -11,5 +11,5 @@ pub struct UnifyError(pub Ty, pub Ty);
 pub struct TypeError {
     pub expected: Ty,
     pub found: Ty,
-    pub span: Span
+    pub span: Span,
 }

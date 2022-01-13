@@ -1,8 +1,8 @@
-use thiserror::Error;
 use lalrpop_util;
+use thiserror::Error;
 
-use util::Spanned;
 use crate::token;
+use util::Spanned;
 
 #[derive(Debug, Error, Clone, PartialEq)]
 pub enum LexErrorKind {
@@ -13,7 +13,7 @@ pub enum LexErrorKind {
     #[error("integer constant `{0}` is too large")]
     TooLargeInteger(String),
     #[error("floating constant `{0}` exceeds range of IEEE754 single precision")]
-    InvalidFloat(String)
+    InvalidFloat(String),
 }
 
 pub type LexError = Spanned<LexErrorKind>;
@@ -29,7 +29,7 @@ pub enum ParseErrorKind {
     #[error("parse error: invalid token `{0}`")]
     InvalidToken(token::Token),
     #[error("parse error: unrecognized token `{0}`, expected `{1}`")]
-    UnrecognizedToken(token::Token, String)
+    UnrecognizedToken(token::Token, String),
 }
 
 pub type ParseError = Spanned<ParseErrorKind>;
@@ -39,14 +39,16 @@ type LalrpopError = lalrpop_util::ParseError<usize, token::Token, LexError>;
 pub fn from_lalrpop(err: LalrpopError) -> ParseError {
     match err {
         // TODO: Are there cases where this isn't an EOF?
-        LalrpopError::InvalidToken { location } => Spanned::new(ParseErrorKind::Eof, (location, location)),
-        LalrpopError::ExtraToken { token: (lo, tok, hi) } => Spanned::new(ParseErrorKind::ExtraToken(tok), (lo, hi)),
-        LalrpopError::User { error } => {
-            error.map(ParseErrorKind::Lexical)
-        },
+        LalrpopError::InvalidToken { location } => {
+            Spanned::new(ParseErrorKind::Eof, (location, location))
+        }
+        LalrpopError::ExtraToken {
+            token: (lo, tok, hi),
+        } => Spanned::new(ParseErrorKind::ExtraToken(tok), (lo, hi)),
+        LalrpopError::User { error } => error.map(ParseErrorKind::Lexical),
         LalrpopError::UnrecognizedToken {
             token: (lo, tok, hi),
-            expected
+            expected,
         } => {
             // take only first expected candidate
             assert!(!expected.is_empty());
@@ -54,6 +56,8 @@ pub fn from_lalrpop(err: LalrpopError) -> ParseError {
 
             Spanned::new(ParseErrorKind::UnrecognizedToken(tok, expected), (lo, hi))
         }
-        LalrpopError::UnrecognizedEOF { location, .. } => Spanned::new(ParseErrorKind::Eof, (location, location)),
+        LalrpopError::UnrecognizedEOF { location, .. } => {
+            Spanned::new(ParseErrorKind::Eof, (location, location))
+        }
     }
 }

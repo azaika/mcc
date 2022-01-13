@@ -2,7 +2,7 @@ use global_counter::primitive::exact::CounterUsize;
 
 pub type Id = String;
 
-static COUNTER : CounterUsize = CounterUsize::new(0);
+static COUNTER: CounterUsize = CounterUsize::new(0);
 
 pub fn gen_tmp_var() -> Id {
     let n = COUNTER.get();
@@ -32,9 +32,8 @@ pub fn distinguish(mut x: Id) -> Id {
     COUNTER.inc();
 
     if let Some(dot) = x.find('.') {
-        x.replace_range((dot+1).., &n.to_string());
-    }
-    else {
+        x.replace_range((dot + 1).., &n.to_string());
+    } else {
         x += &format!(".{}", n);
     }
 

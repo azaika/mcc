@@ -1,8 +1,8 @@
-use util::{ ToSpanned, id, Id };
-use ast::{ closure, mir };
+use ast::{closure, mir};
 use ty::mir::Ty;
+use util::{id, Id, ToSpanned};
 
-fn conv_simple(e : closure::ExprKind) -> mir::InstKind {
+fn conv_simple(e: closure::ExprKind) -> mir::InstKind {
     use mir::InstKind;
     match e {
         closure::ExprKind::Const(c) => {
@@ -13,7 +13,7 @@ fn conv_simple(e : closure::ExprKind) -> mir::InstKind {
             };
 
             InstKind::Const(c)
-        },
+        }
         closure::ExprKind::Var(v) => InstKind::Var(v),
         closure::ExprKind::UnOp(kind, x) => {
             let kind = match kind {
@@ -22,7 +22,7 @@ fn conv_simple(e : closure::ExprKind) -> mir::InstKind {
             };
 
             InstKind::UnOp(kind, x)
-        },
+        }
         closure::ExprKind::BinOp(kind, x, y) => {
             use mir::BinOpKind::*;
             let kind = match kind {
@@ -37,7 +37,7 @@ fn conv_simple(e : closure::ExprKind) -> mir::InstKind {
             };
 
             InstKind::BinOp(kind, x, y)
-        },
+        }
         closure::ExprKind::Tuple(xs) => InstKind::Tuple(xs),
         closure::ExprKind::CallDir(l, args) => InstKind::CallDir(mir::Label(l.0), args),
         closure::ExprKind::CallCls(f, args) => InstKind::CallCls(f, args),
@@ -45,11 +45,18 @@ fn conv_simple(e : closure::ExprKind) -> mir::InstKind {
         closure::ExprKind::ArrayPut(x, y, z) => InstKind::ArrayPut(x, y, z),
         closure::ExprKind::TupleGet(x, i) => InstKind::TupleGet(x, i),
         closure::ExprKind::MakeCls(l, xs) => InstKind::MakeCls(mir::Label(l.0), xs),
-        _ => panic!("non-simple ExprKind has been passed: {}", e)
+        _ => panic!("non-simple ExprKind has been passed: {}", e),
     }
 }
 
-fn gen_array_init(name: Id, num: Id, init: Id, span: util::Span, p: &mut mir::Program, bid: mir::BlockId) -> mir::BlockId {
+fn gen_array_init(
+    name: Id,
+    num: Id,
+    init: Id,
+    span: util::Span,
+    p: &mut mir::Program,
+    bid: mir::BlockId,
+) -> mir::BlockId {
     use mir::InstKind;
     use mir::TailKind;
     // `let a = Array.make num init` を
@@ -61,39 +68,62 @@ fn gen_array_init(name: Id, num: Id, init: Id, span: util::Span, p: &mut mir::Pr
     // ```
     // に変換する
     let t = p.tymap.get(&init).unwrap();
-    p.block_arena[bid].body.push((Some(name.clone()), InstKind::AllocArray(num.clone(), t.clone()).with_span(span)));
+    p.block_arena[bid].body.push((
+        Some(name.clone()),
+        InstKind::AllocArray(num.clone(), t.clone()).with_span(span),
+    ));
 
     let idx_var = id::gen_uniq_with("Idx");
     let idx_t = Ty::Mut(Box::new(Ty::Int));
 
     p.tymap.insert(idx_var.clone(), idx_t);
 
-    let loop_id = p.block_arena.alloc(mir::Block::with_name(id::gen_uniq_with(".FEEntry")));
-    let body_id = p.block_arena.alloc(mir::Block::with_name(id::gen_uniq_with(".FEBody")));
+    let loop_id = p
+        .block_arena
+        .alloc(mir::Block::with_name(id::gen_uniq_with(".FEEntry")));
+    let body_id = p
+        .block_arena
+        .alloc(mir::Block::with_name(id::gen_uniq_with(".FEBody")));
     let cont_id = p.block_arena.alloc(mir::Block::new());
 
     *p.block_arena[bid].tail = TailKind::Jump(loop_id).with_span(span);
 
     let bl = &mut p.block_arena[body_id];
     bl.body = vec![
-        (None, InstKind::ArrayPut(name.clone(), idx_var.clone(), init.clone()).with_span(span)),
-        (Some(idx_var.clone()), InstKind::Var(init.clone()).with_span(span))
+        (
+            None,
+            InstKind::ArrayPut(name.clone(), idx_var.clone(), init.clone()).with_span(span),
+        ),
+        (
+            Some(idx_var.clone()),
+            InstKind::Var(init.clone()).with_span(span),
+        ),
     ];
     bl.tail = Box::new(TailKind::Jump(loop_id).with_span(span));
 
     let size = if let Ty::Array(_, size) = p.tymap.get(&name).unwrap() {
-        if size.is_some() { None } else { Some(num) }
-    }
-    else {
+        if size.is_some() {
+            None
+        } else {
+            Some(num)
+        }
+    } else {
         unreachable!()
     };
 
-    *p.block_arena[loop_id].tail = TailKind::ForEach(idx_var, name, size, body_id, cont_id).with_span(span);
+    *p.block_arena[loop_id].tail =
+        TailKind::ForEach(idx_var, name, size, body_id, cont_id).with_span(span);
 
     cont_id
 }
 
-fn conv_let(d: closure::Decl, e1: Box<closure::Expr>, span: util::Span, p: &mut mir::Program, bid: id_arena::Id<mir::Block>) -> Option<mir::BlockId> {
+fn conv_let(
+    d: closure::Decl,
+    e1: Box<closure::Expr>,
+    span: util::Span,
+    p: &mut mir::Program,
+    bid: id_arena::Id<mir::Block>,
+) -> Option<mir::BlockId> {
     use mir::InstKind;
     use mir::TailKind;
     let body = &mut p.block_arena[bid].body;
@@ -102,9 +132,11 @@ fn conv_let(d: closure::Decl, e1: Box<closure::Expr>, span: util::Span, p: &mut 
     if let closure::ExprKind::Var(x) = e1.item {
         body.push((Some(d.name), InstKind::Var(x).with_span(span)));
         return None;
-    }
-    else if e1.item == closure::ExprKind::Const(closure::ConstKind::CUnit) {
-        body.push((Some(d.name), InstKind::Const(mir::ConstKind::CUnit).with_span(span)));
+    } else if e1.item == closure::ExprKind::Const(closure::ConstKind::CUnit) {
+        body.push((
+            Some(d.name),
+            InstKind::Const(mir::ConstKind::CUnit).with_span(span),
+        ));
         return None;
     };
 
@@ -123,27 +155,34 @@ fn conv_let(d: closure::Decl, e1: Box<closure::Expr>, span: util::Span, p: &mut 
             conv(e1, p, bid, res, TailKind::Jump(cont_id), None);
 
             return Some(cont_id);
-        },
+        }
         closure::ExprKind::CreateArray(num, init) => {
             return Some(gen_array_init(name, num, init, span, p, bid));
-        },
+        }
         closure::ExprKind::Loop { .. } => {
             let cont_id = p.block_arena.alloc(mir::Block::new());
 
             conv(e1, p, bid, res, TailKind::Jump(cont_id), None);
 
             return Some(cont_id);
-        },
+        }
         closure::ExprKind::Let(_, _, _) => panic!("knormal::Expr should be let-flattened"),
         closure::ExprKind::Continue(_) => unreachable!(),
-        _ => body.push((res.clone(), conv_simple(e1.item).with_span(span)))
+        _ => body.push((res.clone(), conv_simple(e1.item).with_span(span))),
     }
 
     // no block was created
     None
 }
 
-fn conv(e: Box<closure::Expr>, p: &mut mir::Program, bid: id_arena::Id<mir::Block>, res: Option<Id>, tail: mir::TailKind, loop_id: Option<mir::BlockId>) {
+fn conv(
+    e: Box<closure::Expr>,
+    p: &mut mir::Program,
+    bid: id_arena::Id<mir::Block>,
+    res: Option<Id>,
+    tail: mir::TailKind,
+    loop_id: Option<mir::BlockId>,
+) {
     use closure::ExprKind;
     use mir::InstKind;
     use mir::TailKind;
@@ -161,14 +200,19 @@ fn conv(e: Box<closure::Expr>, p: &mut mir::Program, bid: id_arena::Id<mir::Bloc
                 closure::IfKind::IfLE => mir::IfKind::IfLE,
             };
 
-            p.block_arena[bid].tail = Box::new(TailKind::If(kind, x, y, b1_id, b2_id).with_span(e.loc));
-        },
+            p.block_arena[bid].tail =
+                Box::new(TailKind::If(kind, x, y, b1_id, b2_id).with_span(e.loc));
+        }
         closure::ExprKind::Let(d, e1, e2) => {
             let bid = conv_let(d, e1, e.loc, p, bid).unwrap_or(bid);
 
             conv(e2, p, bid, res, tail, loop_id);
-        },
-        ExprKind::Loop { vars, init, body: e1 } => {
+        }
+        ExprKind::Loop {
+            vars,
+            init,
+            body: e1,
+        } => {
             assert!(vars.len() == init.len());
 
             let body = &mut p.block_arena[bid].body;
@@ -177,13 +221,18 @@ fn conv(e: Box<closure::Expr>, p: &mut mir::Program, bid: id_arena::Id<mir::Bloc
 
                 p.tymap.insert(v.name.clone(), v.t.into());
 
-                body.push((Some(v.name), InstKind::Var(init[i].clone()).with_span(e.loc)));
+                body.push((
+                    Some(v.name),
+                    InstKind::Var(init[i].clone()).with_span(e.loc),
+                ));
             }
 
             // create loop block and convert
-            let loop_id = p.block_arena.alloc(mir::Block::with_name(id::gen_tmp_var_with(".loop")));
+            let loop_id = p
+                .block_arena
+                .alloc(mir::Block::with_name(id::gen_tmp_var_with(".loop")));
             conv(e1, p, loop_id, res, tail, Some(loop_id));
-        },
+        }
         ExprKind::Continue(xs) => {
             let body = &mut p.block_arena[bid].body;
             for (v, x) in xs {
@@ -191,15 +240,15 @@ fn conv(e: Box<closure::Expr>, p: &mut mir::Program, bid: id_arena::Id<mir::Bloc
             }
 
             p.block_arena[bid].tail = Box::new(TailKind::Jump(loop_id.unwrap()).with_span(e.loc));
-        },
+        }
         ExprKind::CreateArray(num, init) => {
             assert!(res.is_some(), "result cannot have type Unit");
             let res = res.unwrap();
-            
+
             let bid = gen_array_init(res, num, init, e.loc, p, bid);
 
             p.block_arena[bid].tail = Box::new(tail.with_span(e.loc));
-        },
+        }
         _ => {
             let block = &mut p.block_arena[bid];
             block.body.push((res, conv_simple(e.item).with_span(e.loc)));
@@ -211,13 +260,13 @@ fn conv(e: Box<closure::Expr>, p: &mut mir::Program, bid: id_arena::Id<mir::Bloc
 fn init_global(globals: Vec<closure::Global>, p: &mut mir::Program) -> mir::BlockId {
     let mut cur_id = p.entry;
     for g in globals {
-        use mir::TailKind::Jump;
         use mir::InstKind::Assign;
+        use mir::TailKind::Jump;
 
         let can_skip = g.t == ty::knormal::Ty::Unit && {
             match g.init.item {
                 closure::ExprKind::Const(_) | closure::ExprKind::Var(_) => false,
-                _ => true
+                _ => true,
             }
         };
 
@@ -225,17 +274,18 @@ fn init_global(globals: Vec<closure::Global>, p: &mut mir::Program) -> mir::Bloc
             p.globals.push(mir::Label(g.name.0.clone()));
             p.tymap.insert(g.name.0.clone(), g.t.into());
             Some(g.name.0.clone())
-        }
-        else {
+        } else {
             None
         };
 
-        let cont_id = p.block_arena.alloc(mir::Block::with_name(format!(".Init@{}", g.name.0)));
+        let cont_id = p
+            .block_arena
+            .alloc(mir::Block::with_name(format!(".Init@{}", g.name.0)));
         let span = g.init.loc;
         conv(g.init, p, cur_id, res, Jump(cont_id), None);
         p.block_arena[cont_id].body.push((
             None,
-            Assign(mir::Label(g.name.0.clone()), g.name.0).with_span(span)
+            Assign(mir::Label(g.name.0.clone()), g.name.0).with_span(span),
         ));
         cur_id = cont_id;
     }
@@ -244,17 +294,25 @@ fn init_global(globals: Vec<closure::Global>, p: &mut mir::Program) -> mir::Bloc
 }
 
 fn convert_fundef(fundefs: Vec<closure::Fundef>, p: &mut mir::Program) {
-    for closure::Fundef { fvar, args, formal_fv, body } in fundefs {
+    for closure::Fundef {
+        fvar,
+        args,
+        formal_fv,
+        body,
+    } in fundefs
+    {
         // register arguments and formal_fv types
         p.tymap.insert(fvar.name.clone(), fvar.t.clone().into());
         for closure::Decl { name, t } in args.iter().chain(&formal_fv) {
             p.tymap.insert(name.clone(), t.clone().into());
         }
 
-        let entry_id = p.block_arena.alloc(mir::Block::with_name(format!(".Entry@{}", fvar.name)));
+        let entry_id = p
+            .block_arena
+            .alloc(mir::Block::with_name(format!(".Entry@{}", fvar.name)));
 
         // register fundef
-        p.fundefs.push(mir::Fundef{
+        p.fundefs.push(mir::Fundef {
             name: mir::Label(fvar.name),
             args: args.into_iter().map(|d| d.name).collect(),
             formal_fv: formal_fv.into_iter().map(|d| d.name).collect(),
@@ -265,7 +323,7 @@ fn convert_fundef(fundefs: Vec<closure::Fundef>, p: &mut mir::Program) {
         for g in &p.globals {
             p.block_arena[entry_id].body.push((
                 Some(g.0.clone()),
-                mir::InstKind::Load(g.clone()).with_span(body.loc)
+                mir::InstKind::Load(g.clone()).with_span(body.loc),
             ));
         }
 
@@ -273,15 +331,20 @@ fn convert_fundef(fundefs: Vec<closure::Fundef>, p: &mut mir::Program) {
             let is_unit = rt.as_ref() == &ty::knormal::Ty::Unit;
             if is_unit {
                 conv(body, p, entry_id, None, mir::TailKind::Return(None), None);
-            }
-            else {
+            } else {
                 let ret_var = util::id::gen_tmp_var_with(rt.short());
                 p.tymap.insert(ret_var.clone(), (*rt).into());
 
-                conv(body, p, entry_id, Some(ret_var.clone()), mir::TailKind::Return(Some(ret_var.clone())), None);
+                conv(
+                    body,
+                    p,
+                    entry_id,
+                    Some(ret_var.clone()),
+                    mir::TailKind::Return(Some(ret_var.clone())),
+                    None,
+                );
             }
-        }
-        else {
+        } else {
             unreachable!()
         }
     }
@@ -294,8 +357,15 @@ pub fn convert(prog: closure::Program) -> mir::Program {
 
     let entry = init_global(prog.globals, &mut p);
     convert_fundef(prog.fundefs, &mut p);
-    
-    conv(prog.main, &mut p, entry, None, mir::TailKind::Return(None), None);
+
+    conv(
+        prog.main,
+        &mut p,
+        entry,
+        None,
+        mir::TailKind::Return(None),
+        None,
+    );
 
     p
 }
