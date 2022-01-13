@@ -212,7 +212,9 @@ fn conv(
                         // register ArrayGet
                         arrmap.insert(key.clone(), d.name.clone());
                         let r = Let(d, e1, conv(e2, tyenv, effects, saved, arr_saved));
-                        arr_saved.entry(t).and_modify(|arrmap| { arrmap.remove(&key); });
+                        arr_saved.entry(t).and_modify(|arrmap| {
+                            arrmap.remove(&key);
+                        });
                         r
                     }
                 } else {
@@ -239,8 +241,7 @@ fn conv(
         ArrayPut(arr, idx, x) => {
             let t = if let Ty::Array(t) = tyenv.get(&arr).unwrap() {
                 t.as_ref()
-            }
-            else {
+            } else {
                 unreachable!()
             };
 

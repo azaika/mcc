@@ -61,7 +61,7 @@ fn infer(e: syntax::Expr, path: &str) -> Result<(syntax::Expr, typing::TypeMap)>
 
         let mut colors = ColorGenerator::new();
 
-        // Generate & choose some colours for each of our elements
+        // Generate & choose some colors for each of our elements
         let a = colors.next();
 
         Report::build(ReportKind::Error, path, err.span.0)
@@ -83,6 +83,7 @@ fn infer(e: syntax::Expr, path: &str) -> Result<(syntax::Expr, typing::TypeMap)>
 fn optimize_knorm(mut e: knormal::Expr, tyenv: &mut knorm::TyMap, config: &Args) -> knormal::Expr {
     let mut prev = e.clone();
     // ループの変換は一回だけやる (多重再帰のループ性判定はしない)
+    e = knorm::flatten_let(e);
     e = knorm::detect_loop(e, tyenv);
 
     for i in 0..config.loop_opt {
@@ -162,7 +163,10 @@ pub fn compile(args: Args) -> Result<()> {
     let knormed = knorm::convert(typed, &extenv)?;
 
     if args.verbose {
-        debug_output(Path::new("knormed.txt"), format!("[[knormed]]\n{}", knormed))?;
+        debug_output(
+            Path::new("knormed.txt"),
+            format!("[[knormed]]\n{}", knormed),
+        )?;
     }
 
     let (alpha, mut tyenv) = knorm::to_alpha_form(knormed);
@@ -174,18 +178,24 @@ pub fn compile(args: Args) -> Result<()> {
     let opt_knorm = if args.optimize {
         let r = optimize_knorm(alpha, &mut tyenv, &args);
 
-        if args.verbose {
-            debug_output(Path::new("opt_knorm.txt"), format!("[[optimized_knorm]]\n{}", r))?;
-        }
-
         r
     } else {
         knorm::flatten_let(alpha)
     };
 
+    if args.verbose {
+        debug_output(
+            Path::new("opt_knorm.txt"),
+            format!("[[optimized_knorm]]\n{}", opt_knorm),
+        )?;
+    }
+
     let closured = cls::convert(opt_knorm, tyenv);
     if args.verbose {
-        debug_output(Path::new("closure.txt"), format!("[[closured]]\n{}", closured))?;
+        debug_output(
+            Path::new("closure.txt"),
+            format!("[[closured]]\n{}", closured),
+        )?;
     }
 
     let mir = cfg::convert(closured);
@@ -197,7 +207,10 @@ pub fn compile(args: Args) -> Result<()> {
         let r = optimize_mir(mir);
 
         if args.verbose {
-            debug_output(Path::new("opt_mir.txt"), format!("[[optimized_mir]]\n{}", r))?;
+            debug_output(
+                Path::new("opt_mir.txt"),
+                format!("[[optimized_mir]]\n{}", r),
+            )?;
         }
 
         r

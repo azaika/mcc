@@ -8,7 +8,7 @@ fn rotate(decl: Decl, cont: Box<Expr>, span: util::Span, mut e: Box<Expr>) -> Bo
         ExprKind::LetRec(fd, e2) => ExprKind::LetRec(fd, rotate(decl, cont, span, e2)),
         item => {
             return Box::new(
-                ExprKind::Let(decl, Box::new(item.with_span(e.loc)), cont).with_span(span),
+                ExprKind::Let(decl, Box::new(item.with_span(e.loc)), conv(cont)).with_span(span),
             )
         }
     };
@@ -21,7 +21,7 @@ fn conv(mut e: Box<Expr>) -> Box<Expr> {
     use ExprKind::*;
     e.item = match e.item {
         If(kind, x, y, e1, e2) => If(kind, x, y, conv(e1), conv(e2)),
-        Let(decl, e1, e2) => return rotate(decl, conv(e2), e.loc, conv(e1)),
+        Let(decl, e1, e2) => return rotate(decl, e2, e.loc, conv(e1)),
         LetRec(Fundef { fvar, args, body }, e2) => LetRec(
             Fundef {
                 fvar,

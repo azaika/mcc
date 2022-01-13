@@ -114,12 +114,12 @@ impl ExprKind {
             ArrayPut(arr, idx, x) => write!(f, "ArrayPut {arr}, {idx}, {x}\n"),
             TupleGet(arr, idx) => write!(f, "TupleGet {arr}.{idx}\n"),
             Loop { vars, init, body } => {
-                write!(f, "Loop:\n{}vars = ", indent(level + 1))?;
+                write!(f, "Loop:\n{}vars = ", indent(level))?;
                 util::format_vec(f, vars, "[", ", ", "]")?;
-                write!(f, "\n{}init = ", indent(level + 1))?;
+                write!(f, "\n{}init = ", indent(level))?;
                 util::format_vec(f, init, "[", ", ", "]")?;
-                write!(f, "\n{}body =\n", indent(level + 1))?;
-                body.item.format_indented(f, level + 2)
+                write!(f, "\n{}body =\n", indent(level))?;
+                body.item.format_indented(f, level + 1)
             }
             Continue(xs) => {
                 write!(f, "Continue ")?;

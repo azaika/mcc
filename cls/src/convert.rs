@@ -46,9 +46,6 @@ fn has_free_impl(func: &mut Set, e: &knormal::Expr, known: &mut Set) -> bool {
         }
         Tuple(xs) | ExtApp(_, xs) => !xs.iter().all(|x| known.contains(x)),
         App(f, args) => {
-            if !func.contains(f) {
-                panic!();
-            }
             !func.contains(f) || !args.iter().all(|x| known.contains(x))
         }
         ArrayPut(x, y, z) => !known.contains(x) || !known.contains(y) || !known.contains(z),
@@ -211,7 +208,7 @@ fn conv(
                 if !is_closure {
                     known.insert(fundef.fvar.name.clone());
                 }
-                
+
                 let mut fvs = Set::default();
                 collect_free(&e1, &mut known, &mut fvs);
                 fvs.into_iter().collect()
