@@ -121,7 +121,7 @@ pub enum TailKind {
     IntLoop {
         idx: Id,
         range: (Id, Id),
-        delta: Id,
+        delta: i32,
         element_wise: Vec<Id>,
         body: BlockId,
         cont: BlockId,

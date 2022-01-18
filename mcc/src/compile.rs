@@ -111,11 +111,26 @@ fn optimize_knorm(mut e: knormal::Expr, tyenv: &mut knorm::TyMap, config: &Args)
     e
 }
 
+fn optimize_closure(mut p: ast::closure::Program) -> ast::closure::Program {
+    let mut prev = p.clone();
+    for i in 0..100 {
+        log::info!("closure opt loop: {i}");
+        p = cls::detect_intloop(p);
+
+        if p == prev {
+            break;
+        }
+        prev = p.clone();
+    }
+
+    p
+}
+
 fn optimize_mir(mut p: ast::mir::Program) -> ast::mir::Program {
     let mut prev = p.clone();
     for i in 0..100 {
         log::info!("mir opt loop: {i}");
-        p = cfg::compress_jump(p);
+        p = cfg::skip_jump(p);
 
         if p == prev {
             break;
@@ -198,7 +213,22 @@ pub fn compile(args: Args) -> Result<()> {
         )?;
     }
 
-    let mir = cfg::convert(closured);
+    let opt_closure = if args.optimize {
+        let r = optimize_closure(closured);
+
+        if args.verbose {
+            debug_output(
+                Path::new("closure_opt.txt"),
+                format!("[[optimized_closure]]\n{}", r),
+            )?;
+        }
+
+        r
+    } else {
+        closured
+    };
+
+    let mir = cfg::convert(opt_closure);
     if args.verbose {
         debug_output(Path::new("mir.txt"), format!("[[mir]]\n{}", mir))?;
     }

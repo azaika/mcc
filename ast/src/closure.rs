@@ -62,11 +62,10 @@ pub enum ExprKind {
         init: Vec<Id>,
         body: Box<Expr>,
     },
-    IntLoop {
+    DoAll {
         idx: Decl,
         range: (Id, Id),
-        delta: Id,
-        element_wise: Vec<Id>,
+        delta: i32,
         body: Box<Expr>,
     },
     Continue(Vec<(Id, Id)>), // only in Loop.body
@@ -128,22 +127,13 @@ impl ExprKind {
                 write!(f, "\n{}body =\n", indent(level))?;
                 body.item.format_indented(f, level + 1)
             }
-            IntLoop {
+            DoAll {
                 idx: var,
                 range,
                 delta,
-                element_wise,
                 body,
             } => {
-                write!(
-                    f,
-                    "IntLoop: {var}, ({}, {}), {delta}\nelement_wise = {}",
-                    range.0,
-                    range.1,
-                    indent(level)
-                )?;
-                util::format_vec(f, element_wise, "[", ", ", "]")?;
-                write!(f, "\n")?;
+                write!(f, "DoAll: {var}, ({}, {}), {delta}\n", range.0, range.1)?;
                 body.item.format_indented(f, level + 1)
             }
             Continue(xs) => {

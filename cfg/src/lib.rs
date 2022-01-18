@@ -1,5 +1,5 @@
-mod compress_jump;
 mod convert;
+mod skip_jump;
 
-pub use compress_jump::compress_jump;
 pub use convert::convert;
+pub use skip_jump::skip_jump;

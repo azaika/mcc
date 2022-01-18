@@ -71,7 +71,7 @@ fn conv(bid: BlockId, p: &mut Program, arrived: &mut Set) {
     }
 }
 
-pub fn compress_jump(mut p: Program) -> Program {
+pub fn skip_jump(mut p: Program) -> Program {
     let mut arrived = Set::default();
     for bid in p.collect_used() {
         conv(bid, &mut p, &mut arrived);

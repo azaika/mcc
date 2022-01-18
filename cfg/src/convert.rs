@@ -103,13 +103,11 @@ fn gen_array_init(
 
     let zero_var = id::gen_uniq_with("Idx");
     p.tymap.insert(zero_var.clone(), Ty::Mut(Box::new(Ty::Int)));
-    let one_var = id::gen_uniq_with("Idx");
-    p.tymap.insert(one_var.clone(), Ty::Mut(Box::new(Ty::Int)));
 
     *p.block_arena[loop_id].tail = TailKind::IntLoop {
         idx: idx_var,
         range: (zero_var, num),
-        delta: one_var,
+        delta: 1,
         element_wise: vec![name],
         body: body_id,
         cont: cont_id,
@@ -221,7 +219,8 @@ fn conv(
             for i in 0..vars.len() {
                 let v = vars[i].clone();
 
-                p.tymap.insert(v.name.clone(), Ty::Mut(Box::new(v.t.into())));
+                p.tymap
+                    .insert(v.name.clone(), Ty::Mut(Box::new(v.t.into())));
 
                 body.push((
                     Some(v.name),
