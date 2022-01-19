@@ -126,20 +126,20 @@ fn optimize_closure(mut p: ast::closure::Program) -> ast::closure::Program {
     p
 }
 
-fn optimize_mir(mut p: ast::mir::Program) -> ast::mir::Program {
-    let mut prev = p.clone();
-    for i in 0..100 {
-        log::info!("mir opt loop: {i}");
-        p = cfg::skip_jump(p);
+// fn optimize_mir(mut p: ast::mir::Program) -> ast::mir::Program {
+//     let mut prev = p.clone();
+//     for i in 0..100 {
+//         log::info!("mir opt loop: {i}");
+//         p = cfg::skip_jump(p);
 
-        if p == prev {
-            break;
-        }
-        prev = p.clone();
-    }
+//         if p == prev {
+//             break;
+//         }
+//         prev = p.clone();
+//     }
 
-    p
-}
+//     p
+// }
 
 fn debug_output(path: &Path, s: String) -> Result<()> {
     if !Path::new(&"debug").exists() {
@@ -213,7 +213,7 @@ pub fn compile(args: Args) -> Result<()> {
         )?;
     }
 
-    let opt_closure = if args.optimize {
+    let _opt_closure = if args.optimize {
         let r = optimize_closure(closured);
 
         if args.verbose {
@@ -228,25 +228,25 @@ pub fn compile(args: Args) -> Result<()> {
         closured
     };
 
-    let mir = cfg::convert(opt_closure);
-    if args.verbose {
-        debug_output(Path::new("mir.txt"), format!("[[mir]]\n{}", mir))?;
-    }
+    // let mir = cfg::convert(opt_closure);
+    // if args.verbose {
+    //     debug_output(Path::new("mir.txt"), format!("[[mir]]\n{}", mir))?;
+    // }
 
-    let _opt_mir = if args.optimize {
-        let r = optimize_mir(mir);
+    // let _opt_mir = if args.optimize {
+    //     let r = optimize_mir(mir);
 
-        if args.verbose {
-            debug_output(
-                Path::new("mir_opt.txt"),
-                format!("[[optimized_mir]]\n{}", r),
-            )?;
-        }
+    //     if args.verbose {
+    //         debug_output(
+    //             Path::new("mir_opt.txt"),
+    //             format!("[[optimized_mir]]\n{}", r),
+    //         )?;
+    //     }
 
-        r
-    } else {
-        mir
-    };
+    //     r
+    // } else {
+    //     mir
+    // };
 
     Ok(())
 }

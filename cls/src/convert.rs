@@ -128,7 +128,7 @@ fn collect_free(e: &closure::Expr, known: &mut Set, fv: &mut Set) {
             push(y)
         }),
         Const(_) | ExtArray(_) | Load(_) => { /* no vars */ }
-        DoAll { .. } => {
+        DoAll { .. } => { 
             unreachable!()
         }
     }

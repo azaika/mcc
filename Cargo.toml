@@ -8,5 +8,5 @@ members = [
     "typing",
     "knorm",
     "cls",
-    "cfg"
+    # "cfg"
 ]
