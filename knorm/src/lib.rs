@@ -1,5 +1,6 @@
 mod alpha;
 mod beta;
+mod compress_onehot_if;
 mod convert;
 mod cse;
 mod detect_loop;
@@ -11,6 +12,7 @@ mod inlining;
 pub use alpha::to_alpha_form;
 pub use alpha::TyMap;
 pub use beta::beta_reduction;
+pub use compress_onehot_if::compress_onehot_if;
 pub use convert::convert;
 pub use cse::cse;
 pub use detect_loop::detect_loop;

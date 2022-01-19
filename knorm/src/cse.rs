@@ -236,11 +236,11 @@ fn conv(
         Loop { vars, init, body } => {
             arr_saved.clear();
             Loop {
-            vars,
-            init,
-            body: conv(body, tyenv, effects, saved, arr_saved),
+                vars,
+                init,
+                body: conv(body, tyenv, effects, saved, arr_saved),
+            }
         }
-        },
         ArrayPut(arr, idx, x) => {
             let t = if let Ty::Array(t) = tyenv.get(&arr).unwrap() {
                 t.as_ref()

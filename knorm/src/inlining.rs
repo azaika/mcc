@@ -23,15 +23,7 @@ fn calc_info(e: &Expr, name: &Id) -> FuncInfo {
             let (is_rec, size) = merge(calc_info(e1, name), calc_info(e2, name));
             (is_rec || x == name || y == name, size + 1)
         }
-        Let(_, e1, e2)
-        | LetRec(
-            Fundef {
-                fvar: _,
-                args: _,
-                body: e1,
-            },
-            e2,
-        ) => {
+        Let(_, e1, e2) | LetRec(Fundef { body: e1, .. }, e2) => {
             let (is_rec, size) = merge(calc_info(e1, name), calc_info(e2, name));
             (is_rec, size + 1)
         }

@@ -87,10 +87,11 @@ fn optimize_knorm(mut e: knormal::Expr, tyenv: &mut knorm::TyMap, config: &Args)
     e = knorm::detect_loop(e, tyenv);
 
     for i in 0..config.loop_opt {
-        log::info!("knorm opt loop: {}", i);
+        log::info!("knorm opt loop: {}", i + 1);
         e = knorm::eliminate(e);
         e = knorm::flatten_let(e);
         e = knorm::fold_const(e, tyenv);
+        e = knorm::compress_onehot_if(e);
         e = knorm::beta_reduction(e, tyenv);
         e = knorm::eliminate(e);
         e = knorm::cse(e, tyenv);
@@ -98,6 +99,7 @@ fn optimize_knorm(mut e: knormal::Expr, tyenv: &mut knorm::TyMap, config: &Args)
         e = knorm::eliminate(e);
         e = knorm::inlining(e, config.inline, tyenv);
         e = knorm::flatten_let(e);
+        e = knorm::compress_onehot_if(e);
         e = knorm::fold_const(e, tyenv);
         e = knorm::beta_reduction(e, tyenv);
         e = knorm::eliminate(e);
