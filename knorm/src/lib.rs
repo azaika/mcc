@@ -8,6 +8,7 @@ mod eliminate;
 mod flatten;
 mod fold_const;
 mod inlining;
+mod simplify_loop;
 
 pub use alpha::to_alpha_form;
 pub use alpha::TyMap;
@@ -20,3 +21,4 @@ pub use eliminate::eliminate;
 pub use flatten::flatten_let;
 pub use fold_const::fold_const;
 pub use inlining::inlining;
+pub use simplify_loop::simplify_loop;

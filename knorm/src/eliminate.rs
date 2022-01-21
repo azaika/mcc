@@ -17,7 +17,7 @@ fn has_effect(e: &Expr) -> bool {
 }
 
 // 変換の呼び出し
-fn conv(mut e: Box<Expr>, used: &mut Set) -> Box<Expr> {
+fn conv(mut e: Box<Expr>, used: &mut Set, tyenv: &mut TyMap) -> Box<Expr> {
     use ExprKind::*;
     e.item = match e.item {
         Var(x) => {
@@ -34,29 +34,31 @@ fn conv(mut e: Box<Expr>, used: &mut Set) -> Box<Expr> {
             BinOp(op, x, y)
         }
         If(kind, x, y, e1, e2) => {
-            let e1 = conv(e1, used);
-            let e2 = conv(e2, used);
+            let e1 = conv(e1, used, tyenv);
+            let e2 = conv(e2, used, tyenv);
             used.insert(x.clone());
             used.insert(y.clone());
             If(kind, x, y, e1, e2)
         }
         Let(d, e1, e2) => {
-            let e2 = conv(e2, used);
+            let e2 = conv(e2, used, tyenv);
             if !used.contains(&d.name) && !has_effect(&e1) {
                 log::debug!("eliminating variable `{}`.", d.name);
+                tyenv.remove(&d.name);
                 return e2;
             }
 
-            Let(d, conv(e1, used), e2)
+            Let(d, conv(e1, used, tyenv), e2)
         }
         LetRec(Fundef { fvar, args, body }, e2) => {
-            let e2 = conv(e2, used);
+            let e2 = conv(e2, used, tyenv);
             if !used.contains(&fvar.name) {
                 log::info!("eliminating function `{}`.", fvar.name);
+                tyenv.remove(&fvar.name);
                 return e2;
             }
 
-            let body = conv(body, used);
+            let body = conv(body, used, tyenv);
             LetRec(Fundef { fvar, args, body }, e2)
         }
         Tuple(xs) => {
@@ -103,7 +105,7 @@ fn conv(mut e: Box<Expr>, used: &mut Set) -> Box<Expr> {
             TupleGet(x, idx)
         }
         Loop { vars, init, body } => {
-            let body = conv(body, used);
+            let body = conv(body, used, tyenv);
             for x in &init {
                 used.insert(x.clone());
             }
@@ -122,6 +124,6 @@ fn conv(mut e: Box<Expr>, used: &mut Set) -> Box<Expr> {
 }
 
 // 不要定義削除を行う
-pub fn eliminate(e: Expr) -> Expr {
-    *conv(Box::new(e), &mut Set::default())
+pub fn eliminate(e: Expr, tyenv: &mut TyMap) -> Expr {
+    *conv(Box::new(e), &mut Set::default(), tyenv)
 }

@@ -85,24 +85,25 @@ fn optimize_knorm(mut e: knormal::Expr, tyenv: &mut knorm::TyMap, config: &Args)
     // ループの変換は一回だけやる (多重再帰のループ性判定はしない)
     e = knorm::flatten_let(e);
     e = knorm::detect_loop(e, tyenv);
+    e = knorm::simplify_loop(e, tyenv);
 
     for i in 0..config.loop_opt {
         log::info!("knorm opt loop: {}", i + 1);
-        e = knorm::eliminate(e);
+        e = knorm::eliminate(e, tyenv);
         e = knorm::flatten_let(e);
         e = knorm::fold_const(e, tyenv);
         e = knorm::compress_onehot_if(e);
         e = knorm::beta_reduction(e, tyenv);
-        e = knorm::eliminate(e);
+        e = knorm::eliminate(e, tyenv);
         e = knorm::cse(e, tyenv);
         e = knorm::beta_reduction(e, tyenv);
-        e = knorm::eliminate(e);
+        e = knorm::eliminate(e, tyenv);
         e = knorm::inlining(e, config.inline, tyenv);
         e = knorm::flatten_let(e);
         e = knorm::compress_onehot_if(e);
         e = knorm::fold_const(e, tyenv);
         e = knorm::beta_reduction(e, tyenv);
-        e = knorm::eliminate(e);
+        e = knorm::eliminate(e, tyenv);
 
         if e == prev {
             break;
