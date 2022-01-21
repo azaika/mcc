@@ -103,7 +103,7 @@ fn collect_free(e: &closure::Expr, known: &mut Set, fv: &mut Set) {
         }
         Let(d, e1, e2) => {
             collect_free(e1, known, fv);
-            known.insert(d.name.clone());
+            known.insert(d.clone());
             collect_free(e2, known, fv);
         }
         Tuple(xs) | CallDir(_, xs) | MakeCls(_, xs) => xs.iter().for_each(|x| push(x)),
@@ -118,7 +118,7 @@ fn collect_free(e: &closure::Expr, known: &mut Set, fv: &mut Set) {
         }
         Loop { vars, init, body } => {
             init.iter().for_each(|x| push(x));
-            for closure::Decl { name, .. } in vars {
+            for name in vars {
                 known.insert(name.clone());
             }
             collect_free(body, known, fv);
@@ -177,9 +177,10 @@ fn conv(
 
             if global.contains(&d.name) {
                 // global variable
+                p.tyenv.insert(d.name.clone(), d.t.clone().into());
                 p.globals.push(closure::Global {
                     name: closure::Label(d.name),
-                    t: d.t,
+                    t: d.t.into(),
                     init: e1,
                 });
 
@@ -187,7 +188,8 @@ fn conv(
             } else {
                 // not global variable
                 let e2 = conv(e2, tyenv, known, global, p);
-                lift(ExprKind::Let(d, e1, e2))
+                p.tyenv.insert(d.name.clone(), d.t.into());
+                lift(ExprKind::Let(d.name, e1, e2))
             }
         }
         knormal::ExprKind::LetRec(fundef, e2) => {
@@ -215,17 +217,20 @@ fn conv(
                 fvs.into_iter().collect()
             };
 
-            let formal_fv = fvs
-                .iter()
-                .map(|x| closure::Decl {
-                    name: x.clone(),
-                    t: tyenv.get(x).unwrap().clone(),
-                })
-                .collect();
+            for x in &fvs {
+                p.tyenv
+                    .insert(x.clone(), tyenv.get(x).unwrap().clone().into());
+            }
+
+            for d in &fundef.args {
+                p.tyenv.insert(d.name.clone(), d.t.clone().into());
+            }
+
+            let formal_fv = fvs.clone();
 
             p.fundefs.push(closure::Fundef {
-                fvar: fundef.fvar.clone(),
-                args: fundef.args,
+                name: fundef.fvar.name.clone(),
+                args: fundef.args.into_iter().map(|d| d.name).collect(),
                 formal_fv,
                 body: e1,
             });
@@ -235,11 +240,8 @@ fn conv(
                 let e2 = conv(e2, tyenv, known, global, p);
                 let f = fundef.fvar.name.clone();
                 lift(ExprKind::Let(
-                    fundef.fvar,
-                    lift(ExprKind::MakeCls(
-                        closure::Label(f),
-                        fvs.iter().cloned().collect(),
-                    )),
+                    fundef.fvar.name,
+                    lift(ExprKind::MakeCls(closure::Label(f), fvs)),
                     e2,
                 ))
             } else {
@@ -262,11 +264,17 @@ fn conv(
         knormal::ExprKind::ArrayGet(x, y) => lift(ExprKind::ArrayGet(x, y)),
         knormal::ExprKind::ArrayPut(x, y, z) => lift(ExprKind::ArrayPut(x, y, z)),
         knormal::ExprKind::TupleGet(x, idx) => lift(ExprKind::TupleGet(x, idx)),
-        knormal::ExprKind::Loop { vars, init, body } => lift(ExprKind::Loop {
-            vars,
-            init,
-            body: conv(body, tyenv, known, global, p),
-        }),
+        knormal::ExprKind::Loop { vars, init, body } => {
+            for d in &vars {
+                p.tyenv.insert(d.name.clone(), d.t.clone().into());
+            }
+
+            lift(ExprKind::Loop {
+                vars: vars.into_iter().map(|d| d.name).collect(),
+                init,
+                body: conv(body, tyenv, known, global, p),
+            })
+        }
         knormal::ExprKind::Continue(ps) => lift(ExprKind::Continue(ps)),
     }
 }

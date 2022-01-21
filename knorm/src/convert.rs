@@ -281,7 +281,8 @@ fn conv(
             // に変換
 
             // let xi: ti = ei として xs = vec{xi}, ts = vec{ti}
-            let make_tuple: Box<dyn FnOnce(Vec<Id>, Vec<Ty>) -> (ExprKind, Ty)> = Box::new(|vs, ts| (ExprKind::Tuple(vs), Ty::Tuple(ts)));
+            let make_tuple: Box<dyn FnOnce(Vec<Id>, Vec<Ty>) -> (ExprKind, Ty)> =
+                Box::new(|vs, ts| (ExprKind::Tuple(vs), Ty::Tuple(ts)));
             es.into_iter().rev().fold(make_tuple, |k, (ei, ti)| {
                 Box::new(|mut vs, mut ts| {
                     insert_let(*ei, ti.clone(), e.loc, |xi| {

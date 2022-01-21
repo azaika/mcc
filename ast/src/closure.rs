@@ -1,5 +1,4 @@
 use std::fmt;
-
 use util::{Id, Spanned};
 
 use crate::knormal;
@@ -7,8 +6,8 @@ use crate::knormal;
 pub type ConstKind = knormal::ConstKind;
 pub type UnOpKind = knormal::UnOpKind;
 pub type BinOpKind = knormal::BinOpKind;
-pub type Decl = knormal::Decl;
 pub type IfKind = knormal::IfKind;
+pub type Ty = ty::closure::Ty;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Label(pub Id);
@@ -21,9 +20,9 @@ impl fmt::Display for Label {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Fundef {
-    pub fvar: Decl,
-    pub args: Vec<Decl>,
-    pub formal_fv: Vec<Decl>,
+    pub name: Id,
+    pub args: Vec<Id>,
+    pub formal_fv: Vec<Id>,
     pub body: Box<Expr>,
 }
 
@@ -31,7 +30,7 @@ impl Fundef {
     fn format_indented(&self, f: &mut fmt::Formatter, level: usize) -> fmt::Result {
         // print indentation
         let indent = |level: usize| "    ".repeat(level);
-        write!(f, "{}Fundef {}", indent(level), self.fvar)?;
+        write!(f, "{}Fundef {}", indent(level), self.name)?;
         write!(f, "\n{}args: ", indent(level + 1))?;
         util::format_vec(f, &self.args, "[", ", ", "]")?;
         write!(f, "\n{}formal_fv: ", indent(level + 1))?;
@@ -48,7 +47,7 @@ pub enum ExprKind {
     UnOp(UnOpKind, Id),
     BinOp(BinOpKind, Id, Id),
     If(IfKind, Id, Id, Box<Expr>, Box<Expr>),
-    Let(Decl, Box<Expr>, Box<Expr>),
+    Let(Id, Box<Expr>, Box<Expr>),
     Tuple(Vec<Id>),
     CallDir(Label, Vec<Id>),
     CallCls(Id, Vec<Id>),
@@ -58,12 +57,12 @@ pub enum ExprKind {
     ArrayPut(Id, Id, Id),
     TupleGet(Id, usize),
     Loop {
-        vars: Vec<Decl>,
+        vars: Vec<Id>,
         init: Vec<Id>,
         body: Box<Expr>,
     },
     DoAll {
-        idx: Decl,
+        idx: Id,
         range: (Id, Id),
         delta: i32,
         body: Box<Expr>,
@@ -174,8 +173,11 @@ impl Global {
     }
 }
 
+pub type TyMap = util::Map<Id, Ty>;
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Program {
+    pub tyenv: TyMap,
     pub globals: Vec<Global>,
     pub fundefs: Vec<Fundef>,
     pub main: Box<Expr>,
@@ -185,6 +187,7 @@ impl Program {
     pub fn new() -> Self {
         let dummy = Spanned::new(ExprKind::Var("!!dummy!!".to_string()), (0, 0));
         Self {
+            tyenv: TyMap::default(),
             globals: vec![],
             fundefs: vec![],
             main: Box::new(dummy),
@@ -194,7 +197,11 @@ impl Program {
 
 impl fmt::Display for Program {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "[Globals]\n")?;
+        write!(f, "[TyMaps]\n")?;
+        for (x, t) in &self.tyenv {
+            writeln!(f, "    {x}: {t}")?;
+        }
+        write!(f, "\n[Globals]\n")?;
         for g in &self.globals {
             g.format_indented(f, 1)?;
         }

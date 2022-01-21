@@ -1,5 +1,4 @@
 use ast::closure::*;
-use ty::knormal::Ty;
 use util::{Id, ToSpanned};
 
 type Map<T> = util::Map<Id, T>;
@@ -59,20 +58,20 @@ fn find_delta(e: &Expr, v: &Id, deltas: &mut Map<i32>, constants: &mut Map<i32>)
         Let(d, e1, e2) => {
             match &e1.item {
                 Const(ConstKind::CInt(i)) => {
-                    constants.insert(d.name.clone(), *i);
+                    constants.insert(d.clone(), *i);
                 }
                 BinOp(kind, x, y) if x == v || y == v => {
                     if let Some(delta) = is_delta(kind, v, x, y, deltas, constants) {
-                        deltas.insert(d.name.clone(), delta);
+                        deltas.insert(d.clone(), delta);
                     }
                 }
                 Var(x) => {
                     if let Some(x) = constants.get(x) {
                         let x = *x;
-                        constants.insert(d.name.clone(), x);
+                        constants.insert(d.clone(), x);
                     } else if let Some(x) = deltas.get(x) {
                         let x = *x;
-                        deltas.insert(d.name.clone(), x);
+                        deltas.insert(d.clone(), x);
                     }
                 }
                 _ => { /* do nothing */ }
@@ -118,34 +117,41 @@ fn is_e1_exit(
     )
 }
 
-fn conv(mut e: Box<Expr>, constants: &mut Map<i32>) -> Box<Expr> {
+fn conv(mut e: Box<Expr>, constants: &mut Map<i32>, tyenv: &mut TyMap) -> Box<Expr> {
     use ExprKind::*;
     e.item = match e.item {
-        If(kind, x, y, e1, e2) => If(kind, x, y, conv(e1, constants), conv(e2, constants)),
+        If(kind, x, y, e1, e2) => If(
+            kind,
+            x,
+            y,
+            conv(e1, constants, tyenv),
+            conv(e2, constants, tyenv),
+        ),
         Let(d, e1, e2) => {
-            let e1 = conv(e1, constants);
+            let e1 = conv(e1, constants, tyenv);
             if let Const(ConstKind::CInt(i)) = &e1.item {
-                constants.insert(d.name.clone(), *i);
+                constants.insert(d.clone(), *i);
             }
 
-            Let(d, e1, conv(e2, constants))
+            Let(d, e1, conv(e2, constants, tyenv))
         }
         Loop { vars, init, body } => {
-            if vars.len() != 1 || vars[0].t != Ty::Int {
+            if vars.len() != 1 || tyenv.get(&vars[0]).unwrap() != &Ty::Int {
                 Loop {
                     vars,
                     init,
-                    body: conv(body, constants),
+                    body: conv(body, constants, tyenv),
                 }
             } else {
-                let v = vars[0].name.clone();
+                let v = vars[0].clone();
                 let init = init.into_iter().next().unwrap();
                 match body.item {
                     If(kind, x, y, e1, e2) if x != y && (x == v || y == v) => {
                         if let Some(delta) = is_e1_exit(&v, constants, &kind, &e1, &e2) {
                             let end = if x == v { y.clone() } else { x.clone() };
+                            tyenv.insert(v.clone(), Ty::Int);
                             ExprKind::DoAll {
-                                idx: Decl::new(v, Ty::Int),
+                                idx: v,
                                 range: (init, end),
                                 delta,
                                 body: Box::new(
@@ -159,6 +165,7 @@ fn conv(mut e: Box<Expr>, constants: &mut Map<i32>) -> Box<Expr> {
                                 body: conv(
                                     Box::new(If(kind, x, y, e1, e2).with_span(body.loc)),
                                     constants,
+                                    tyenv,
                                 ),
                             }
                         }
@@ -166,7 +173,7 @@ fn conv(mut e: Box<Expr>, constants: &mut Map<i32>) -> Box<Expr> {
                     _ => Loop {
                         vars,
                         init: vec![init],
-                        body: conv(body, constants),
+                        body: conv(body, constants, tyenv),
                     },
                 }
             }
@@ -180,7 +187,7 @@ fn conv(mut e: Box<Expr>, constants: &mut Map<i32>) -> Box<Expr> {
             idx,
             range,
             delta,
-            body: conv(body, constants),
+            body: conv(body, constants, tyenv),
         },
         _ => e.item,
     };
@@ -196,15 +203,15 @@ pub fn detect_intloop(mut p: Program) -> Program {
         } else {
             let mut inner = Box::new(ExprKind::Const(ConstKind::CUnit).with_span((0, 0)));
             std::mem::swap(&mut g.init, &mut inner);
-            g.init = conv(inner, &mut constants);
+            g.init = conv(inner, &mut constants, &mut p.tyenv);
         }
     }
 
-    p.main = conv(p.main, &mut constants);
+    p.main = conv(p.main, &mut constants, &mut p.tyenv);
     for fundef in &mut p.fundefs {
         let mut inner = Box::new(ExprKind::Const(ConstKind::CUnit).with_span((0, 0)));
         std::mem::swap(&mut fundef.body, &mut inner);
-        fundef.body = conv(inner, &mut constants);
+        fundef.body = conv(inner, &mut constants, &mut p.tyenv);
     }
 
     p

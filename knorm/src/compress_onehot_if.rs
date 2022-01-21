@@ -147,7 +147,13 @@ fn check_follows(e: &Expr, name: &Id) -> bool {
     }
 }
 
-fn try_conv(onehot: bool, d: Decl, e1: Box<Expr>, e2: Box<Expr>, zeros: &mut Set) -> Result<Box<Expr>, (Decl, Box<Expr>, Box<Expr>)> {
+fn try_conv(
+    onehot: bool,
+    d: Decl,
+    e1: Box<Expr>,
+    e2: Box<Expr>,
+    zeros: &mut Set,
+) -> Result<Box<Expr>, (Decl, Box<Expr>, Box<Expr>)> {
     use ExprKind::*;
 
     if check_follows(&e2, &d.name) {
@@ -199,8 +205,7 @@ fn conv(mut e: Box<Expr>, zeros: &mut Set) -> Box<Expr> {
                     return e;
                 }
                 res.unwrap_err()
-            }
-            else {
+            } else {
                 (d, e1, e2)
             };
             // try false onehot
@@ -211,7 +216,7 @@ fn conv(mut e: Box<Expr>, zeros: &mut Set) -> Box<Expr> {
                     log::debug!("compressing onehot conditional variable `{}`", name);
                     return e;
                 }
-                
+
                 res.unwrap_err()
             } else {
                 (d, e1, e2)
