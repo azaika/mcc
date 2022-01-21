@@ -139,25 +139,25 @@ fn conv(
                 insert_let(*e2, t2, e.loc, |y| (ExprKind::BinOp(op, x, y), t))
             })
         }
-        syntax::ExprKind::If(cond, e1, e2) => {
+        syntax::ExprKind::If(cond, et, ef) => {
             match cond.item {
-                syntax::ExprKind::BinOp(op, e3, e4) if is_comparator(&op) => {
+                syntax::ExprKind::BinOp(op, e1, e2) if is_comparator(&op) => {
                     let kind = match op {
                         syntax::BinOpKind::Eq => IfKind::IfEq,
                         syntax::BinOpKind::LE => IfKind::IfLE,
                         _ => unreachable!(),
                     };
-                    let (e1, t) = conv(e1, env, extenv)?;
-                    let (e2, _) = conv(e2, env, extenv)?;
-                    let (e3, t3) = conv(e3, env, extenv)?;
-                    let (e4, t4) = conv(e4, env, extenv)?;
+                    let (et, t) = conv(et, env, extenv)?;
+                    let (ef, _) = conv(ef, env, extenv)?;
+                    let (e1, t1) = conv(e1, env, extenv)?;
+                    let (e2, t2) = conv(e2, env, extenv)?;
 
-                    insert_let(*e3, t3, e.loc, |x| {
-                        insert_let(*e4, t4, e.loc, |y| (ExprKind::If(kind, x, y, e1, e2), t))
+                    insert_let(*e1, t1, e.loc, |x| {
+                        insert_let(*e2, t2, e.loc, |y| (ExprKind::If(kind, x, y, et, ef), t))
                     })
                 }
-                syntax::ExprKind::UnOp(syntax::UnOpKind::Not, e3) => {
-                    return conv(lift!(syntax::ExprKind::If(e3, e2, e1)), env, extenv);
+                syntax::ExprKind::UnOp(syntax::UnOpKind::Not, e1) => {
+                    return conv(lift!(syntax::ExprKind::If(e1, ef, et)), env, extenv);
                 }
                 _ => {
                     // if {cond} = false then e2 else e1 に変換
@@ -169,8 +169,8 @@ fn conv(
                                 cond,
                                 lift!(syntax::ExprKind::Const(false.into()))
                             )),
-                            e2,
-                            e1
+                            ef,
+                            et
                         )),
                         env,
                         extenv,
@@ -281,8 +281,7 @@ fn conv(
             // に変換
 
             // let xi: ti = ei として xs = vec{xi}, ts = vec{ti}
-            let make_tuple = Box::new(|vs, ts| (ExprKind::Tuple(vs), Ty::Tuple(ts)))
-                as Box<dyn FnOnce(Vec<Id>, Vec<Ty>) -> (ExprKind, Ty)>;
+            let make_tuple: Box<dyn FnOnce(Vec<Id>, Vec<Ty>) -> (ExprKind, Ty)> = Box::new(|vs, ts| (ExprKind::Tuple(vs), Ty::Tuple(ts)));
             es.into_iter().rev().fold(make_tuple, |k, (ei, ti)| {
                 Box::new(|mut vs, mut ts| {
                     insert_let(*ei, ti.clone(), e.loc, |xi| {
@@ -304,14 +303,13 @@ fn conv(
             let args = conv_args;
 
             // おおまかには Tuple のときと同じだが, 関数側が外部関数かどうかで場合分け
-            let make_app = match &f.item {
+            let make_app: Box<dyn FnOnce(Vec<Id>) -> (ExprKind, Ty)> = match &f.item {
                 syntax::ExprKind::Var(x) if extenv.contains_key(x) => {
                     // 外部関数の呼び出し
                     let tf = extenv.get(x).unwrap();
                     if let SyntaxTy::Fun(_, t) = tf {
                         let t = (**t).clone().into();
                         Box::new(|xs| (ExprKind::ExtApp(x.clone(), xs), t))
-                            as Box<dyn FnOnce(Vec<Id>) -> (ExprKind, Ty)>
                     } else {
                         return Err(anyhow::Error::msg(format!("external variable `{}` must have an function type, but it has type `{}`", x, tf)));
                     }
@@ -324,7 +322,6 @@ fn conv(
                     };
 
                     Box::new(|xs| insert_let(*f, tf, e.loc, |x| (ExprKind::App(x.clone(), xs), t)))
-                        as Box<dyn FnOnce(Vec<Id>) -> (ExprKind, Ty)>
                 }
             };
 
