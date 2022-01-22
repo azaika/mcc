@@ -363,7 +363,7 @@ fn conv(
         knormal::ExprKind::CreateArray(num, init) => {
             let t: closure::Ty = tyenv.get(&init).unwrap().clone().into();
 
-            let arr = gen_new_var(p, closure::Ty::Array(Box::new(t.clone()), None));
+            let arr = gen_new_var(p, closure::Ty::ArrayPtr(Box::new(t.clone())));
 
             let e1 = lift(ExprKind::Var(arr.clone()));
             if zeros.contains(&num) {

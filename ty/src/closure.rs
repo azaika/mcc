@@ -7,8 +7,10 @@ pub enum Ty {
     Int,
     Float,
     Fun(Vec<Ty>, Box<Ty>),
+    TuplePtr(Vec<Ty>),
     Tuple(Vec<Ty>),
-    Array(Box<Ty>, Option<usize>),
+    Array(Box<Ty>, usize),
+    ArrayPtr(Box<Ty>),
 }
 
 impl From<knormal::Ty> for Ty {
@@ -22,8 +24,8 @@ impl From<knormal::Ty> for Ty {
                 args.into_iter().map(|x| x.into()).collect(),
                 Box::new((*r).into()),
             ),
-            knormal::Ty::Tuple(ts) => Tuple(ts.into_iter().map(|x| x.into()).collect()),
-            knormal::Ty::Array(t) => Array(Box::new((*t).into()), None),
+            knormal::Ty::Tuple(ts) => TuplePtr(ts.into_iter().map(|x| x.into()).collect()),
+            knormal::Ty::Array(t) => ArrayPtr(Box::new((*t).into())),
         }
     }
 }
@@ -32,15 +34,22 @@ impl Ty {
     fn print_block(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use Ty::*;
         match self {
-            Fun(_, _) | Tuple(_) => write!(f, "({})", self),
+            Fun(_, _) | TuplePtr(_) | Tuple(_) => write!(f, "({})", self),
             _ => write!(f, "{}", self),
         }
     }
 
     pub fn is_array(&self) -> bool {
         match self {
-            Self::Array(..) => true,
+            Self::Array(..) | Self::ArrayPtr(..) => true,
             _ => false,
+        }
+    }
+
+    pub fn elem_t(&self) -> &Self {
+        match self {
+            Self::Array(t, _) | Self::ArrayPtr(t) => t,
+            _ => panic!()
         }
     }
 }
@@ -67,13 +76,21 @@ impl fmt::Display for Ty {
                 }
                 Ok(())
             }
+            TuplePtr(ts) => {
+                write!(f, "(")?;
+                ts.first().map_or(Ok(()), |t| t.print_block(f))?;
+                for t in &ts[1..ts.len()] {
+                    write!(f, " * {}", t)?;
+                }
+                write!(f, ") ptr")
+            }
             Array(t, s) => {
                 t.print_block(f)?;
-                write!(
-                    f,
-                    " array[{}]",
-                    s.map_or("?".to_string(), |x| x.to_string())
-                )
+                write!(f, " array[{s}]")
+            },
+            ArrayPtr(t) => {
+                t.print_block(f)?;
+                write!(f, " array ptr")
             }
         }
     }
@@ -86,8 +103,8 @@ impl Ty {
             Ty::Int => "i",
             Ty::Float => "d",
             Ty::Fun(_, _) => "f",
-            Ty::Tuple(_) => "t",
-            Ty::Array(_, _) => "a",
+            Ty::TuplePtr(_) | Ty::Tuple(_) => "t",
+            Ty::Array(..) | Ty::ArrayPtr(..) => "a",
         }
     }
 }
@@ -97,10 +114,10 @@ mod tests {
     use super::Ty::*;
     #[test]
     fn print_type() {
-        let iarr = Array(Box::new(Int), Some(2));
-        let iiarr = Array(Box::new(iarr.clone()), None);
+        let iarr = Array(Box::new(Int), 2usize);
+        let iiarr = ArrayPtr(Box::new(iarr.clone()));
 
-        assert_eq!(iiarr.to_string(), "int array[2] array[?]");
+        assert_eq!(iiarr.to_string(), "int array[2] array ptr");
 
         let fun1 = Fun(vec![Unit, iarr.clone()], Box::new(Float));
         assert_eq!(fun1.to_string(), "unit -> int array[2] -> float");
@@ -114,10 +131,10 @@ mod tests {
         let tup1 = Tuple(vec![fun1.clone(), Unit]);
         assert_eq!(tup1.to_string(), "(unit -> int array[2] -> float) * unit");
 
-        let tup2 = Tuple(vec![iarr.clone(), Float, iiarr.clone()]);
+        let tup2 = TuplePtr(vec![iarr.clone(), Float, iiarr.clone()]);
         assert_eq!(
             tup2.to_string(),
-            "int array[2] * float * int array[2] array[?]"
+            "(int array[2] * float * int array[2] array ptr) ptr"
         );
     }
 }
