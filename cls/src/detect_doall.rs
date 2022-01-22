@@ -195,7 +195,7 @@ fn conv(mut e: Box<Expr>, constants: &mut Map<i32>, tyenv: &mut TyMap) -> Box<Ex
     e
 }
 
-pub fn detect_intloop(mut p: Program) -> Program {
+pub fn detect_doall(mut p: Program) -> Program {
     let mut constants = Map::default();
     for g in &mut p.globals {
         if let ExprKind::Const(ConstKind::CInt(x)) = &g.init.item {

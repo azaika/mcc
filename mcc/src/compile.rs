@@ -118,7 +118,7 @@ fn optimize_closure(mut p: ast::closure::Program) -> ast::closure::Program {
     let mut prev = p.clone();
     for i in 0..100 {
         log::info!("closure opt loop: {i}");
-        p = cls::detect_intloop(p);
+        p = cls::detect_doall(p);
 
         if p == prev {
             break;

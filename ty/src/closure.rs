@@ -36,6 +36,13 @@ impl Ty {
             _ => write!(f, "{}", self),
         }
     }
+
+    pub fn is_array(&self) -> bool {
+        match self {
+            Self::Array(..) => true,
+            _ => false
+        }
+    }
 }
 
 impl fmt::Display for Ty {

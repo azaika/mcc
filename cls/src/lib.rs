@@ -1,5 +1,5 @@
 mod convert;
-mod detect_intloop;
+mod detect_doall;
 
 pub use convert::convert;
-pub use detect_intloop::detect_intloop;
+pub use detect_doall::detect_doall;
