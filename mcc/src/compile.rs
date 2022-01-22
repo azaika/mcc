@@ -116,10 +116,12 @@ fn optimize_knorm(mut e: knormal::Expr, tyenv: &mut knorm::TyMap, config: &Args)
 
 fn optimize_closure(mut p: ast::closure::Program) -> ast::closure::Program {
     let mut prev = p.clone();
+
+    p = cls::detect_doall(p);
     for i in 0..100 {
-        log::info!("closure opt loop: {i}");
+        log::info!("closure opt loop: {}", i + 1);
         p = cls::beta_reduction(p);
-        p = cls::detect_doall(p);
+        p = cls::fold_const(p);
 
         if p == prev {
             break;

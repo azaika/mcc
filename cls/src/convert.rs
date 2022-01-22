@@ -247,25 +247,32 @@ fn conv(
             let e1 = Box::new(ExprKind::AllocArray(num.clone(), t).with_span(e1.loc));
             p.tyenv.insert(d.name.clone(), d.t.clone().into());
 
-            let e2 = conv(e2, tyenv, known, zeros, global, p);
-            let e2 = if zeros.contains(&num) {
-                // dummy array は初期化しない
-                e2
-            } else {
-                gen_array_init(p, d.name.clone(), e.loc, num, init, e2)
-            };
-
             if global.contains(&d.name) {
                 // global variable
                 p.globals.push(closure::Global {
-                    name: closure::Label(d.name),
+                    name: closure::Label(d.name.clone()),
                     t: d.t.into(),
                     init: e1,
                 });
 
+                let e2 = conv(e2, tyenv, known, zeros, global, p);
+                let e2 = if zeros.contains(&num) {
+                    // dummy array は初期化しない
+                    e2
+                } else {
+                    gen_array_init(p, d.name, e.loc, num, init, e2)
+                };
+
                 e2
             } else {
                 // non-global variable
+                let e2 = conv(e2, tyenv, known, zeros, global, p);
+                let e2 = if zeros.contains(&num) {
+                    // dummy array は初期化しない
+                    e2
+                } else {
+                    gen_array_init(p, d.name.clone(), e.loc, num, init, e2)
+                };
                 lift(ExprKind::Let(d.name, e1, e2))
             }
         }
@@ -278,7 +285,7 @@ fn conv(
             }
 
             p.tyenv.insert(d.name.clone(), d.t.clone().into());
-            let e2 = conv(e2, tyenv, known, zeros, global, p);
+
             if global.contains(&d.name) {
                 // global variable
                 p.globals.push(closure::Global {
@@ -286,10 +293,12 @@ fn conv(
                     t: d.t.into(),
                     init: e1,
                 });
+                let e2 = conv(e2, tyenv, known, zeros, global, p);
 
                 e2
             } else {
                 // non-global variable
+                let e2 = conv(e2, tyenv, known, zeros, global, p);
                 lift(ExprKind::Let(d.name, e1, e2))
             }
         }

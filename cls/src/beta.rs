@@ -77,7 +77,6 @@ fn conv(mut e: Box<Expr>, env: &mut Map, tyenv: &mut TyMap) -> Box<Expr> {
 }
 
 // β 簡約を行う
-// α 変換されていることを仮定している
 pub fn beta_reduction(mut p: Program) -> Program {
     for g in &mut p.globals {
         let mut buf = Box::new(ExprKind::dummy());

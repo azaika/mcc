@@ -49,7 +49,7 @@ impl Ty {
     pub fn elem_t(&self) -> &Self {
         match self {
             Self::Array(t, _) | Self::ArrayPtr(t) => t,
-            _ => panic!()
+            _ => panic!(),
         }
     }
 }
@@ -87,7 +87,7 @@ impl fmt::Display for Ty {
             Array(t, s) => {
                 t.print_block(f)?;
                 write!(f, " array[{s}]")
-            },
+            }
             ArrayPtr(t) => {
                 t.print_block(f)?;
                 write!(f, " array ptr")
