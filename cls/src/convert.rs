@@ -128,7 +128,9 @@ fn collect_free(e: &closure::Expr, known: &mut Set, fv: &mut Set) {
             push(y)
         }),
         Const(_) | ExtArray(_) | Load(_) => { /* no vars */ }
-        DoAll { idx, range, body, .. } => {
+        DoAll {
+            idx, range, body, ..
+        } => {
             known.insert(idx.clone());
             known.insert(range.0.clone());
             known.insert(range.1.clone());

@@ -149,6 +149,10 @@ impl ExprKind {
             Load(x) => write!(f, "Load {x}"),
         }
     }
+
+    pub fn dummy() -> Expr {
+        Spanned::new(ExprKind::Var("!!dummy!!".to_string()), (0, 0))
+    }
 }
 
 impl fmt::Display for ExprKind {

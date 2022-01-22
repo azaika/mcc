@@ -40,7 +40,7 @@ impl Ty {
     pub fn is_array(&self) -> bool {
         match self {
             Self::Array(..) => true,
-            _ => false
+            _ => false,
         }
     }
 }

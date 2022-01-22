@@ -150,12 +150,19 @@ fn conv(mut e: Box<Expr>, constants: &mut Map<i32>, tyenv: &mut TyMap) -> Box<Ex
                         if let Some(delta) = is_e1_exit(&v, constants, &kind, &e1, &e2) {
                             let end = if x == v { y.clone() } else { x.clone() };
                             tyenv.insert(v.clone(), Ty::Int);
+
+                            log::debug!("detected Do-All loop, which uses `{v}`");
                             ExprKind::DoAll {
                                 idx: v,
                                 range: (init, end),
                                 delta,
-                                body: Box::new(
-                                    ExprKind::If(IfKind::IfLE, x, y, e1, e2).with_span(body.loc),
+                                body: conv(
+                                    Box::new(
+                                        ExprKind::If(IfKind::IfLE, x, y, e1, e2)
+                                            .with_span(body.loc),
+                                    ),
+                                    constants,
+                                    tyenv,
                                 ),
                             }
                         } else {
@@ -207,12 +214,13 @@ pub fn detect_doall(mut p: Program) -> Program {
         }
     }
 
-    p.main = conv(p.main, &mut constants, &mut p.tyenv);
     for fundef in &mut p.fundefs {
         let mut inner = Box::new(ExprKind::Const(ConstKind::CUnit).with_span((0, 0)));
         std::mem::swap(&mut fundef.body, &mut inner);
         fundef.body = conv(inner, &mut constants, &mut p.tyenv);
     }
+
+    p.main = conv(p.main, &mut constants, &mut p.tyenv);
 
     p
 }
