@@ -204,14 +204,10 @@ fn conv(mut e: Box<Expr>, constants: &mut Map<i32>, tyenv: &mut TyMap) -> Box<Ex
 
 pub fn detect_doall(mut p: Program) -> Program {
     let mut constants = Map::default();
-    for g in &mut p.globals {
-        if let ExprKind::Const(ConstKind::CInt(x)) = &g.init.item {
-            constants.insert(g.name.0.clone(), *x);
-        } else {
-            let mut inner = Box::new(ExprKind::Const(ConstKind::CUnit).with_span((0, 0)));
-            std::mem::swap(&mut g.init, &mut inner);
-            g.init = conv(inner, &mut constants, &mut p.tyenv);
-        }
+    {
+        let mut buf = Box::new(ExprKind::Const(ConstKind::CUnit).with_span((0, 0)));
+        std::mem::swap(&mut p.global_init, &mut buf);
+        p.global_init = conv(buf, &mut constants, &mut p.tyenv);
     }
 
     for fundef in &mut p.fundefs {

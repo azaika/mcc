@@ -78,10 +78,10 @@ fn conv(mut e: Box<Expr>, env: &mut Map, tyenv: &mut TyMap) -> Box<Expr> {
 
 // β 簡約を行う
 pub fn beta_reduction(mut p: Program) -> Program {
-    for g in &mut p.globals {
+    {
         let mut buf = Box::new(ExprKind::dummy());
-        std::mem::swap(&mut g.init, &mut buf);
-        g.init = conv(buf, &mut Map::default(), &mut p.tyenv);
+        std::mem::swap(&mut p.global_init, &mut buf);
+        p.global_init = conv(buf, &mut Map::default(), &mut p.tyenv);
     }
 
     for Fundef { body, .. } in &mut p.fundefs {

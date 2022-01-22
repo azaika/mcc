@@ -145,8 +145,8 @@ impl ExprKind {
                 util::format_vec(f, actual_fv, "[", ", ", "]")?;
                 write!(f, "\n")
             }
-            Assign(x, y) => write!(f, "Assign {x}, {y}"),
-            Load(x) => write!(f, "Load {x}"),
+            Assign(x, y) => write!(f, "Assign {x}, {y}\n"),
+            Load(x) => write!(f, "Load {x}\n"),
         }
     }
 
@@ -161,29 +161,14 @@ impl fmt::Display for ExprKind {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct Global {
-    pub name: Label,
-    pub t: ty::knormal::Ty,
-    pub init: Box<Expr>,
-}
-
-impl Global {
-    fn format_indented(&self, f: &mut fmt::Formatter, level: usize) -> fmt::Result {
-        let indent = |level: usize| "    ".repeat(level);
-
-        write!(f, "{}Global: ({}, {})\n", indent(level), self.name, self.t)?;
-        self.init.item.format_indented(f, level + 1)
-    }
-}
-
 pub type TyMap = util::Map<Id, Ty>;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Program {
     pub tyenv: TyMap,
-    pub globals: Vec<Global>,
+    pub globals: Vec<Id>,
     pub fundefs: Vec<Fundef>,
+    pub global_init: Box<Expr>,
     pub main: Box<Expr>,
 }
 
@@ -194,6 +179,7 @@ impl Program {
             tyenv: TyMap::default(),
             globals: vec![],
             fundefs: vec![],
+            global_init: Box::new(Spanned::new(ExprKind::Const(ConstKind::CUnit), (0, 0))),
             main: Box::new(dummy),
         }
     }
@@ -207,8 +193,10 @@ impl fmt::Display for Program {
         }
         write!(f, "\n[Globals]\n")?;
         for g in &self.globals {
-            g.format_indented(f, 1)?;
+            writeln!(f, "    ({g}: {})", self.tyenv.get(g).unwrap())?;
         }
+        write!(f, "\n[global_init]\n")?;
+        self.global_init.item.format_indented(f, 1)?;
         write!(f, "\n[Fundefs]\n")?;
         for fundef in &self.fundefs {
             fundef.format_indented(f, 1)?;

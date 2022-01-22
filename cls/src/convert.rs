@@ -211,6 +211,18 @@ fn gen_array_init(
     ))
 }
 
+fn insert_global<F: FnOnce(&mut closure::Program, Box<closure::Expr>) -> Box<closure::Expr>>(
+    p: &mut closure::Program,
+    name: Id,
+    k: F,
+) {
+    p.globals.push(name.clone());
+
+    let mut buf = Box::new(closure::ExprKind::dummy());
+    std::mem::swap(&mut buf, &mut p.global_init);
+    p.global_init = k(p, buf);
+}
+
 fn conv(
     e: Box<knormal::Expr>,
     tyenv: &knormal::TyMap,
@@ -247,27 +259,34 @@ fn conv(
             let e1 = Box::new(ExprKind::AllocArray(num.clone(), t).with_span(e1.loc));
             p.tyenv.insert(d.name.clone(), d.t.clone().into());
 
+            let is_dummy = zeros.contains(&num);
+
             if global.contains(&d.name) {
                 // global variable
-                p.globals.push(closure::Global {
-                    name: closure::Label(d.name.clone()),
-                    t: d.t.into(),
-                    init: e1,
-                });
-
+                let name = d.name.clone();
                 let e2 = conv(e2, tyenv, known, zeros, global, p);
-                let e2 = if zeros.contains(&num) {
-                    // dummy array は初期化しない
-                    e2
-                } else {
-                    gen_array_init(p, d.name, e.loc, num, init, e2)
-                };
+                insert_global(p, d.name, |p, cont| {
+                    let e2 = if is_dummy {
+                        // dummy array は初期化しない
+                        cont
+                    } else {
+                        gen_array_init(p, name.clone(), e.loc, num, init, cont)
+                    };
+                    let tmp = gen_new_var(p, closure::Ty::Unit);
+                    let e2 = lift(ExprKind::Let(
+                        tmp,
+                        lift(ExprKind::Assign(closure::Label(name.clone()), name.clone())),
+                        e2,
+                    ));
+
+                    lift(ExprKind::Let(name, e1, e2))
+                });
 
                 e2
             } else {
                 // non-global variable
                 let e2 = conv(e2, tyenv, known, zeros, global, p);
-                let e2 = if zeros.contains(&num) {
+                let e2 = if is_dummy {
                     // dummy array は初期化しない
                     e2
                 } else {
@@ -288,12 +307,17 @@ fn conv(
 
             if global.contains(&d.name) {
                 // global variable
-                p.globals.push(closure::Global {
-                    name: closure::Label(d.name),
-                    t: d.t.into(),
-                    init: e1,
-                });
+                let name = d.name.clone();
                 let e2 = conv(e2, tyenv, known, zeros, global, p);
+                insert_global(p, d.name.clone(), |p, cont| {
+                    let tmp = gen_new_var(p, closure::Ty::Unit);
+                    let e2 = lift(ExprKind::Let(
+                        tmp,
+                        lift(ExprKind::Assign(closure::Label(name.clone()), name.clone())),
+                        cont,
+                    ));
+                    lift(ExprKind::Let(name, e1, e2))
+                });
 
                 e2
             } else {
@@ -444,6 +468,8 @@ pub fn convert(e: knormal::Expr, tyenv: knormal::TyMap) -> closure::Program {
         &global,
         &mut p,
     );
+
+    p.globals.reverse();
 
     p
 }
