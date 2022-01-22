@@ -89,8 +89,8 @@ fn collect_free(e: &closure::Expr, known: &mut Set, fv: &mut Set) {
         }
     };
     match &e.item {
-        Var(x) | UnOp(_, x) | Assign(_, x) | TupleGet(x, _) => push(x),
-        BinOp(_, x, y) | CreateArray(x, y) | ArrayGet(x, y) => {
+        Var(x) | UnOp(_, x) | Assign(_, x) | TupleGet(x, _) | AllocArray(x, _) => push(x),
+        BinOp(_, x, y) | ArrayGet(x, y) => {
             push(x);
             push(y);
         }
@@ -128,8 +128,11 @@ fn collect_free(e: &closure::Expr, known: &mut Set, fv: &mut Set) {
             push(y)
         }),
         Const(_) | ExtArray(_) | Load(_) => { /* no vars */ }
-        DoAll { .. } => {
-            unreachable!()
+        DoAll { idx, range, body, .. } => {
+            known.insert(idx.clone());
+            known.insert(range.0.clone());
+            known.insert(range.1.clone());
+            collect_free(body, known, fv);
         }
     }
 }
@@ -151,10 +154,66 @@ fn emerge(e: &knormal::Expr, name: &Id) -> bool {
     }
 }
 
+fn is_create_array(e: &knormal::Expr) -> bool {
+    match e.item {
+        knormal::ExprKind::CreateArray(..) => true,
+        _ => false,
+    }
+}
+
+fn gen_new_var(p: &mut closure::Program, t: closure::Ty) -> Id {
+    let x = util::id::gen_tmp_var_with(t.short());
+    p.tyenv.insert(x.clone(), t);
+    x
+}
+
+fn gen_array_init(
+    p: &mut closure::Program,
+    arr: Id,
+    span: util::Span,
+    num: Id,
+    init: Id,
+    cont: Box<closure::Expr>,
+) -> Box<closure::Expr> {
+    use closure::ExprKind;
+    use ExprKind::*;
+
+    let lift = |expr: ExprKind| Box::new(expr.with_span(span));
+
+    let zero = gen_new_var(p, closure::Ty::Int);
+    let one = gen_new_var(p, closure::Ty::Int);
+    let end = gen_new_var(p, closure::Ty::Int);
+    let idx = gen_new_var(p, closure::Ty::Int);
+    let tmp = gen_new_var(p, closure::Ty::Int);
+
+    let cont = lift(Let(
+        tmp,
+        lift(DoAll {
+            idx: idx.clone(),
+            range: (zero.clone(), end.clone()),
+            delta: 1,
+            body: lift(ArrayPut(arr, idx.clone(), init)),
+        }),
+        cont,
+    ));
+    let cont = lift(Let(
+        end,
+        lift(BinOp(closure::BinOpKind::Sub, num, one.clone())),
+        cont,
+    ));
+
+    lift(Let(
+        zero,
+        lift(Const(0.into())),
+        lift(Let(one, lift(Const(1.into())), cont)),
+    ))
+}
+
 fn conv(
     e: Box<knormal::Expr>,
     tyenv: &knormal::TyMap,
     known: &mut Set,
+    zeros: &mut Set,
     global: &Set,
     p: &mut closure::Program,
 ) -> Box<closure::Expr> {
@@ -167,28 +226,68 @@ fn conv(
         knormal::ExprKind::UnOp(kind, x) => lift(ExprKind::UnOp(kind, x)),
         knormal::ExprKind::BinOp(kind, x, y) => lift(ExprKind::BinOp(kind, x, y)),
         knormal::ExprKind::If(kind, x, y, e1, e2) => {
-            let e1 = conv(e1, tyenv, known, global, p);
-            let e2 = conv(e2, tyenv, known, global, p);
+            let e1 = conv(e1, tyenv, known, zeros, global, p);
+            let e2 = conv(e2, tyenv, known, zeros, global, p);
 
             lift(ExprKind::If(kind, x, y, e1, e2))
         }
-        knormal::ExprKind::Let(d, e1, e2) => {
-            let e1 = conv(e1, tyenv, known, global, p);
+        // create_array を alloc_array に変換
+        knormal::ExprKind::Let(d, e1, e2) if is_create_array(&e1) => {
+            let (num, init) = match e1.item {
+                knormal::ExprKind::CreateArray(num, init) => (num, init),
+                _ => unreachable!(),
+            };
+
+            let t = match &d.t {
+                ty::knormal::Ty::Array(t) => (**t).clone().into(),
+                _ => panic!(),
+            };
+            let e1 = Box::new(ExprKind::AllocArray(num.clone(), t).with_span(e1.loc));
+            p.tyenv.insert(d.name.clone(), d.t.clone().into());
+
+            let e2 = conv(e2, tyenv, known, zeros, global, p);
+            let e2 = if zeros.contains(&num) {
+                // dummy array は初期化しない
+                e2
+            } else {
+                gen_array_init(p, d.name.clone(), e.loc, num, init, e2)
+            };
 
             if global.contains(&d.name) {
                 // global variable
-                p.tyenv.insert(d.name.clone(), d.t.clone().into());
                 p.globals.push(closure::Global {
                     name: closure::Label(d.name),
                     t: d.t.into(),
                     init: e1,
                 });
 
-                conv(e2, tyenv, known, global, p)
+                e2
             } else {
-                // not global variable
-                let e2 = conv(e2, tyenv, known, global, p);
-                p.tyenv.insert(d.name.clone(), d.t.into());
+                // non-global variable
+                lift(ExprKind::Let(d.name, e1, e2))
+            }
+        }
+        knormal::ExprKind::Let(d, e1, e2) => {
+            let e1 = conv(e1, tyenv, known, zeros, global, p);
+
+            // 0 と分かるものだけ記憶 (dummy array の初期化省略に使う)
+            if e1.item == ExprKind::Const(0.into()) {
+                zeros.insert(d.name.clone());
+            }
+
+            p.tyenv.insert(d.name.clone(), d.t.clone().into());
+            let e2 = conv(e2, tyenv, known, zeros, global, p);
+            if global.contains(&d.name) {
+                // global variable
+                p.globals.push(closure::Global {
+                    name: closure::Label(d.name),
+                    t: d.t.into(),
+                    init: e1,
+                });
+
+                e2
+            } else {
+                // non-global variable
                 lift(ExprKind::Let(d.name, e1, e2))
             }
         }
@@ -200,7 +299,7 @@ fn conv(
             }
 
             // convert function body
-            let e1 = conv(fundef.body, tyenv, known, global, p);
+            let e1 = conv(fundef.body, tyenv, known, zeros, global, p);
 
             // free variables which are contained in converted function body
             let fvs: Vec<_> = {
@@ -237,7 +336,7 @@ fn conv(
 
             // make closure (if needed) and convert following programs
             if emerge(&e2, &fundef.fvar.name) {
-                let e2 = conv(e2, tyenv, known, global, p);
+                let e2 = conv(e2, tyenv, known, zeros, global, p);
                 let f = fundef.fvar.name.clone();
                 lift(ExprKind::Let(
                     fundef.fvar.name,
@@ -245,7 +344,7 @@ fn conv(
                     e2,
                 ))
             } else {
-                conv(e2, tyenv, known, global, p)
+                conv(e2, tyenv, known, zeros, global, p)
             }
         }
         knormal::ExprKind::Tuple(xs) => lift(ExprKind::Tuple(xs)),
@@ -259,7 +358,19 @@ fn conv(
         knormal::ExprKind::ExtApp(func, args) => {
             lift(ExprKind::CallDir(closure::Label(func), args))
         }
-        knormal::ExprKind::CreateArray(x, y) => lift(ExprKind::CreateArray(x, y)),
+        knormal::ExprKind::CreateArray(num, init) => {
+            let t: closure::Ty = tyenv.get(&init).unwrap().clone().into();
+
+            let arr = gen_new_var(p, closure::Ty::Array(Box::new(t.clone()), None));
+
+            let e1 = lift(ExprKind::Var(arr.clone()));
+            if zeros.contains(&num) {
+                e1
+            } else {
+                let e1 = gen_array_init(p, arr.clone(), e.loc, num.clone(), init, e1);
+                lift(ExprKind::Let(arr, lift(ExprKind::AllocArray(num, t)), e1))
+            }
+        }
         knormal::ExprKind::ExtArray(x) => lift(ExprKind::ExtArray(closure::Label(x))),
         knormal::ExprKind::ArrayGet(x, y) => lift(ExprKind::ArrayGet(x, y)),
         knormal::ExprKind::ArrayPut(x, y, z) => lift(ExprKind::ArrayPut(x, y, z)),
@@ -272,7 +383,7 @@ fn conv(
             lift(ExprKind::Loop {
                 vars: vars.into_iter().map(|d| d.name).collect(),
                 init,
-                body: conv(body, tyenv, known, global, p),
+                body: conv(body, tyenv, known, zeros, global, p),
             })
         }
         knormal::ExprKind::Continue(ps) => lift(ExprKind::Continue(ps)),
@@ -314,7 +425,14 @@ pub fn convert(e: knormal::Expr, tyenv: knormal::TyMap) -> closure::Program {
         collect_global(&e, &last, &mut global);
     }
 
-    p.main = conv(Box::new(e), &tyenv, &mut Set::default(), &global, &mut p);
+    p.main = conv(
+        Box::new(e),
+        &tyenv,
+        &mut Set::default(),
+        &mut Set::default(),
+        &global,
+        &mut p,
+    );
 
     p
 }
