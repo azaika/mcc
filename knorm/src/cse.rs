@@ -2,7 +2,7 @@ use std::hash::Hash;
 
 use ast::knormal::*;
 use ty::knormal::Ty;
-use util::{Id, Spanned};
+use util::{Id, Spanned, ToSpanned};
 
 // for comparison considering commutativity
 // ignoring float constant NaN, which do not emerge in constant context
@@ -190,11 +190,34 @@ fn conv(
                 let e1 = key.0;
                 let e1 = conv(e1, tyenv, effects, saved, arr_saved);
                 if !is_impure(&e1, effects) {
-                    let key = ExprInVal(e1.clone());
-                    saved.insert(key.clone(), d.name.clone());
-                    let r = Let(d, e1, conv(e2, tyenv, effects, saved, arr_saved));
-                    saved.remove(&key);
-                    r
+                    match &e1.item {
+                        Tuple(xs) => {
+                            let mut keys = vec![];
+                            for (idx, x) in xs.iter().enumerate() {
+                                let k = ExprInVal(Box::new(ExprKind::TupleGet(d.name.clone(), idx).with_span((0, 0))));
+                                saved.insert(k.clone(), x.clone());
+                                keys.push(k);
+                            };
+
+                            let key = ExprInVal(e1.clone());
+                            saved.insert(key.clone(), d.name.clone());
+                            let r = Let(d, e1, conv(e2, tyenv, effects, saved, arr_saved));
+                            saved.remove(&key);
+
+                            for key in keys {
+                                saved.remove(&key);
+                            }
+
+                            r
+                        },
+                        _ => {
+                            let key = ExprInVal(e1.clone());
+                            saved.insert(key.clone(), d.name.clone());
+                            let r = Let(d, e1, conv(e2, tyenv, effects, saved, arr_saved));
+                            saved.remove(&key);
+                            r
+                        }
+                    }
                 } else if let ExprKind::ArrayGet(arr, idx) = &e1.item {
                     let t = d.t.clone();
 

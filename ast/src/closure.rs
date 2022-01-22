@@ -117,7 +117,7 @@ impl ExprKind {
             AllocArray(num, t) => write!(f, "AllocArray<{t}>({num})\n"),
             ArrayGet(arr, idx) => write!(f, "ArrayGet {arr}, {idx}\n"),
             ArrayPut(arr, idx, x) => write!(f, "ArrayPut {arr}, {idx}, {x}\n"),
-            TupleGet(arr, idx) => write!(f, "TupleGet {arr}.{idx}\n"),
+            TupleGet(arr, idx) => write!(f, "TupleGet {arr}.({idx})\n"),
             Loop { vars, init, body } => {
                 write!(f, "Loop:\n{}vars = ", indent(level))?;
                 util::format_vec(f, vars, "[", ", ", "]")?;
