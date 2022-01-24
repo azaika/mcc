@@ -34,7 +34,7 @@ impl Ty {
     fn print_block(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use Ty::*;
         match self {
-            Fun(_, _) | TuplePtr(_) | Tuple(_) => write!(f, "({})", self),
+            Fun(_, _) | Tuple(_) => write!(f, "({})", self),
             _ => write!(f, "{}", self),
         }
     }
