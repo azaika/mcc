@@ -27,6 +27,6 @@ pub fn collect_consts(p: &Program) -> ConstMap {
         collect_consts_impl(body, &mut consts);
     }
     collect_consts_impl(&p.main, &mut consts);
-    
+
     consts
 }

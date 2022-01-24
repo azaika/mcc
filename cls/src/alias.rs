@@ -6,7 +6,7 @@ use crate::common;
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Index {
     Int(usize),
-    Var(Id)
+    Var(Id),
 }
 
 impl Index {
@@ -20,8 +20,23 @@ impl Index {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Alias {
-    top: Id,
-    belongs: Vec<Index>
+    pub top: Id,
+    pub belongs: Vec<Index>,
+}
+
+pub fn may_overlap(a1: &Alias, a2: &Alias) -> bool {
+    if (a1.top != a2.top) || (a1.belongs.len() != a2.belongs.len()) {
+        return false;
+    }
+
+    for (b1, b2) in a1.belongs.iter().zip(&a2.belongs) {
+        use Index::Int;
+        match (b1, b2) {
+            (Int(i), Int(j)) if i != j => return false,
+            _ => (),
+        };
+    }
+    return true;
 }
 
 pub type AliasMap = util::Map<Id, Alias>;
@@ -34,10 +49,16 @@ fn analyze_aliases_impl(e: &Expr, consts: &common::ConstMap, aliases: &mut Alias
             match &e1.item {
                 Var(x) if aliases.contains_key(x) => {
                     aliases.insert(v.clone(), aliases.get(x).unwrap().clone());
-                },
+                }
                 AllocArray(..) => {
-                    aliases.insert(v.clone(), Alias { top: v.clone(), belongs: vec![] });
-                },
+                    aliases.insert(
+                        v.clone(),
+                        Alias {
+                            top: v.clone(),
+                            belongs: vec![],
+                        },
+                    );
+                }
                 ArrayGet(arr, idx) if aliases.contains_key(arr) => {
                     let mut alias = aliases.get(arr).unwrap().clone();
                     let idx = if let Some(ConstKind::CInt(s)) = consts.get(idx) {
@@ -45,29 +66,27 @@ fn analyze_aliases_impl(e: &Expr, consts: &common::ConstMap, aliases: &mut Alias
                             // negative index access
                             // undefined behavior
                             Index::Var(idx.clone())
-                        }
-                        else {
+                        } else {
                             Index::Int(*s as usize)
                         }
-                    }
-                    else {
+                    } else {
                         Index::Var(idx.clone())
                     };
 
                     alias.belongs.push(idx);
                     aliases.insert(v.clone(), alias);
-                },
+                }
                 TupleGet(x, idx) if aliases.contains_key(x) => {
                     let mut alias = aliases.get(x).unwrap().clone();
                     alias.belongs.push(Index::Int(*idx));
                     aliases.insert(v.clone(), alias);
-                },
-                _ => ()
+                }
+                _ => (),
             }
 
             analyze_aliases_impl(e2, consts, aliases);
-        },
-        e => e.map_ref(|e| analyze_aliases_impl(e, consts, aliases))
+        }
+        e => e.map_ref(|e| analyze_aliases_impl(e, consts, aliases)),
     }
 }
 
@@ -79,7 +98,13 @@ pub fn analyze_aliases(p: &Program, use_strict_aliasing: bool) -> AliasMap {
         if use_strict_aliasing {
             for x in args {
                 if p.tyenv.get(x).unwrap().is_array() {
-                    aliases.insert(x.clone(), Alias { top: x.clone(), belongs: vec![] });
+                    aliases.insert(
+                        x.clone(),
+                        Alias {
+                            top: x.clone(),
+                            belongs: vec![],
+                        },
+                    );
                 }
             }
         }
@@ -93,8 +118,7 @@ pub fn analyze_aliases(p: &Program, use_strict_aliasing: bool) -> AliasMap {
         }
         if let Some(alias) = aliases.get(x) {
             log::debug!("`{x}` = {:?}", alias);
-        }
-        else {
+        } else {
             log::debug!("failed to analyze `{x}` alias.");
         }
     }

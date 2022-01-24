@@ -52,6 +52,23 @@ impl Ty {
             _ => panic!(),
         }
     }
+
+    pub fn decay(self) -> Self {
+        match self {
+            Ty::Fun(ts, mut r) => {
+                *r = r.decay();
+                Ty::Fun(ts.into_iter().map(|t| t.decay()).collect(), r)
+            }
+            Ty::TuplePtr(ts) | Ty::Tuple(ts) => {
+                Ty::TuplePtr(ts.into_iter().map(|t| t.decay()).collect())
+            }
+            Ty::Array(mut t, _) | Ty::ArrayPtr(mut t) => {
+                *t = t.decay();
+                Ty::ArrayPtr(t)
+            }
+            t => t,
+        }
+    }
 }
 
 impl fmt::Display for Ty {

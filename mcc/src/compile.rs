@@ -6,7 +6,6 @@ use clap::Parser;
 
 use ariadne;
 use ast::{knormal, syntax};
-use cls::alias::analyze_aliases;
 
 #[derive(Debug, Parser)]
 pub struct Args {
@@ -121,11 +120,11 @@ fn optimize_closure(mut p: ast::closure::Program, option: &Args) -> ast::closure
     let mut prev = p.clone();
 
     p = cls::detect_doall(p);
-    let _ = analyze_aliases(&p, option.use_strict_aliasing);
     for i in 0..100 {
         log::info!("closure opt loop: {}", i + 1);
         p = cls::beta_reduction(p);
         p = cls::fold_const(p);
+        p = cls::eliminate_get(p, option.use_strict_aliasing);
 
         if p == prev {
             break;
