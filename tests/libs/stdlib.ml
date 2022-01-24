@@ -61,13 +61,13 @@ let rec print_char x =
   min_caml_print_byte x; ()
 in
 let rec read_float x =
-  let a = x = () in
+  x;
   let a = min_caml_read_float () in
   let b = a *. 1.0 in
   a
 in
 let rec read_int x =
-  let a = x = () in
+  x;
   let a = min_caml_read_int () in
   let b = a * 1 in
   a

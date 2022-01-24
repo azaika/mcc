@@ -105,7 +105,7 @@ fn conv_array_put(
     };
     if aliases.contains_key(&arr) {
         let mut a = aliases.get(&arr).unwrap().clone();
-        
+
         a.belongs.push(index);
 
         let t = tyenv.get(&arr).unwrap().clone().decay();
@@ -120,8 +120,7 @@ fn conv_array_put(
         v.map(|v| saved.insert(a, v));
 
         ArrayPut(arr, idx, x)
-    }
-    else {
+    } else {
         let t = tyenv.get(&arr).unwrap().clone().decay();
 
         // 型が一致するものはキャッシュを消去
@@ -228,7 +227,17 @@ fn conv(
                     saved,
                     unknown_saved,
                 ),
-                ArrayPut(arr, idx, x) => conv_array_put(arr, idx, x, Some(v.clone()), consts, tyenv, aliases, saved, unknown_saved),
+                ArrayPut(arr, idx, x) => conv_array_put(
+                    arr,
+                    idx,
+                    x,
+                    Some(v.clone()),
+                    consts,
+                    tyenv,
+                    aliases,
+                    saved,
+                    unknown_saved,
+                ),
                 _ => {
                     conv(
                         Box::new(e1.item.with_span(e1.loc)),
@@ -258,7 +267,17 @@ fn conv(
         ArrayGet(arr, idx) => {
             conv_array_get(arr, idx, None, consts, tyenv, aliases, saved, unknown_saved)
         }
-        ArrayPut(arr, idx, x) => conv_array_put(arr, idx, x, None, consts, tyenv, aliases, saved, unknown_saved),
+        ArrayPut(arr, idx, x) => conv_array_put(
+            arr,
+            idx,
+            x,
+            None,
+            consts,
+            tyenv,
+            aliases,
+            saved,
+            unknown_saved,
+        ),
         TupleGet(tup, idx) => conv_tuple_get(tup, idx, None, aliases, saved),
         Loop { vars, init, body } => {
             cleanse_cache(&body, consts, tyenv, aliases, saved, unknown_saved);

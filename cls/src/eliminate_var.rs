@@ -15,7 +15,7 @@ fn has_effect(e: &Expr) -> bool {
 }
 
 // 変換の呼び出し
-fn conv(mut e: Box<Expr>, used: &mut Set, tyenv: &mut TyMap) -> Box<Expr> {
+fn conv(mut e: Box<Expr>, globals: &Vec<Id>, used: &mut Set, tyenv: &mut TyMap) -> Box<Expr> {
     use ExprKind::*;
     e.item = match e.item {
         Var(x) => {
@@ -32,21 +32,21 @@ fn conv(mut e: Box<Expr>, used: &mut Set, tyenv: &mut TyMap) -> Box<Expr> {
             BinOp(op, x, y)
         }
         If(kind, x, y, e1, e2) => {
-            let e1 = conv(e1, used, tyenv);
-            let e2 = conv(e2, used, tyenv);
+            let e1 = conv(e1, globals, used, tyenv);
+            let e2 = conv(e2, globals, used, tyenv);
             used.insert(x.clone());
             used.insert(y.clone());
             If(kind, x, y, e1, e2)
         }
         Let(d, e1, e2) => {
-            let e2 = conv(e2, used, tyenv);
-            if !used.contains(&d) && !has_effect(&e1) {
+            let e2 = conv(e2, globals, used, tyenv);
+            if !used.contains(&d) && !has_effect(&e1) && !globals.contains(&d) {
                 log::debug!("eliminating variable `{}`.", d);
                 tyenv.remove(&d);
                 return e2;
             }
 
-            Let(d, conv(e1, used, tyenv), e2)
+            Let(d, conv(e1, globals, used, tyenv), e2)
         }
         Tuple(xs) => {
             for x in &xs {
@@ -87,7 +87,7 @@ fn conv(mut e: Box<Expr>, used: &mut Set, tyenv: &mut TyMap) -> Box<Expr> {
             TupleGet(x, idx)
         }
         Loop { vars, init, body } => {
-            let body = conv(body, used, tyenv);
+            let body = conv(body, globals, used, tyenv);
             for x in &init {
                 used.insert(x.clone());
             }
@@ -99,7 +99,7 @@ fn conv(mut e: Box<Expr>, used: &mut Set, tyenv: &mut TyMap) -> Box<Expr> {
             delta,
             body,
         } => {
-            let body = conv(body, used, tyenv);
+            let body = conv(body, globals, used, tyenv);
             used.insert(idx.clone());
             used.insert(range.0.clone());
             used.insert(range.1.clone());
@@ -139,14 +139,14 @@ pub fn eliminate_var(mut p: Program) -> Program {
     for Fundef { body, .. } in &mut p.fundefs {
         let mut buf = Box::new(ExprKind::dummy());
         std::mem::swap(body, &mut buf);
-        *body = conv(buf, &mut used, &mut p.tyenv);
+        *body = conv(buf, &p.globals, &mut used, &mut p.tyenv);
     }
-    p.main = conv(p.main, &mut used, &mut p.tyenv);
+    p.main = conv(p.main, &p.globals, &mut used, &mut p.tyenv);
 
     {
         let mut buf = Box::new(ExprKind::dummy());
         std::mem::swap(&mut p.global_init, &mut buf);
-        p.global_init = conv(buf, &mut used, &mut p.tyenv);
+        p.global_init = conv(buf, &p.globals, &mut used, &mut p.tyenv);
     }
 
     p
