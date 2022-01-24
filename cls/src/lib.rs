@@ -1,8 +1,9 @@
 mod beta;
+pub mod common;
 mod convert;
 mod detect_doall;
 mod fold_const;
-pub mod common;
+pub mod alias;
 
 pub use beta::beta_reduction;
 pub use convert::convert;

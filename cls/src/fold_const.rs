@@ -149,12 +149,7 @@ fn conv(mut e: Box<Expr>, tyenv: &mut TyMap, consts: &mut ConstMap) -> Box<Expr>
             let e2 = conv(e2, tyenv, consts);
             ExprKind::Let(d, e1, e2)
         }
-        ExprKind::Loop { vars, init, body } => ExprKind::Loop {
-            vars,
-            init,
-            body: conv(body, tyenv, consts),
-        },
-        _ => e.item,
+        e => e.map(|e| conv(e, tyenv, consts)),
     };
 
     e

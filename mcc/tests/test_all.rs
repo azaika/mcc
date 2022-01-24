@@ -14,6 +14,7 @@ fn dummy_arg(path: &str) -> Args {
         inline: 100,
         loop_opt: 200,
         optimize: true,
+        use_strict_aliasing: false,
         verbose: false,
         debug: false,
         lib: Some(vec!["../tests/libs/stdlib.ml".to_string()]),
@@ -26,6 +27,7 @@ fn dummy_arg_minrt(path: &str) -> Args {
         inline: 100,
         loop_opt: 200,
         optimize: true,
+        use_strict_aliasing: true,
         verbose: false,
         debug: false,
         lib: Some(vec![

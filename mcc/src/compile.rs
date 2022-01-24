@@ -6,6 +6,7 @@ use clap::Parser;
 
 use ariadne;
 use ast::{knormal, syntax};
+use cls::alias::analyze_aliases;
 
 #[derive(Debug, Parser)]
 pub struct Args {
@@ -13,6 +14,8 @@ pub struct Args {
     pub inline: usize,
     #[clap(long, default_value_t = 100)]
     pub loop_opt: usize,
+    #[clap(long)]
+    pub use_strict_aliasing: bool,
     #[clap(short, long)]
     pub optimize: bool,
     #[clap(short, long)]
@@ -114,10 +117,11 @@ fn optimize_knorm(mut e: knormal::Expr, tyenv: &mut knorm::TyMap, config: &Args)
     e
 }
 
-fn optimize_closure(mut p: ast::closure::Program) -> ast::closure::Program {
+fn optimize_closure(mut p: ast::closure::Program, option: &Args) -> ast::closure::Program {
     let mut prev = p.clone();
 
     p = cls::detect_doall(p);
+    let _ = analyze_aliases(&p, option.use_strict_aliasing);
     for i in 0..100 {
         log::info!("closure opt loop: {}", i + 1);
         p = cls::beta_reduction(p);
@@ -220,7 +224,7 @@ pub fn compile(args: Args) -> Result<()> {
     }
 
     let _opt_closure = if args.optimize {
-        let r = optimize_closure(closured);
+        let r = optimize_closure(closured, &args);
 
         if args.verbose {
             debug_output(

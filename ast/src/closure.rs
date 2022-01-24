@@ -77,21 +77,40 @@ pub type Expr = Spanned<ExprKind>;
 
 pub trait ExprMap {
     type Lifted;
-    fn map<F: FnMut(Box<Self::Lifted>) -> Box<Self::Lifted>>(self, f: F) -> Self where Self : Sized;
+    fn map<F: FnMut(Box<Self::Lifted>) -> Box<Self::Lifted>>(self, f: F) -> Self
+    where
+        Self: Sized;
     fn map_ref<F: FnMut(&Self::Lifted) -> ()>(&self, f: F) -> ();
 }
 
 impl ExprMap for ExprKind {
     type Lifted = Expr;
 
-    fn map<F: FnMut(Box<Self::Lifted>) -> Box<Self::Lifted>>(self, mut f: F) -> Self where Self : Sized {
+    fn map<F: FnMut(Box<Self::Lifted>) -> Box<Self::Lifted>>(self, mut f: F) -> Self
+    where
+        Self: Sized,
+    {
         use ExprKind::*;
         match self {
             If(kind, x, y, e1, e2) => If(kind, x, y, f(e1), f(e2)),
             Let(v, e1, e2) => Let(v, f(e1), f(e2)),
-            Loop { vars, init, body } => Loop { vars, init, body: f(body) },
-            DoAll { idx, range, delta, body } => DoAll { idx, range, delta, body: f(body) },
-            e => e
+            Loop { vars, init, body } => Loop {
+                vars,
+                init,
+                body: f(body),
+            },
+            DoAll {
+                idx,
+                range,
+                delta,
+                body,
+            } => DoAll {
+                idx,
+                range,
+                delta,
+                body: f(body),
+            },
+            e => e,
         }
     }
 
@@ -101,9 +120,9 @@ impl ExprMap for ExprKind {
             If(_, _, _, e1, e2) | Let(_, e1, e2) => {
                 f(e1);
                 f(e2);
-            },
+            }
             Loop { body, .. } | DoAll { body, .. } => f(body),
-            _ => ()
+            _ => (),
         }
     }
 }

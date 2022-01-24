@@ -159,12 +159,7 @@ fn is_impure(e: &Expr, effects: &mut Set) -> bool {
     }
 }
 
-fn conv(
-    mut e: Box<Expr>,
-    tyenv: &TyMap,
-    effects: &mut Set,
-    saved: &mut Map
-) -> Box<Expr> {
+fn conv(mut e: Box<Expr>, tyenv: &TyMap, effects: &mut Set, saved: &mut Map) -> Box<Expr> {
     use ExprKind::*;
     e.item = match e.item {
         If(kind, x, y, e1, e2) => If(
@@ -191,10 +186,12 @@ fn conv(
                         Tuple(xs) => {
                             let mut keys = vec![];
                             for (idx, x) in xs.iter().enumerate() {
-                                let k = ExprInVal(Box::new(ExprKind::TupleGet(d.name.clone(), idx).with_span((0, 0))));
+                                let k = ExprInVal(Box::new(
+                                    ExprKind::TupleGet(d.name.clone(), idx).with_span((0, 0)),
+                                ));
                                 saved.insert(k.clone(), x.clone());
                                 keys.push(k);
-                            };
+                            }
 
                             let key = ExprInVal(e1.clone());
                             saved.insert(key.clone(), d.name.clone());
@@ -206,7 +203,7 @@ fn conv(
                             }
 
                             r
-                        },
+                        }
                         _ => {
                             let key = ExprInVal(e1.clone());
                             saved.insert(key.clone(), d.name.clone());
@@ -215,8 +212,7 @@ fn conv(
                             r
                         }
                     }
-                }
-                else {
+                } else {
                     Let(d, e1, conv(e2, tyenv, effects, saved))
                 }
             }
@@ -232,9 +228,9 @@ fn conv(
             LetRec(Fundef { fvar, args, body }, e2)
         }
         Loop { vars, init, body } => Loop {
-                vars,
-                init,
-                body: conv(body, tyenv, effects, saved),
+            vars,
+            init,
+            body: conv(body, tyenv, effects, saved),
         },
         _ => e.item,
     };
@@ -245,10 +241,5 @@ fn conv(
 // common sub-expression elimination
 // assume `e` is alpha formed
 pub fn cse(e: Expr, tyenv: &TyMap) -> Expr {
-    *conv(
-        Box::new(e),
-        tyenv,
-        &mut Set::default(),
-        &mut Map::default(),
-    )
+    *conv(Box::new(e), tyenv, &mut Set::default(), &mut Map::default())
 }
