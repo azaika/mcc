@@ -85,6 +85,61 @@ fn conv_tuple_get(
     }
 }
 
+fn conv_array_put(
+    arr: Id,
+    idx: Id,
+    x: Id,
+    v: Option<Id>,
+    consts: &ConstMap,
+    tyenv: &TyMap,
+    aliases: &AliasMap,
+    saved: &mut Saved,
+    unknown_saved: &mut SavedUnknown,
+) -> ExprKind {
+    use ExprKind::*;
+
+    let index = if let Some(ConstKind::CInt(s)) = consts.get(&idx) {
+        alias::Index::Int(s.abs() as usize)
+    } else {
+        alias::Index::Var(idx.clone())
+    };
+    if aliases.contains_key(&arr) {
+        let mut a = aliases.get(&arr).unwrap().clone();
+        
+        a.belongs.push(index);
+
+        let t = tyenv.get(&arr).unwrap().clone().decay();
+
+        // エイリアス不明の変数で型が一致するものはキャッシュを消去
+        if let Some(arr_saved) = unknown_saved.get_mut(&t) {
+            arr_saved.clear();
+        }
+        // エイリアスが分かっている変数は共通部分がありうるもののみ消去
+        saved.retain(|a2, _| !may_overlap(&a, a2));
+
+        v.map(|v| saved.insert(a, v));
+
+        ArrayPut(arr, idx, x)
+    }
+    else {
+        let t = tyenv.get(&arr).unwrap().clone().decay();
+
+        // 型が一致するものはキャッシュを消去
+        if let Some(arr_saved) = unknown_saved.get_mut(&t) {
+            arr_saved.clear();
+        }
+        saved.retain(|_, arr| tyenv.get(arr).unwrap().clone().decay() != t);
+
+        v.map(|v| {
+            let mut m = util::Map::default();
+            m.insert((arr.clone(), index), v);
+            unknown_saved.entry(t).or_insert(m);
+        });
+
+        ArrayPut(arr, idx, x)
+    }
+}
+
 // ループに入る前に保存しているとマズそうなものを削除
 fn cleanse_cache(
     body: &Expr,
@@ -173,6 +228,7 @@ fn conv(
                     saved,
                     unknown_saved,
                 ),
+                ArrayPut(arr, idx, x) => conv_array_put(arr, idx, x, Some(v.clone()), consts, tyenv, aliases, saved, unknown_saved),
                 _ => {
                     conv(
                         Box::new(e1.item.with_span(e1.loc)),
@@ -202,37 +258,7 @@ fn conv(
         ArrayGet(arr, idx) => {
             conv_array_get(arr, idx, None, consts, tyenv, aliases, saved, unknown_saved)
         }
-        ArrayPut(arr, idx, x) if aliases.contains_key(&arr) => {
-            let mut a = aliases.get(&arr).unwrap().clone();
-            let index = if let Some(ConstKind::CInt(s)) = consts.get(&idx) {
-                alias::Index::Int(s.abs() as usize)
-            } else {
-                alias::Index::Var(idx.clone())
-            };
-            a.belongs.push(index);
-
-            let t = tyenv.get(&arr).unwrap().clone().decay();
-
-            // エイリアス不明の変数で型が一致するものはキャッシュを消去
-            if let Some(arr_saved) = unknown_saved.get_mut(&t) {
-                arr_saved.clear();
-            }
-            // エイリアスが分かっている変数は共通部分がありうるもののみ消去
-            saved.retain(|a2, _| !may_overlap(&a, a2));
-
-            ArrayPut(arr, idx, x)
-        }
-        ArrayPut(arr, idx, x) => {
-            let t = tyenv.get(&arr).unwrap().clone().decay();
-
-            // 型が一致するものはキャッシュを消去
-            if let Some(arr_saved) = unknown_saved.get_mut(&t) {
-                arr_saved.clear();
-            }
-            saved.retain(|_, arr| tyenv.get(arr).unwrap().clone().decay() != t);
-
-            ArrayPut(arr, idx, x)
-        }
+        ArrayPut(arr, idx, x) => conv_array_put(arr, idx, x, None, consts, tyenv, aliases, saved, unknown_saved),
         TupleGet(tup, idx) => conv_tuple_get(tup, idx, None, aliases, saved),
         Loop { vars, init, body } => {
             cleanse_cache(&body, consts, tyenv, aliases, saved, unknown_saved);
