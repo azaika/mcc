@@ -125,6 +125,7 @@ fn optimize_closure(mut p: ast::closure::Program, option: &Args) -> ast::closure
         p = cls::beta_reduction(p);
         p = cls::fold_const(p);
         p = cls::eliminate_get(p, option.use_strict_aliasing);
+        p = cls::eliminate_var(p);
 
         if p == prev {
             break;
