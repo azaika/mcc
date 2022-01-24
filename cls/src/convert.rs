@@ -186,7 +186,7 @@ fn gen_array_init(
     let one = gen_new_var(p, closure::Ty::Int);
     let end = gen_new_var(p, closure::Ty::Int);
     let idx = gen_new_var(p, closure::Ty::Int);
-    let tmp = gen_new_var(p, closure::Ty::Int);
+    let tmp = gen_new_var(p, closure::Ty::Unit);
 
     let cont = lift(Let(
         tmp,
