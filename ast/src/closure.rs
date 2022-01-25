@@ -71,6 +71,7 @@ pub enum ExprKind {
     MakeCls(Label, Vec<Id>), // (label, actual_fv)
     Assign(Label, Id),
     Load(Label),
+    Asm(String, Vec<Id>),
 }
 
 pub type Expr = Spanned<ExprKind>;
@@ -199,6 +200,11 @@ impl ExprKind {
             }
             Assign(x, y) => write!(f, "Assign {x}, {y}\n"),
             Load(x) => write!(f, "Load {x}\n"),
+            Asm(inst, args) => {
+                write!(f, "Asm \"{inst}\"")?;
+                util::format_vec(f, args, "(", ", ", ")")?;
+                write!(f, "\n")
+            }
         }
     }
 

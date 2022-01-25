@@ -44,7 +44,9 @@ fn has_free_impl(func: &mut Set, e: &knormal::Expr, known: &mut Set) -> bool {
 
             r || has_free_impl(func, &e2, known)
         }
-        Tuple(xs) | ExtApp(_, xs) => !xs.iter().all(|x| known.contains(x)),
+        Tuple(xs) | ExtApp(_, xs) | Asm(_, xs) | AsmE(_, xs) => {
+            !xs.iter().all(|x| known.contains(x))
+        }
         App(f, args) => !func.contains(f) || !args.iter().all(|x| known.contains(x)),
         ArrayPut(x, y, z) => !known.contains(x) || !known.contains(y) || !known.contains(z),
         Loop { vars, init, body } => {
@@ -106,7 +108,7 @@ fn collect_free(e: &closure::Expr, known: &mut Set, fv: &mut Set) {
             known.insert(d.clone());
             collect_free(e2, known, fv);
         }
-        Tuple(xs) | CallDir(_, xs) | MakeCls(_, xs) => xs.iter().for_each(|x| push(x)),
+        Tuple(xs) | CallDir(_, xs) | MakeCls(_, xs) | Asm(_, xs) => xs.iter().for_each(|x| push(x)),
         CallCls(x, ys) => {
             push(x);
             ys.iter().for_each(|x| push(x));
@@ -127,7 +129,6 @@ fn collect_free(e: &closure::Expr, known: &mut Set, fv: &mut Set) {
             push(x);
             push(y)
         }),
-        Const(_) | ExtArray(_) | Load(_) => { /* no vars */ }
         DoAll {
             idx, range, body, ..
         } => {
@@ -136,6 +137,7 @@ fn collect_free(e: &closure::Expr, known: &mut Set, fv: &mut Set) {
             known.insert(range.1.clone());
             collect_free(body, known, fv);
         }
+        Const(_) | ExtArray(_) | Load(_) => { /* no vars */ }
     }
 }
 
@@ -148,7 +150,9 @@ fn emerge(e: &knormal::Expr, name: &Id) -> bool {
         Let(_, e1, e2) | LetRec(knormal::Fundef { body: e1, .. }, e2) => {
             emerge(e1, name) || emerge(e2, name)
         }
-        Tuple(xs) | ExtApp(_, xs) | App(_, xs) => xs.iter().any(|x| x == name),
+        Tuple(xs) | ExtApp(_, xs) | App(_, xs) | Asm(_, xs) | AsmE(_, xs) => {
+            xs.iter().any(|x| x == name)
+        }
         ArrayPut(x, y, z) => x == name || y == name || z == name,
         Loop { init, body, .. } => init.iter().any(|x| x == name) || emerge(body, name),
         Continue(xs) => xs.iter().any(|(_, x)| x == name),
@@ -422,6 +426,9 @@ fn conv(
             })
         }
         knormal::ExprKind::Continue(ps) => lift(ExprKind::Continue(ps)),
+        knormal::ExprKind::Asm(inst, args) | knormal::ExprKind::AsmE(inst, args) => {
+            lift(ExprKind::Asm(inst, args))
+        }
     }
 }
 

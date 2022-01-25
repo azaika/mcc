@@ -99,7 +99,7 @@ fn hash_impl<H: std::hash::Hasher>(e: &Expr, state: &mut H, num_let: usize) {
             hash_impl(&body, state, num_let);
             hash_impl(&e2, state, num_let);
         }
-        Tuple(xs) => xs.hash(state),
+        Tuple(xs) | Asm(_, xs) => xs.hash(state),
         App(f, args) | ExtApp(f, args) => {
             f.hash(state);
             args.hash(state)
@@ -120,6 +120,7 @@ fn hash_impl<H: std::hash::Hasher>(e: &Expr, state: &mut H, num_let: usize) {
         Loop { .. } | Continue(_) => {
             // do nothing because loop is not target of CSE
         }
+        AsmE(_, _) => { /* do nothing */ }
     }
 }
 
@@ -154,7 +155,8 @@ fn is_impure(e: &Expr, effects: &mut Set) -> bool {
         | ExtArray(_)
         | ArrayPut(_, _, _)
         | ArrayGet(_, _)
-        | Loop { .. } => true,
+        | Loop { .. }
+        | AsmE { .. } => true,
         _ => false,
     }
 }

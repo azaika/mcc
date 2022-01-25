@@ -111,6 +111,8 @@ pub enum ExprKind {
         body: Box<Expr>,
     },
     Continue(Vec<(Id, Id)>), // only in Loop.body
+    Asm(String, Vec<Id>),
+    AsmE(String, Vec<Id>),
 }
 
 pub type Expr = Spanned<ExprKind>;
@@ -179,6 +181,8 @@ pub fn rename(mut e: Box<Expr>, env: &Map) -> Box<Expr> {
             Loop { vars, init, body }
         }
         Continue(xs) => Continue(xs.into_iter().map(|x| (map!(x.0), map!(x.1))).collect()),
+        Asm(inst, args) => Asm(inst, args.into_iter().map(|x| map!(x)).collect()),
+        AsmE(inst, args) => AsmE(inst, args.into_iter().map(|x| map!(x)).collect()),
         Const(_) | ExtArray(_) => e.item,
     };
 
@@ -285,6 +289,16 @@ impl ExprKind {
             Continue(xs) => {
                 write!(f, "Continue ")?;
                 util::format_vec(f, &xs.iter().map(|(_, x)| x).collect(), "[", ", ", "]")?;
+                write!(f, "\n")
+            }
+            Asm(inst, args) => {
+                write!(f, "Asm \"{inst}\"")?;
+                util::format_vec(f, args, "(", ", ", ")")?;
+                write!(f, "\n")
+            }
+            AsmE(inst, args) => {
+                write!(f, "AsmE \"{inst}\"")?;
+                util::format_vec(f, args, "(", ", ", ")")?;
                 write!(f, "\n")
             }
         }

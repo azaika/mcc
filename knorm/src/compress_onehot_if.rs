@@ -131,7 +131,9 @@ fn occur(e: &Expr, name: &Id) -> bool {
         BinOp(_, x, y) | CreateArray(x, y) | ArrayPut(_, x, y) => x == name || y == name,
         If(_, x, y, e1, e2) => x == name || y == name || occur(e1, name) || occur(e2, name),
         Let(_, e1, e2) | LetRec(Fundef { body: e1, .. }, e2) => occur(e1, name) || occur(e2, name),
-        Tuple(xs) | App(_, xs) | ExtApp(_, xs) => xs.iter().any(|x| x == name),
+        Tuple(xs) | App(_, xs) | ExtApp(_, xs) | Asm(_, xs) | AsmE(_, xs) => {
+            xs.iter().any(|x| x == name)
+        }
         Loop { init, body, .. } => init.iter().any(|x| x == name) || occur(body, name),
         Continue(ps) => ps.iter().any(|(_, x)| x == name),
         Const(_) | ExtArray(_) | TupleGet(_, _) => false,

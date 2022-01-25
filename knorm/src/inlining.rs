@@ -27,7 +27,7 @@ fn calc_info(e: &Expr, name: &Id) -> FuncInfo {
             let (is_rec, size) = merge(calc_info(e1, name), calc_info(e2, name));
             (is_rec, size + 1)
         }
-        Tuple(xs) => (xs.iter().any(|x| x == name), 1),
+        Tuple(xs) | Asm(_, xs) | AsmE(_, xs) => (xs.iter().any(|x| x == name), 1),
         App(f, args) | ExtApp(f, args) => (f == name || args.iter().any(|x| x == name), 1),
         ArrayPut(x, y, z) => ([x, y, z].iter().any(|x| *x == name), 1),
         Loop { init, body, .. } => {

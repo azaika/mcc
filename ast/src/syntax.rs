@@ -100,6 +100,8 @@ pub enum ExprKind {
     Array(Box<Expr>, Box<Expr>),
     Get(Box<Expr>, Box<Expr>),
     Put(Box<Expr>, Box<Expr>, Box<Expr>),
+    Asm(String, Vec<Id>),
+    AsmE(String, Vec<Id>),
 }
 
 pub type Expr = Spanned<ExprKind>;
@@ -207,6 +209,16 @@ impl ExprKind {
                 idx.item.format_indented(f, level + 2)?;
                 write!(f, "{}content =\n", indent(level + 1))?;
                 e.item.format_indented(f, level + 2)
+            }
+            Asm(inst, args) => {
+                write!(f, "Asm: \"{inst}\"")?;
+                util::format_vec(f, args, "(", ", ", ")")?;
+                write!(f, "\n")
+            }
+            AsmE(inst, args) => {
+                write!(f, "AsmE: \"{inst}\"\n")?;
+                util::format_vec(f, args, "(", ", ", ")")?;
+                write!(f, "\n")
             }
         }
     }

@@ -272,6 +272,17 @@ fn infer_impl(e: &Expr, env: &mut Map, extenv: &mut Map) -> Result<Ty, TypeError
             unify(&Ty::Int, &infer_impl(e2, env, extenv)?).map_err(with(e2.loc))?;
             Ok(Ty::Unit)
         }
+        ExprKind::Asm(_, args) | ExprKind::AsmE(_, args) => {
+            for v in args {
+                if !env.contains_key(v) && !extenv.contains_key(v) {
+                    info!("free variable `{v}` assumed as external.");
+                    let t = Ty::new_var();
+                    extenv.insert(v.clone(), t.clone());
+                }
+            }
+
+            Ok(Ty::new_var())
+        }
     }
 }
 

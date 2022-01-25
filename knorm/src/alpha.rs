@@ -112,6 +112,8 @@ pub fn conv(mut e: Box<Expr>, env: &mut Map) -> Box<Expr> {
             Loop { vars, init, body }
         }
         Continue(xs) => Continue(xs.into_iter().map(|(x, y)| (map!(x), map!(y))).collect()),
+        Asm(inst, args) => Asm(inst, args.into_iter().map(|x| map!(x)).collect()),
+        AsmE(inst, args) => AsmE(inst, args.into_iter().map(|x| map!(x)).collect()),
         Const(_) | ExtArray(_) => e.item,
     };
 

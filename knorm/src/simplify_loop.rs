@@ -14,7 +14,9 @@ fn emerge(e: &Expr, vars: &util::Set<Id>) -> bool {
         Let(_, e1, e2) | LetRec(Fundef { body: e1, .. }, e2) => {
             emerge(e1, vars) || emerge(e2, vars)
         }
-        Tuple(xs) | ExtApp(_, xs) | App(_, xs) => xs.iter().any(|x| vars.contains(x)),
+        Tuple(xs) | ExtApp(_, xs) | App(_, xs) | Asm(_, xs) | AsmE(_, xs) => {
+            xs.iter().any(|x| vars.contains(x))
+        }
         ArrayPut(x, y, z) => vars.contains(x) || vars.contains(y) || vars.contains(z),
         Loop { init, body, .. } => init.iter().any(|x| vars.contains(x)) || emerge(body, vars),
         Continue(xs) => xs.iter().any(|(_, x)| vars.contains(x)),

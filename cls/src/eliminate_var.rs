@@ -127,6 +127,12 @@ fn conv(mut e: Box<Expr>, globals: &Vec<Id>, used: &mut Set, tyenv: &mut TyMap) 
             used.insert(x.clone());
             Assign(label, x)
         }
+        Asm(inst, args) => {
+            for x in &args {
+                used.insert(x.clone());
+            }
+            Asm(inst, args)
+        }
         Const(_) | Load(_) | ExtArray(_) => e.item,
     };
 

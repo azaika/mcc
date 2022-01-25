@@ -48,8 +48,7 @@ fn conv(mut e: Box<Expr>, globals: &mut Vec<Id>, env: &mut Map, tyenv: &mut TyMa
                             let i = globals.iter().position(|y| y == &d).unwrap();
                             globals.remove(i);
                             beta_label(e2, &Label(d.clone()), &Label(x.clone()))
-                        }
-                        else {
+                        } else {
                             e2
                         };
 

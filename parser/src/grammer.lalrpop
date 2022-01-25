@@ -42,6 +42,8 @@ extern {
         "." => Token::Dot,
         "<-" => Token::LessMinus,
         ";" => Token::SemiColon,
+        Asm => Token::Asm(<String>),
+        AsmE => Token::AsmE(<String>),
         Ident => Token::Ident(<String>)
     }
 }
@@ -50,6 +52,7 @@ extern {
 // : atom
 // : array get
 // : function application (left assoc)
+// ; inline assembly
 // : - -. (prefix)
 // : * / *. /. (left assoc)
 // : + - +. - (left assoc)
@@ -146,6 +149,8 @@ SubExpr: Box<Expr> = {
     <l:@L> ArrayCreate <e1:SimpleExpr> <e2:SubExpr> <r:@R> => Box::new(Spanned::new(ExprKind::Array(e1, e2), (l, r))),
     // App
     <l:@L> <e:SimpleExpr> <args:ActualArgs> <r:@R> => Box::new(Spanned::new(ExprKind::App(e, args), (l, r))),
+    <l:@L> <inst:Asm> <args:Ident*> <r:@R> => Box::new(Spanned::new(ExprKind::Asm(inst, args), (l, r))),
+    <l:@L> <inst:AsmE> <args:Ident*> <r:@R> => Box::new(Spanned::new(ExprKind::AsmE(inst, args), (l, r))),
 
     // unary - -. not
     #[precedence(level="2")]

@@ -8,6 +8,7 @@ use ty::syntax::Ty as SyntaxTy;
 use util::Id;
 use util::Map as FnvMap;
 use util::Spanned;
+use util::ToSpanned;
 
 type Map = FnvMap<Id, Ty>;
 type SyntaxMap = FnvMap<Id, SyntaxTy>;
@@ -188,7 +189,25 @@ fn conv(
 
             match l {
                 syntax::LetKind::Let(decl, e1, e2) => {
-                    let (e1, _) = conv(e1, env, extenv)?;
+                    let e1 = match &e1.item {
+                        syntax::ExprKind::Asm(..) => {
+                            let (inst, args) = match e1.item {
+                                syntax::ExprKind::Asm(inst, args) => (inst, args),
+                                _ => unreachable!(),
+                            };
+
+                            Box::new(ExprKind::Asm(inst, args).with_span(e1.loc))
+                        }
+                        syntax::ExprKind::AsmE(..) => {
+                            let (inst, args) = match e1.item {
+                                syntax::ExprKind::AsmE(inst, args) => (inst, args),
+                                _ => unreachable!(),
+                            };
+
+                            Box::new(ExprKind::AsmE(inst, args).with_span(e1.loc))
+                        }
+                        _ => conv(e1, env, extenv)?.0,
+                    };
 
                     let s = env.insert(decl.name.clone(), decl.t.clone().into());
                     let (e2, t2) = conv(e2, env, extenv)?;
@@ -370,6 +389,11 @@ fn conv(
                     insert_let(*e3, t3, e.loc, |v| (ExprKind::ArrayPut(arr, idx, v), t))
                 })
             })
+        }
+        syntax::ExprKind::Asm(..) | syntax::ExprKind::AsmE(..) => {
+            return Err(anyhow::Error::msg(format!(
+                "_asm or _asmE cannot emerge freely"
+            )))
         }
     };
 

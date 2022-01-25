@@ -74,6 +74,8 @@ lexer! {
     "in" => Tok(Token::In),
     "rec" => Tok(Token::Rec),
     "," => Tok(Token::Comma),
+    "_asm\"[^\"+]\"" => Tok(Token::Asm(text[5..(text.len() - 1)].to_string())),
+    "_asmE\"[^\"+]\"" => Tok(Token::AsmE(text[6..(text.len() - 1)].to_string())),
     "_" => Tok(Token::Ident(id::gen_tmp_var())),
     r"Array\.((create)|(make))" => Tok(Token::ArrayMake),
     r"\." => Tok(Token::Dot),

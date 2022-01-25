@@ -35,6 +35,8 @@ pub enum Token {
     SemiColon,
     LPar,
     RPar,
+    Asm(String),
+    AsmE(String),
 }
 
 impl fmt::Display for Token {
@@ -73,6 +75,8 @@ impl fmt::Display for Token {
             SemiColon => write!(f, ";"),
             LPar => write!(f, "("),
             RPar => write!(f, ")"),
+            Asm(inst) => write!(f, "Asm\"{inst}\""),
+            AsmE(inst) => write!(f, "AsmE\"{inst}\""),
         }
     }
 }

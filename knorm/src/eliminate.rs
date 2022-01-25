@@ -11,7 +11,7 @@ fn has_effect(e: &Expr) -> bool {
         Let(_, e1, e2) => has_effect(&e1) || has_effect(&e2),
         LetRec(_, e2) => has_effect(&e2),
         Loop { body, .. } => has_effect(&body),
-        App(_, _) | ExtApp(_, _) | ArrayPut(_, _, _) => true,
+        App(..) | ExtApp(..) | ArrayPut(..) | AsmE(..) => true,
         _ => false,
     }
 }
@@ -116,6 +116,18 @@ fn conv(mut e: Box<Expr>, used: &mut Set, tyenv: &mut TyMap) -> Box<Expr> {
                 used.insert(x.clone());
             }
             Continue(xs)
+        }
+        Asm(inst, args) => {
+            for x in &args {
+                used.insert(x.clone());
+            }
+            Asm(inst, args)
+        }
+        AsmE(inst, args) => {
+            for x in &args {
+                used.insert(x.clone());
+            }
+            AsmE(inst, args)
         }
         Const(_) => e.item,
     };
