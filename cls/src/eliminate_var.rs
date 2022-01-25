@@ -9,7 +9,7 @@ fn has_effect(e: &Expr) -> bool {
     match &e.item {
         If(_, _, _, e1, e2) | Let(_, e1, e2) => has_effect(&e1) || has_effect(&e2),
         Loop { body, .. } | DoAll { body, .. } => has_effect(&body),
-        CallDir(..) | CallCls(..) | ArrayPut(..) | Assign(..) => true,
+        CallDir(..) | CallCls(..) | ArrayPut(..) | Assign(..) | Asm(..) => true,
         _ => false,
     }
 }

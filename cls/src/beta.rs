@@ -96,7 +96,8 @@ fn conv(mut e: Box<Expr>, globals: &mut Vec<Id>, env: &mut Map, tyenv: &mut TyMa
         Continue(xs) => Continue(xs.into_iter().map(|(x, y)| (map!(x), map!(y))).collect()),
         MakeCls(label, fvs) => MakeCls(label, fvs.into_iter().map(|x| map!(x)).collect()),
         Assign(label, x) => Assign(label, x),
-        _ => e.item,
+        Asm(inst, args) => Asm(inst, args.into_iter().map(|x| map!(x)).collect()),
+        Const(_) | ExtArray(_) | Load(_) => e.item,
     };
 
     e
