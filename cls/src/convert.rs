@@ -191,6 +191,8 @@ fn gen_array_init(
     let end = gen_new_var(p, closure::Ty::Int);
     let idx = gen_new_var(p, closure::Ty::Int);
     let tmp = gen_new_var(p, closure::Ty::Unit);
+    let tmp2 = gen_new_var(p, closure::Ty::Unit);
+    let next = gen_new_var(p, closure::Ty::Int);
 
     let cont = lift(Let(
         tmp,
@@ -198,7 +200,15 @@ fn gen_array_init(
             idx: idx.clone(),
             range: (zero.clone(), end.clone()),
             delta: 1,
-            body: lift(ArrayPut(arr, idx.clone(), init)),
+            body: lift(Let(
+                tmp2,
+                lift(ArrayPut(arr, idx.clone(), init)),
+                lift(Let(
+                    next.clone(),
+                    lift(BinOp(closure::BinOpKind::Add, idx.clone(), one.clone())),
+                    lift(Continue(vec![(idx.clone(), next.clone())]))
+                ))
+            )),
         }),
         cont,
     ));

@@ -282,7 +282,7 @@ fn conv(
         Loop { vars, init, body } => {
             cleanse_cache(&body, consts, tyenv, aliases, saved, unknown_saved);
 
-            let body = conv(body, consts, tyenv, aliases, saved, unknown_saved);
+            let body = conv(body, consts, tyenv, aliases, &mut saved.clone(), &mut unknown_saved.clone());
             Loop { vars, init, body }
         }
         DoAll {
@@ -293,7 +293,7 @@ fn conv(
         } => {
             cleanse_cache(&body, consts, tyenv, aliases, saved, unknown_saved);
 
-            let body = conv(body, consts, tyenv, aliases, saved, unknown_saved);
+            let body = conv(body, consts, tyenv, aliases, &mut saved.clone(), &mut unknown_saved.clone());
             DoAll {
                 idx,
                 range,
