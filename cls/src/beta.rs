@@ -1,10 +1,21 @@
-use util::Id;
+use util::{Id, ToSpanned};
 
 type Map = util::Map<Id, Id>;
 
 use ast::closure::*;
 
-fn conv(mut e: Box<Expr>, globals: &util::Set<Id>, env: &mut Map, tyenv: &mut TyMap) -> Box<Expr> {
+fn beta_label(mut e: Box<Expr>, from: &Label, to: &Label) -> Box<Expr> {
+    use ExprKind::*;
+    e.item = match e.item {
+        Assign(l, _) if &l == from => Const(ConstKind::CUnit),
+        Load(l) if &l == from => Load(to.clone()),
+        e => e.map(|e| beta_label(e, from, to)),
+    };
+
+    e
+}
+
+fn conv(mut e: Box<Expr>, globals: &mut Vec<Id>, env: &mut Map, tyenv: &mut TyMap) -> Box<Expr> {
     macro_rules! map {
         ($name: expr) => {
             if let Some(x) = env.get(&$name) {
@@ -28,11 +39,27 @@ fn conv(mut e: Box<Expr>, globals: &util::Set<Id>, env: &mut Map, tyenv: &mut Ty
         Let(d, e1, e2) => {
             let e1 = conv(e1, globals, env, tyenv);
             match e1.item {
-                Var(x) if !globals.contains(&x) => {
-                    log::debug!("beta-reducing `{}` to `{}`", d, x);
-                    tyenv.remove(&d);
-                    env.insert(d.clone(), x);
-                    return conv(e2, globals, env, tyenv);
+                Var(x) => {
+                    let is_global = globals.contains(&d);
+                    if !is_global || (is_global && globals.contains(&x)) {
+                        log::debug!("beta-reducing `{}` to `{}`", d, x);
+
+                        let e2 = if is_global {
+                            let i = globals.iter().position(|y| y == &d).unwrap();
+                            globals.remove(i);
+                            beta_label(e2, &Label(d.clone()), &Label(x.clone()))
+                        }
+                        else {
+                            e2
+                        };
+
+                        tyenv.remove(&d);
+                        env.insert(d.clone(), x);
+                        return conv(e2, globals, env, tyenv);
+                    } else {
+                        let e2 = conv(e2, globals, env, tyenv);
+                        Let(d, Box::new(Var(x).with_span(e1.loc)), e2)
+                    }
                 }
                 _ => {
                     let e2 = conv(e2, globals, env, tyenv);
@@ -78,20 +105,19 @@ fn conv(mut e: Box<Expr>, globals: &util::Set<Id>, env: &mut Map, tyenv: &mut Ty
 
 // β 簡約を行う
 pub fn beta_reduction(mut p: Program) -> Program {
-    let globals = p.globals.iter().cloned().collect();
     {
         let mut buf = Box::new(ExprKind::dummy());
         std::mem::swap(&mut p.global_init, &mut buf);
-        p.global_init = conv(buf, &globals, &mut Map::default(), &mut p.tyenv);
+        p.global_init = conv(buf, &mut p.globals, &mut Map::default(), &mut p.tyenv);
     }
 
     for Fundef { body, .. } in &mut p.fundefs {
         let mut buf = Box::new(ExprKind::dummy());
         std::mem::swap(body, &mut buf);
-        *body = conv(buf, &globals, &mut Map::default(), &mut p.tyenv);
+        *body = conv(buf, &mut p.globals, &mut Map::default(), &mut p.tyenv);
     }
 
-    p.main = conv(p.main, &globals, &mut Map::default(), &mut p.tyenv);
+    p.main = conv(p.main, &mut p.globals, &mut Map::default(), &mut p.tyenv);
 
     p
 }
