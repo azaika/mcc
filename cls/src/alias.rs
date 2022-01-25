@@ -24,12 +24,13 @@ pub struct Alias {
     pub belongs: Vec<Index>,
 }
 
-pub fn may_overlap(a1: &Alias, a2: &Alias) -> bool {
-    if (a1.top != a2.top) || (a1.belongs.len() != a2.belongs.len()) {
+// エイリアス `written` への書き込みが `alias` のキャッシュを無効にしうるか
+pub fn may_overlap(written: &Alias, alias: &Alias) -> bool {
+    if (written.top != alias.top) || (written.belongs.len() > alias.belongs.len()) {
         return false;
     }
 
-    for (b1, b2) in a1.belongs.iter().zip(&a2.belongs) {
+    for (b1, b2) in written.belongs.iter().zip(&alias.belongs) {
         use Index::Int;
         match (b1, b2) {
             (Int(i), Int(j)) if i != j => return false,
