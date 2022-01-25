@@ -1,42 +1,42 @@
 let rec sin x =
   let a = x *. 1.0 in
-  let b = min_caml_sin x in
+  let b = _asm"fsin" x in
   let c = b *. 1.0 in
   b
 in
 let rec cos x =
   let a = x *. 1.0 in
-  let b = min_caml_cos x in
+  let b = _asm"fcos" x in
   let c = b *. 1.0 in
   b
 in
 let rec sqrt x =
   let a = x *. 1.0 in
-  let b = min_caml_sqrt x in
+  let b = _asm"fsqrt" x in
   let c = b *. 1.0 in
   b
 in
 let rec fabs x =
   let a = x *. 1.0 in
-  let b = min_caml_fabs x in
+  let b = _asm"fabs" x in
   let c = b *. 1.0 in
   b
 in
 let rec atan x =
   let a = x *. 1.0 in
-  let b = min_caml_atan x in
+  let b = _asm"fatan" x in
   let c = b *. 1.0 in
   b
 in
 let rec int_of_float x =
   let a = x *. 1.0 in
-  let b = min_caml_int_of_float x in
+  let b = _asm"ftoi" x in
   let c = b * 1 in
   b
 in
 let rec float_of_int x =
   let a = x * 1 in
-  let b = min_caml_float_of_int x in
+  let b = _asm"itof" x in
   let c = b *. 1.0 in
   b
 in
@@ -44,13 +44,14 @@ let truncate = int_of_float
 in
 let rec floor x =
   let a = x *. 1.0 in
-  let b = min_caml_floor x in
+  let b = _asm"ffloor" x in
   let c = b *. 1.0 in
   b
 in
 let rec print_newline x =
-  let a = x = () in
-  min_caml_print_newline (); ()
+  x;
+  let x = 10 in (* '\n' = 10 *)
+  _asmE"out" x; ()
 in
 let rec print_int x =
   let a = x * 1 in
@@ -58,17 +59,17 @@ let rec print_int x =
 in
 let rec print_char x =
   let a = x * 1 in
-  min_caml_print_byte x; ()
+  _asmE"out" x; ()
 in
 let rec read_float x =
   x;
-  let a = min_caml_read_float () in
+  let a = _asmE"in" in
   let b = a *. 1.0 in
   a
 in
 let rec read_int x =
   x;
-  let a = min_caml_read_int () in
+  let a = _asmE"in" in
   let b = a * 1 in
   a
 in
