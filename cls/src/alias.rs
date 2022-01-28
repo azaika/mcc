@@ -82,7 +82,7 @@ fn analyze_loop(
 ) {
     assert!(vars.len() == init.len());
 
-    let mut vars_aliases = vec![None; vars.len()];
+    let mut vars_aliases: Vec<Option<Set<Alias>>> = vec![None; vars.len()];
     for (map, i) in vars_aliases.iter_mut().zip(init) {
         // 初期化変数がアドレス確定なら追跡
         if let Some(a) = aliases.get(i).clone() {
@@ -91,25 +91,39 @@ fn analyze_loop(
         }
     }
 
+    for (var, a) in vars.iter().zip(&vars_aliases) {
+        if let Some(a) = a {
+            aliases.insert(var.clone(), a.iter().cloned().collect());
+        }
+    }
+
     let mut old = vars_aliases.clone();
     // 適当な回数で止める
     for _ in 0..10 {
         iterate_loop(body, consts, aliases, &mut vars_aliases);
 
+        for (v, a) in vars.iter().zip(&vars_aliases) {
+            if let Some(a) = a {
+                aliases.insert(v.clone(), a.iter().cloned().collect());
+            }
+            else {
+                aliases.remove(v);
+            }
+        }
+
         if old == vars_aliases {
             // ループ変数が取りうる変数の範囲を定める
-            for (v, a) in vars.iter().zip(vars_aliases) {
-                if let Some(a) = a {
-                    aliases.insert(v.clone(), a.into_iter().collect());
-                }
-            }
             return;
         }
 
         old = vars_aliases.clone();
     }
 
-    // 一定回数繰り返しても安定しない場合は解析失敗。何もしない
+    // 一定回数繰り返しても安定しない場合は解析失敗
+    // aliases をもとに戻す
+    for v in vars {
+        aliases.remove(v);
+    }
 }
 
 // alias: independent であるか、そうではないが CreateArray で作られているもの

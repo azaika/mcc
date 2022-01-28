@@ -567,8 +567,6 @@ pub fn eliminate_get(mut p: Program, use_strict_aliasing: bool) -> Program {
     let (independents, aliases) = crate::alias::analyze_aliases(&p, use_strict_aliasing);
     let infected_globals_byfunc = collect_global_invalidation(&p, &independents);
 
-    println!("{:#?}", infected_globals_byfunc);
-
     let params = Parameters {
         tyenv: &p.tyenv,
         consts,
