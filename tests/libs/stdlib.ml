@@ -74,13 +74,16 @@ let rec print_byte x = (* assume `x < 256` *)
     x
   in
   (* x < 100 *)
-  let (d, r) = rem x 10 0 in
-  if d = 0 then
-    print_char (r + 48)
-  else (
-    print_char (d + 48);
-    print_char (r + 48)
-  )
+  if x < 10 then
+    print_char (x + 48)
+  else
+    let (d, r) = rem x 10 0 in
+    if d = 0 then
+      print_char (r + 48)
+    else (
+      print_char (d + 48);
+      print_char (r + 48)
+    )
 in
 let rec print_int_final a index emerged =
   if index >= 0 then (
