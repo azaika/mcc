@@ -46,10 +46,33 @@ impl Ty {
         }
     }
 
+    pub fn is_tuple(&self) -> bool {
+        match self {
+            Self::TuplePtr(_) | Self::Tuple(_) => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_pointer(&self) -> bool {
+        match self {
+            Self::TuplePtr(_) | Self::ArrayPtr(_) => true,
+            _ => false,
+        }
+    }
+
     pub fn elem_t(&self) -> &Self {
         match self {
             Self::Array(t, _) | Self::ArrayPtr(t) => t,
             _ => panic!(),
+        }
+    }
+
+    pub fn has_func(&self) -> bool {
+        match self {
+            Ty::Fun(..) => true,
+            Ty::TuplePtr(ts) | Ty::Tuple(ts) => ts.iter().any(|t| t.has_func()),
+            Ty::Array(t, _) | Ty::ArrayPtr(t) => t.has_func(),
+            _ => false
         }
     }
 
