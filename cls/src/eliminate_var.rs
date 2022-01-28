@@ -67,9 +67,12 @@ fn conv(mut e: Box<Expr>, globals: &Vec<Id>, used: &mut Set, tyenv: &mut TyMap) 
             }
             CallDir(label, args)
         }
-        AllocArray(x, y) => {
+        AllocArray(x, y, z) => {
             used.insert(x.clone());
-            AllocArray(x, y)
+            if let Some(z) = &z {
+                used.insert(z.clone());
+            }
+            AllocArray(x, y, z)
         }
         ArrayGet(x, y) => {
             used.insert(x.clone());

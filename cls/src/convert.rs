@@ -91,8 +91,8 @@ fn collect_free(e: &closure::Expr, known: &mut Set, fv: &mut Set) {
         }
     };
     match &e.item {
-        Var(x) | UnOp(_, x) | Assign(_, x) | TupleGet(x, _) | AllocArray(x, _) => push(x),
-        BinOp(_, x, y) | ArrayGet(x, y) => {
+        Var(x) | UnOp(_, x) | Assign(_, x) | TupleGet(x, _) | AllocArray(x, _, None) => push(x),
+        BinOp(_, x, y) | ArrayGet(x, y) | AllocArray(x, _, Some(y)) => {
             push(x);
             push(y);
         }
@@ -173,58 +173,6 @@ fn gen_new_var(p: &mut closure::Program, t: closure::Ty) -> Id {
     x
 }
 
-fn gen_array_init(
-    p: &mut closure::Program,
-    arr: Id,
-    span: util::Span,
-    num: Id,
-    init: Id,
-    cont: Box<closure::Expr>,
-) -> Box<closure::Expr> {
-    use closure::ExprKind;
-    use ExprKind::*;
-
-    let lift = |expr: ExprKind| Box::new(expr.with_span(span));
-
-    let zero = gen_new_var(p, closure::Ty::Int);
-    let one = gen_new_var(p, closure::Ty::Int);
-    let end = gen_new_var(p, closure::Ty::Int);
-    let idx = gen_new_var(p, closure::Ty::Int);
-    let tmp = gen_new_var(p, closure::Ty::Unit);
-    let tmp2 = gen_new_var(p, closure::Ty::Unit);
-    let next = gen_new_var(p, closure::Ty::Int);
-
-    let cont = lift(Let(
-        tmp,
-        lift(DoAll {
-            idx: idx.clone(),
-            range: (zero.clone(), end.clone()),
-            delta: 1,
-            body: lift(Let(
-                tmp2,
-                lift(ArrayPut(arr, idx.clone(), init)),
-                lift(Let(
-                    next.clone(),
-                    lift(BinOp(closure::BinOpKind::Add, idx.clone(), one.clone())),
-                    lift(Continue(vec![(idx.clone(), next.clone())]))
-                ))
-            )),
-        }),
-        cont,
-    ));
-    let cont = lift(Let(
-        end,
-        lift(BinOp(closure::BinOpKind::Sub, num, one.clone())),
-        cont,
-    ));
-
-    lift(Let(
-        zero,
-        lift(Const(0.into())),
-        lift(Let(one, lift(Const(1.into())), cont)),
-    ))
-}
-
 fn insert_global<F: FnOnce(&mut closure::Program, Box<closure::Expr>) -> Box<closure::Expr>>(
     p: &mut closure::Program,
     name: Id,
@@ -270,27 +218,22 @@ fn conv(
                 ty::knormal::Ty::Array(t) => (**t).clone().into(),
                 _ => panic!(),
             };
-            let e1 = Box::new(ExprKind::AllocArray(num.clone(), t).with_span(e1.loc));
-            p.tyenv.insert(d.name.clone(), d.t.clone().into());
-
+            
             let is_dummy = zeros.contains(&num);
+            let init = if is_dummy { None } else { Some(init) };
+            let e1 = Box::new(ExprKind::AllocArray(num.clone(), t, init).with_span(e1.loc));
+            p.tyenv.insert(d.name.clone(), d.t.clone().into());
 
             if global.contains(&d.name) {
                 // global variable
                 let name = d.name.clone();
                 let e2 = conv(e2, tyenv, known, zeros, global, p);
                 insert_global(p, d.name, |p, cont| {
-                    let e2 = if is_dummy {
-                        // dummy array は初期化しない
-                        cont
-                    } else {
-                        gen_array_init(p, name.clone(), e.loc, num, init, cont)
-                    };
                     let tmp = gen_new_var(p, closure::Ty::Unit);
                     let e2 = lift(ExprKind::Let(
                         tmp,
                         lift(ExprKind::Assign(closure::Label(name.clone()), name.clone())),
-                        e2,
+                        cont,
                     ));
 
                     lift(ExprKind::Let(name, e1, e2))
@@ -300,12 +243,6 @@ fn conv(
             } else {
                 // non-global variable
                 let e2 = conv(e2, tyenv, known, zeros, global, p);
-                let e2 = if is_dummy {
-                    // dummy array は初期化しない
-                    e2
-                } else {
-                    gen_array_init(p, d.name.clone(), e.loc, num, init, e2)
-                };
                 lift(ExprKind::Let(d.name, e1, e2))
             }
         }
@@ -410,15 +347,10 @@ fn conv(
         knormal::ExprKind::CreateArray(num, init) => {
             let t: closure::Ty = tyenv.get(&init).unwrap().clone().into();
 
-            let arr = gen_new_var(p, closure::Ty::ArrayPtr(Box::new(t.clone())));
+            let is_dummy = zeros.contains(&num);
+            let init = if is_dummy { None } else { Some(init) };
 
-            let e1 = lift(ExprKind::Var(arr.clone()));
-            if zeros.contains(&num) {
-                e1
-            } else {
-                let e1 = gen_array_init(p, arr.clone(), e.loc, num.clone(), init, e1);
-                lift(ExprKind::Let(arr, lift(ExprKind::AllocArray(num, t)), e1))
-            }
+            lift(ExprKind::AllocArray(num, t, init))
         }
         knormal::ExprKind::ExtArray(x) => lift(ExprKind::ExtArray(closure::Label(x))),
         knormal::ExprKind::ArrayGet(x, y) => lift(ExprKind::ArrayGet(x, y)),

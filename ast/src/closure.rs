@@ -51,7 +51,7 @@ pub enum ExprKind {
     Tuple(Vec<Id>),
     CallDir(Label, Vec<Id>),
     CallCls(Id, Vec<Id>),
-    AllocArray(Id, Ty),
+    AllocArray(Id, Ty, Option<Id>),
     ExtArray(Label),
     ArrayGet(Id, Id),
     ArrayPut(Id, Id, Id),
@@ -167,7 +167,7 @@ impl ExprKind {
                 util::format_vec(f, args, "(", ", ", ")")?;
                 write!(f, "\n")
             }
-            AllocArray(num, t) => write!(f, "AllocArray<{t}>({num})\n"),
+            AllocArray(num, t, init) => write!(f, "AllocArray<{t}>({num}, {:?})\n", init),
             ArrayGet(arr, idx) => write!(f, "ArrayGet {arr}, {idx}\n"),
             ArrayPut(arr, idx, x) => write!(f, "ArrayPut {arr}, {idx}, {x}\n"),
             TupleGet(arr, idx) => write!(f, "TupleGet {arr}.({idx})\n"),

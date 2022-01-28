@@ -69,7 +69,7 @@ fn conv(mut e: Box<Expr>, globals: &mut Vec<Id>, env: &mut Map, tyenv: &mut TyMa
         Tuple(xs) => Tuple(xs.into_iter().map(|x| map!(x)).collect()),
         CallCls(f, args) => CallCls(map!(f), args.into_iter().map(|x| map!(x)).collect()),
         CallDir(label, args) => CallDir(label, args.into_iter().map(|x| map!(x)).collect()),
-        AllocArray(num, t) => AllocArray(map!(num), t),
+        AllocArray(num, t, init) => AllocArray(map!(num), t, init.map(|x| map!(x))),
         ArrayGet(x, y) => ArrayGet(map!(x), map!(y)),
         ArrayPut(x, y, z) => ArrayPut(map!(x), map!(y), map!(z)),
         TupleGet(x, idx) => TupleGet(map!(x), idx),

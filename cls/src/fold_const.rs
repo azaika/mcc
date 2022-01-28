@@ -20,7 +20,7 @@ fn get_float(consts: &ConstMap, x: &Id) -> Option<f32> {
 
 fn is_alloc_array(e: &Expr) -> bool {
     match e.item {
-        ExprKind::AllocArray(_, _) => true,
+        ExprKind::AllocArray(..) => true,
         _ => false,
     }
 }
@@ -113,7 +113,7 @@ fn conv(mut e: Box<Expr>, tyenv: &mut TyMap, consts: &mut ConstMap) -> Box<Expr>
         }
         ExprKind::Let(d, e1, e2) if is_alloc_array(&e1) => {
             let (num, t) = match &e1.item {
-                ExprKind::AllocArray(num, t) => (num, t),
+                ExprKind::AllocArray(num, t, _) => (num, t),
                 _ => unreachable!(),
             };
 
