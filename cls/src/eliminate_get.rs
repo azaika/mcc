@@ -207,11 +207,11 @@ fn conv_array_put<'a>(
     arr: Id,
     idx: Id,
     x: Id,
-    v: Option<Id>,
     params: &Parameters<'a>,
     disabled: &mut Set<Id>,
     indep_saved: &mut Saved,
     unknown_saved: &mut SavedUnknown,
+    do_save: bool
 ) -> ExprKind {
     use ExprKind::*;
 
@@ -235,8 +235,10 @@ fn conv_array_put<'a>(
 
         if a.len() == 1 {
             // 候補が一つだけならキャッシュを上書き
-            let a = a.drain(0..1).next().unwrap();
-            v.map(|v| indep_saved.insert(a, v));
+            let a =a.drain(0..1).next().unwrap();
+            if do_save {
+                indep_saved.insert(a, x.clone());
+            }
         }
 
         ArrayPut(arr, idx, x)
@@ -249,10 +251,10 @@ fn conv_array_put<'a>(
             arr_saved.clear();
         }
 
-        v.map(|v| {
+        if do_save {
             let m = unknown_saved.entry(t).or_default();
-            m.insert((arr.clone(), index), v);
-        });
+            m.insert((arr.clone(), index), x.clone());
+        }
 
         ArrayPut(arr, idx, x)
     }
@@ -271,16 +273,16 @@ fn cleanse_cache<'a>(
     use ExprKind::*;
     match &e.item {
         ArrayPut(arr, idx, x) => {
-            // キャッシュの上書きをしないので `v` は `None`
+            // キャッシュの上書きをしないので `do_save` は `false`
             conv_array_put(
                 arr.clone(),
                 idx.clone(),
                 x.clone(),
-                None,
                 params,
                 disabled,
                 indep_saved,
                 unknown_saved,
+                false
             );
         }
         Var(x) | AllocArray(_, _, Some(x)) => {
@@ -334,7 +336,7 @@ fn conv<'a>(
             let e2 = conv(e2, params, d2, &mut s2, &mut us2);
 
             // if の両方の分岐で生き残っているキャッシュのみ収集
-            d2.retain(|x| !d1.contains(x));
+            d2.extend(d1);
 
             *indep_saved = s1
                 .drain_filter(|a, x| {
@@ -382,7 +384,7 @@ fn conv<'a>(
                                     let index = alias::Index::Int(i);
                                     let mut a = a.clone();
                                     a.belongs.push(index);
-                                    indep_saved.insert(a, v.clone());
+                                    indep_saved.insert(a, init.clone());
                                 }
                             }
                         }
@@ -390,16 +392,6 @@ fn conv<'a>(
                     
                     AllocArray(num, t, Some(init))
                 }
-                ArrayPut(arr, idx, x) => conv_array_put(
-                    arr,
-                    idx,
-                    x,
-                    Some(v.clone()),
-                    params,
-                    disabled,
-                    indep_saved,
-                    unknown_saved,
-                ),
                 TupleGet(tup, idx) => {
                     conv_tuple_get(tup, idx, Some(v.clone()), params, indep_saved)
                 }
@@ -469,7 +461,6 @@ fn conv<'a>(
                 indep_saved.clear();
                 unknown_saved.clear();
             }
-            
 
             CallDir(label, args)
         }
@@ -485,11 +476,11 @@ fn conv<'a>(
             arr,
             idx,
             x,
-            None,
             params,
             disabled,
             indep_saved,
             unknown_saved,
+            true
         ),
         Var(x) if params.tyenv.get(&x).unwrap().is_array() => {
             disable_dep(&x, params, disabled, indep_saved);
@@ -576,6 +567,8 @@ pub fn eliminate_get(mut p: Program, use_strict_aliasing: bool) -> Program {
     let (independents, aliases) = crate::alias::analyze_aliases(&p, use_strict_aliasing);
     let infected_globals_byfunc = collect_global_invalidation(&p, &independents);
 
+    println!("{:#?}", infected_globals_byfunc);
+
     let params = Parameters {
         tyenv: &p.tyenv,
         consts,
@@ -599,17 +592,6 @@ pub fn eliminate_get(mut p: Program, use_strict_aliasing: bool) -> Program {
             &mut unknown_saved,
         );
     }
-    for Fundef { body, .. } in &mut p.fundefs {
-        let mut buf = Box::new(ExprKind::dummy());
-        std::mem::swap(body, &mut buf);
-        *body = conv(
-            buf,
-            &params,
-            &mut disabled.clone(),
-            &mut indep_saved.clone(),
-            &mut unknown_saved.clone(),
-        );
-    }
 
     p.main = conv(
         p.main,
@@ -618,6 +600,25 @@ pub fn eliminate_get(mut p: Program, use_strict_aliasing: bool) -> Program {
         &mut indep_saved,
         &mut unknown_saved,
     );
+
+    // dependent alias を全て無効化
+    for g in &p.globals {
+        if !params.independents.contains(g) {
+            disabled.remove(g);
+        }
+    }
+
+    for Fundef { body, .. } in &mut p.fundefs {
+        let mut buf = Box::new(ExprKind::dummy());
+        std::mem::swap(body, &mut buf);
+        *body = conv(
+            buf,
+            &params,
+            &mut disabled.clone(),
+            &mut Saved::default(),
+            &mut SavedUnknown::default(),
+        );
+    }
 
     p
 }
