@@ -72,7 +72,7 @@ fn replace(
     let b = if let If(IfKind::IfEq, x, y, e1, e2) = &e.item {
         (x != y || x != cv)
             && ((x == cv && zeros.contains(y)) || (y == cv && zeros.contains(x)))
-            && is_small(if onehot { e2 } else { e1 })
+            && is_small(if onehot { e1 } else { e2 })
     } else {
         false
     };
@@ -84,9 +84,9 @@ fn replace(
     match e.item {
         If(_, _, _, e1, e2) => {
             let (e, _) = if onehot {
-                replace_tail(cond, onehot, Some(e1), e2)
-            } else {
                 replace_tail(cond, onehot, Some(e2), e1)
+            } else {
+                replace_tail(cond, onehot, Some(e1), e2)
             };
 
             (e, None)
