@@ -93,7 +93,7 @@ fn conv(mut e: Box<Expr>, tyenv: &mut TyMap, consts: &mut ConstMap) -> Box<Expr>
                 IfKind::IfEq => xy_int
                     .map(|(x, y)| x == y)
                     .or(xy_float.map(|(x, y)| x == y)),
-                IfKind::IfLE => xy_float
+                IfKind::IfLE => xy_int
                     .map(|(x, y)| x <= y)
                     .or(xy_float.map(|(x, y)| x <= y)),
             };
