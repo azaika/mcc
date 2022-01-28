@@ -5,11 +5,18 @@ This compiler is part of the submittion of cpu-ex 2021 team 5 and only supports 
 
 # Run
 
+## Install rust
+see [Install Rust](https://www.rust-lang.org/tools/install)
+
+## run compiler
 ```sh
 git clone https://github.com/azaika/mcc
 cd mcc
-cargo run
+rustup install nightly # mcc uses nightly-rust
+rustup override add nightly
+# compiles raytracing and emits debug outputs in debug/
+cargo run --release -- -l ./tests/minrt/globals.ml -l ./tests/libs/stdlib.ml ./tests/minrt/minrt.ml -v -o -d --inline 2000 --use-strict-aliasing > debug/out.txt
 ```
 
 ## Known Bug
-- When comments include multi-byte strings, compiler emits wrong report about location in source file 
+- When comments include multi-byte strings, this compiler emits wrong locations in the source file on compile error
