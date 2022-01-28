@@ -218,7 +218,7 @@ fn conv(
                 ty::knormal::Ty::Array(t) => (**t).clone().into(),
                 _ => panic!(),
             };
-            
+
             let is_dummy = zeros.contains(&num);
             let init = if is_dummy { None } else { Some(init) };
             let e1 = Box::new(ExprKind::AllocArray(num.clone(), t, init).with_span(e1.loc));

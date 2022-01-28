@@ -9,7 +9,7 @@ pub type BinOpKind = knormal::BinOpKind;
 pub type IfKind = knormal::IfKind;
 pub type Ty = ty::closure::Ty;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Label(pub Id);
 
 impl fmt::Display for Label {

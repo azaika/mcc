@@ -125,22 +125,17 @@ fn is_e1_exit(
     if delta > 0 {
         if v == y && b1 {
             Some((delta, true))
-        }
-        else if v == x && b2 {
+        } else if v == x && b2 {
             Some((delta, false))
-        }
-        else {
+        } else {
             None
         }
-    }
-    else {
+    } else {
         if v == x && b1 {
             Some((delta, true))
-        }
-        else if v == y && b2 {
+        } else if v == y && b2 {
             Some((delta, false))
-        }
-        else {
+        } else {
             None
         }
     }
@@ -176,46 +171,66 @@ fn conv(mut e: Box<Expr>, constants: &mut Map<i32>, tyenv: &mut TyMap) -> Box<Ex
                 let init = init.into_iter().next().unwrap();
                 match body.item {
                     If(kind, x, y, e1, e2) if x != y && (x == v || y == v) => {
-                        if let Some((delta, do_shift)) = is_e1_exit(&v, &x, &y, constants, &kind, &e1, &e2) {
+                        if let Some((delta, do_shift)) =
+                            is_e1_exit(&v, &x, &y, constants, &kind, &e1, &e2)
+                        {
                             let end = if do_shift {
                                 let end = util::id::gen_tmp_var_with(Ty::Int.short());
                                 tyenv.insert(end.clone(), Ty::Int);
                                 end
-                            }
-                            else {
-                                if x == v { y.clone() } else { x.clone() }
+                            } else {
+                                if x == v {
+                                    y.clone()
+                                } else {
+                                    x.clone()
+                                }
                             };
                             tyenv.insert(v.clone(), Ty::Int);
 
                             log::debug!("detected Do-All loop, which uses `{v}`");
-                            let mut e = Box::new(DoAll {
-                                idx: v,
-                                range: (init, end.clone()),
-                                delta,
-                                body: conv(
-                                    Box::new(
-                                        If(IfKind::IfLE, x, y, e1, e2)
-                                            .with_span(body.loc),
+                            let mut e = Box::new(
+                                DoAll {
+                                    idx: v,
+                                    range: (init, end.clone()),
+                                    delta,
+                                    body: conv(
+                                        Box::new(
+                                            If(IfKind::IfLE, x, y, e1, e2).with_span(body.loc),
+                                        ),
+                                        constants,
+                                        tyenv,
                                     ),
-                                    constants,
-                                    tyenv,
-                                ),
-                            }.with_span(e.loc));
+                                }
+                                .with_span(e.loc),
+                            );
 
                             if do_shift {
                                 let loc = e.loc;
-                                let kind = if delta > 0 { BinOpKind::Sub } else { BinOpKind::Add };
+                                let kind = if delta > 0 {
+                                    BinOpKind::Sub
+                                } else {
+                                    BinOpKind::Add
+                                };
                                 let one = util::id::gen_tmp_var_with(Ty::Int.short());
                                 tyenv.insert(end.clone(), Ty::Int);
-                                e = Box::new(Let(
-                                    one.clone(),
-                                    Box::new(Const(1.into()).with_span(e.loc)),
-                                    Box::new(Let(
-                                        end.clone(),
-                                        Box::new(BinOp(kind, end.clone(), one.clone()).with_span(loc)),
-                                        e
-                                    ).with_span(loc))
-                                ).with_span(loc));
+                                e = Box::new(
+                                    Let(
+                                        one.clone(),
+                                        Box::new(Const(1.into()).with_span(e.loc)),
+                                        Box::new(
+                                            Let(
+                                                end.clone(),
+                                                Box::new(
+                                                    BinOp(kind, end.clone(), one.clone())
+                                                        .with_span(loc),
+                                                ),
+                                                e,
+                                            )
+                                            .with_span(loc),
+                                        ),
+                                    )
+                                    .with_span(loc),
+                                );
                             }
 
                             return e;
