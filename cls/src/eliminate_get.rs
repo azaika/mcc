@@ -1,5 +1,5 @@
 use ast::closure::*;
-use util::{Id, Set, Map, ToSpanned};
+use util::{Id, Map, Set, ToSpanned};
 
 use crate::alias::AliasMap;
 use crate::alias::{self, may_overlap};
@@ -12,14 +12,7 @@ fn retain_immut_global_simple(e: &Expr, immut_global: &mut Set<Id>) {
         ArrayPut(x, _, _) if immut_global.contains(x) => {
             immut_global.remove(x);
         }
-        MakeCls(_, xs) => {
-            for x in xs {
-                if immut_global.contains(x) {
-                    immut_global.remove(x);
-                }
-            }
-        }
-        CallDir(_, xs) => {
+        CallDir(_, xs) | Tuple(xs) | MakeCls(_, xs) => {
             for x in xs {
                 if immut_global.contains(x) {
                     immut_global.remove(x);
@@ -27,53 +20,74 @@ fn retain_immut_global_simple(e: &Expr, immut_global: &mut Set<Id>) {
             }
         }
         // クロージャ呼び出しは追跡が難しいので存在したらグローバル変数をすべて変更しうるとする
-        CallCls(_, xs) => {
+        CallCls(..) => {
             immut_global.clear();
         }
-        e => e.map_ref(|e| retain_immut_global_simple(e, immut_global))
+        e => e.map_ref(|e| retain_immut_global_simple(e, immut_global)),
     }
 }
 
-fn retain_immut_global_compound(e: &Expr, current_immut: &Map<Label, Set<Id>>, immut_global: &mut Set<Id>) {
+fn retain_immut_global_compound(
+    e: &Expr,
+    current_immut: &Map<Label, Set<Id>>,
+    immut_global: &mut Set<Id>,
+) {
     use ExprKind::*;
     match &e.item {
         CallDir(label, _) => {
             // 呼び出し先の関数でも変更されないものだけを変更されないとする
-            immut_global.retain(|x| current_immut.get(label).unwrap().contains(x))
-        },
-        e => e.map_ref(|e| retain_immut_global_compound(e, current_immut, immut_global))
+            // 外部関数呼び出しでは全て変更されうる
+            immut_global.retain(|x| current_immut.get(label).map_or(false, |set| set.contains(x)))
+        }
+        e => e.map_ref(|e| retain_immut_global_compound(e, current_immut, immut_global)),
     }
 }
 
-fn collect_global_invalidation(p: &Program, independent: &Set<Id>) -> Map<Label, Set<Id>> {
-    let base: Set<_> = p.globals.iter().filter(|x| independent.contains(*x)).cloned().collect();
+fn collect_global_invalidation(p: &Program, independents: &Set<Id>) -> Map<Label, Set<Id>> {
+    let base: Set<_> = p
+        .globals
+        .iter()
+        .filter(|x| independents.contains(*x))
+        .cloned()
+        .collect();
 
     let mut simple_immut = Map::default();
+    let mut prev = Map::default();
     for Fundef { name, body, .. } in &p.fundefs {
         let mut immut_global = base.clone();
 
         retain_immut_global_simple(body, &mut immut_global);
 
         simple_immut.insert(Label(name.clone()), immut_global);
+        prev.insert(Label(name.clone()), Set::default());
     }
 
     let mut current = simple_immut;
-    let mut prev = Map::default();
+    
     for _ in 0..p.fundefs.len() {
         for Fundef { name, body, .. } in &p.fundefs {
-            retain_immut_global_compound(body, &prev, current.get_mut(&Label(name.clone())).unwrap());
+            retain_immut_global_compound(
+                body,
+                &prev,
+                current.get_mut(&Label(name.clone())).unwrap(),
+            );
         }
 
         if prev == current {
-            break;    
+            break;
         }
 
-        prev = current;
+        prev = current.clone();
     }
 
     for (_, set) in &mut current {
         // 「変更されないグローバル変数」を保存していたのを「変更されうるグローバル変数」に反転
-        *set = p.globals.iter().filter(|x| !set.contains(*x)).cloned().collect();
+        *set = p
+            .globals
+            .iter()
+            .filter(|x| !set.contains(*x))
+            .cloned()
+            .collect();
     }
 
     current
@@ -87,7 +101,7 @@ struct Parameters<'a> {
     consts: ConstMap,
     independents: Set<Id>,
     aliases: AliasMap,
-    infected_globals_byfunc: Map<Label, Set<Id>>
+    infected_globals_byfunc: Map<Label, Set<Id>>,
 }
 
 fn conv_array_get<'a>(
@@ -95,6 +109,7 @@ fn conv_array_get<'a>(
     idx: Id,
     v: Option<Id>,
     params: &Parameters<'a>,
+    disabled: &Set<Id>,
     indep_saved: &mut Saved,
     unknown_saved: &mut SavedUnknown,
 ) -> ExprKind {
@@ -106,20 +121,22 @@ fn conv_array_get<'a>(
         alias::Index::Var(idx.clone())
     };
 
-    if let Some(mut a) = params.aliases.get(&arr).cloned() {
-        if a.len() == 1 {
-            let a = a[0];
+    if let Some(a) = params.aliases.get(&arr) {
+        if disabled.contains(&arr) || a.len() != 1 {
+            // エイリアスが無効になっているか
+            // エイリアスの候補が複数ある場合は諦める (saved を消したりはしない)
+            ArrayGet(arr, idx)
+        } else {
+            assert!(a.len() == 1);
+            let mut a = a[0].clone();
+            a.belongs.push(index);
+
             if let Some(x) = indep_saved.get(&a) {
                 Var(x.clone())
-            }
-            else {
+            } else {
                 v.map(|v| indep_saved.insert(a.clone(), v.clone()));
                 ArrayGet(arr, idx)
             }
-        }
-        else {
-            // エイリアスの候補が複数ある場合は諦める (saved を消したりはしない)
-            ArrayGet(arr, idx)
         }
     } else {
         let t = params.tyenv.get(&arr).unwrap().clone().decay();
@@ -134,37 +151,34 @@ fn conv_array_get<'a>(
     }
 }
 
-fn collect_puts(e: &Expr, consts: &ConstMap, written: &mut util::Set<(Id, alias::Index)>) {
-    use ExprKind::*;
-    match &e.item {
-        ArrayPut(arr, idx, _) => {
-            let index = if let Some(ConstKind::CInt(idx)) = consts.get(idx) {
-                alias::Index::Int(idx.abs() as usize)
-            } else {
-                alias::Index::Var(idx.clone())
-            };
-
-            written.insert((arr.clone(), index));
-        }
-        e => e.map_ref(|e| collect_puts(e, consts, written)),
-    }
-}
-
-fn conv_tuple_get(
+fn conv_tuple_get<'a>(
     tup: Id,
     idx: usize,
     v: Option<Id>,
-    aliases: &AliasMap,
-    saved: &mut Saved,
+    params: &Parameters<'a>,
+    indep_saved: &mut Saved,
 ) -> ExprKind {
     use ExprKind::*;
     let index = alias::Index::Int(idx);
-    if let Some(mut a) = aliases.get(&tup).cloned() {
-        a.belongs.push(index);
-        if let Some(x) = saved.get(&a) {
-            Var(x.clone())
+
+    if params.independents.contains(&tup) {
+        // independent なときだけ最適化
+        let mut a = params.aliases.get(&tup).unwrap().clone();
+        for a in &mut a {
+            a.belongs.push(index.clone());
+        }
+
+        if a.len() == 1 {
+            let a = a.drain(0..1).next().unwrap();
+
+            if let Some(x) = indep_saved.get(&a) {
+                Var(x.clone())
+            } else {
+                v.map(|v| indep_saved.insert(a, v.clone()));
+                TupleGet(tup, idx)
+            }
         } else {
-            v.map(|v| saved.insert(a.clone(), v.clone()));
+            // エイリアスの候補が複数ある場合は諦める
             TupleGet(tup, idx)
         }
     } else {
@@ -172,89 +186,129 @@ fn conv_tuple_get(
     }
 }
 
-fn conv_array_put(
+fn disable_dep<'a>(
+    x: &Id,
+    params: &Parameters<'a>,
+    disabled: &mut Set<Id>,
+    indep_saved: &mut Saved,
+) {
+    assert!(!params.independents.contains(x));
+    if let Some(a) = params.aliases.get(x) {
+        // 変数のムーブ: dependent alias を disable してキャッシュを一旦削除
+        for a in a {
+            indep_saved.remove(a);
+        }
+
+        disabled.insert(x.clone());
+    }
+}
+
+fn conv_array_put<'a>(
     arr: Id,
     idx: Id,
     x: Id,
     v: Option<Id>,
-    consts: &ConstMap,
-    tyenv: &TyMap,
-    aliases: &AliasMap,
-    saved: &mut Saved,
+    params: &Parameters<'a>,
+    disabled: &mut Set<Id>,
+    indep_saved: &mut Saved,
     unknown_saved: &mut SavedUnknown,
 ) -> ExprKind {
     use ExprKind::*;
 
-    let index = if let Some(ConstKind::CInt(s)) = consts.get(&idx) {
+    disable_dep(&x, params, disabled, indep_saved);
+
+    let index = if let Some(ConstKind::CInt(s)) = params.consts.get(&idx) {
         alias::Index::Int(s.abs() as usize)
     } else {
         alias::Index::Var(idx.clone())
     };
-    if aliases.contains_key(&arr) {
-        let mut a = aliases.get(&arr).unwrap().clone();
 
-        a.belongs.push(index);
+    if params.aliases.contains_key(&arr) && !disabled.contains(&arr) {
+        // independent もしくはまだ disabled でない dependent alias
+        let mut a = params.aliases.get(&arr).unwrap().clone();
+        for a in &mut a {
+            a.belongs.push(index.clone());
 
-        let t = tyenv.get(&arr).unwrap().clone().decay();
-
-        // エイリアス不明の変数で型が一致するものはキャッシュを消去
-        if let Some(arr_saved) = unknown_saved.get_mut(&t) {
-            arr_saved.clear();
+            // エイリアスが分かっている変数は共通部分がありうるもののみ消去
+            indep_saved.retain(|a2, _| !may_overlap(&a, a2));
         }
-        // エイリアスが分かっている変数は共通部分がありうるもののみ消去
-        saved.retain(|a2, _| !may_overlap(&a, a2));
 
-        v.map(|v| saved.insert(a, v));
+        if a.len() == 1 {
+            // 候補が一つだけならキャッシュを上書き
+            let a = a.drain(0..1).next().unwrap();
+            v.map(|v| indep_saved.insert(a, v));
+        }
 
         ArrayPut(arr, idx, x)
     } else {
-        let t = tyenv.get(&arr).unwrap().clone().decay();
+        // disabled dependent alias または unknown array
+        let t = params.tyenv.get(&arr).unwrap().clone().decay();
 
         // 型が一致するものはキャッシュを消去
         if let Some(arr_saved) = unknown_saved.get_mut(&t) {
             arr_saved.clear();
         }
-        saved.retain(|_, arr| tyenv.get(arr).unwrap().clone().decay() != t);
 
         v.map(|v| {
-            let mut m = util::Map::default();
+            let m = unknown_saved.entry(t).or_default();
             m.insert((arr.clone(), index), v);
-            unknown_saved.entry(t).or_insert(m);
         });
 
         ArrayPut(arr, idx, x)
     }
 }
 
-// ループに入る前に保存しているとマズそうなものを削除
-fn cleanse_cache(
-    body: &Expr,
-    consts: &ConstMap,
-    tyenv: &TyMap,
-    aliases: &AliasMap,
-    saved: &mut Saved,
+// independent alias : 書き込みがあったら該当キャッシュ消去
+// dependent alias : 書き込みがあったら該当キャッシュ消去, move があったら disable にして該当キャッシュ消去
+// unknown cache : 同じ型に対する書き込みがあった時点でキャッシュ消去
+fn cleanse_cache<'a>(
+    e: &Expr,
+    params: &Parameters<'a>,
+    disabled: &mut Set<Id>,
+    indep_saved: &mut Saved,
     unknown_saved: &mut SavedUnknown,
 ) {
-    let mut written = util::Set::default();
-    collect_puts(&body, consts, &mut written);
-    let written = written;
-
-    for (arr, index) in written.into_iter() {
-        let t = tyenv.get(&arr).unwrap().clone().decay();
-        if let Some(mut a) = aliases.get(&arr).cloned() {
-            a.belongs.push(index);
-            // エイリアスのある変数値の書き込み
-            if let Some(arr_saved) = unknown_saved.get_mut(&t) {
-                arr_saved.clear();
-            }
-            saved.retain(|a2, _| !may_overlap(&a, a2));
-        } else {
-            // エイリアスが無い変数への書き込み
-            if let Some(arr_saved) = unknown_saved.get_mut(&t) {
-                arr_saved.clear();
-            }
-            saved.retain(|_, arr| tyenv.get(arr).unwrap().clone().decay() != t);
+    use ExprKind::*;
+    match &e.item {
+        ArrayPut(arr, idx, x) => {
+            // キャッシュの上書きをしないので `v` は `None`
+            conv_array_put(
+                arr.clone(),
+                idx.clone(),
+                x.clone(),
+                None,
+                params,
+                disabled,
+                indep_saved,
+                unknown_saved,
+            );
         }
+        Var(x) | AllocArray(_, _, Some(x)) => {
+            disable_dep(&x, params, disabled, indep_saved);
+        }
+        Tuple(xs) | MakeCls(_, xs) => {
+            for x in xs {
+                disable_dep(x, params, disabled, indep_saved);
+            }
+        }
+        Continue(ps) => {
+            for (_, x) in ps {
+                disable_dep(x, params, disabled, indep_saved);
+            }
+        }
+        Assign(label, x) => {
+            if &label.0 != x {
+                disable_dep(x, params, disabled, indep_saved);
+            }
+        }
+        Loop { init, body, .. } => {
+            for x in init {
+                disable_dep(x, params, disabled, indep_saved);
+            }
+            cleanse_cache(body, params, disabled, indep_saved, unknown_saved);
+        }
+        // DoAll は init に配列が入り得ないのでやらなくて良い
+        e => e.map_ref(|e| cleanse_cache(e, params, disabled, indep_saved, unknown_saved)),
     }
 }
 
@@ -269,7 +323,7 @@ fn conv<'a>(
 
     e.item = match e.item {
         If(kind, x, y, e1, e2) => {
-            let d1 = disabled.clone();
+            let mut d1 = disabled.clone();
             let mut s1 = indep_saved.clone();
             let mut us1 = unknown_saved.clone();
             let d2 = disabled;
@@ -281,7 +335,6 @@ fn conv<'a>(
 
             // if の両方の分岐で生き残っているキャッシュのみ収集
             d2.retain(|x| !d1.contains(x));
-            disabled = d2;
 
             *indep_saved = s1
                 .drain_filter(|a, x| {
@@ -313,88 +366,179 @@ fn conv<'a>(
                     idx,
                     Some(v.clone()),
                     params,
+                    disabled,
                     indep_saved,
                     unknown_saved,
                 ),
+                AllocArray(num, t, Some(init)) => {
+                    disable_dep(&init, params, disabled, indep_saved);
+                    if let Some(a) = params.aliases.get(&v) {
+                        if a.len() == 1 {
+                            let a = &a[0];
+                            if let Some(ConstKind::CInt(s)) = params.consts.get(&num) {
+                                let s = s.abs() as usize;
+
+                                for i in 0..s {
+                                    let index = alias::Index::Int(i);
+                                    let mut a = a.clone();
+                                    a.belongs.push(index);
+                                    indep_saved.insert(a, v.clone());
+                                }
+                            }
+                        }
+                    }
+                    
+                    AllocArray(num, t, Some(init))
+                }
                 ArrayPut(arr, idx, x) => conv_array_put(
                     arr,
                     idx,
                     x,
                     Some(v.clone()),
-                    consts,
-                    tyenv,
-                    aliases,
-                    saved,
+                    params,
+                    disabled,
+                    indep_saved,
                     unknown_saved,
                 ),
+                TupleGet(tup, idx) => {
+                    conv_tuple_get(tup, idx, Some(v.clone()), params, indep_saved)
+                }
                 _ => {
                     conv(
                         Box::new(e1.item.with_span(e1.loc)),
-                        globals,
-                        consts,
-                        tyenv,
-                        aliases,
-                        saved,
+                        params,
+                        disabled,
+                        indep_saved,
                         unknown_saved,
                     )
                     .item
                 }
             };
 
-            let e2 = conv(e2, globals, consts, tyenv, aliases, saved, unknown_saved);
+            let e2 = conv(e2, params, disabled, indep_saved, unknown_saved);
             Let(v, e1, e2)
         }
         CallDir(label, args) => {
             // グローバル変数にクロージャーが入っており, そのクロージャーがコールされる場合は, `infected_globals` に全てのグローバル変数が追加されるので良い
-            // 一方でもし引数にクロージャが入っていると違法な最適化をしてしまう
-            for x in globals.iter().chain(&args) {
-                saved.retain(|a, _| &a.top != x);
-            }
-
             for x in &args {
-                let t = tyenv.get(x).unwrap().clone().decay();
-                if t.is_array() {
-                    if let Some(a) = aliases.get(x) {
-                        saved.retain(|a2, _| may_overlap(a, a2));
-                    } else {
-                        saved.retain(|_, arr| tyenv.get(arr).unwrap().clone().decay() != t);
+                // もし引数にクロージャが入っていたら dependent alias と unknown を全て削除
+                let t = params.tyenv.get(x).unwrap();
+                if t.has_func() {
+                    indep_saved.retain(|_, y| {
+                        if !params.independents.contains(y) {
+                            disabled.insert(y.clone());
+                            false
+                        } else {
+                            true
+                        }
+                    });
+                    unknown_saved.clear();
+                }
+
+                // 引数に含まれる変数を削除
+                if t.is_array() || t.is_tuple() {
+                    if let Some(a) = params.aliases.get(x) {
+                        for a in a {
+                            indep_saved.remove(a);
+                        }
+                    }
+
+                    if let Some(arr_saved) = unknown_saved.get_mut(&t) {
+                        arr_saved.clear();
                     }
                 }
             }
 
-            unknown_saved.clear();
+            // 変更を受けるグローバル変数を全てキャッシュから削除
+            if let Some(infected_globals) = params.infected_globals_byfunc.get(&label) {
+                for infected in infected_globals {
+                    if let Some(a) = params.aliases.get(infected) {
+                        for a in a {
+                            indep_saved.remove(a);
+                        }
+                    }
+    
+                    let t = params.tyenv.get(infected).unwrap();
+                    if let Some(arr_saved) = unknown_saved.get_mut(&t) {
+                        arr_saved.clear();
+                    }
+                }
+            }
+            else {
+                // 外部関数呼び出し
+                indep_saved.clear();
+                unknown_saved.clear();
+            }
+            
+
             CallDir(label, args)
         }
         CallCls(f, args) => {
-            saved.clear();
+            indep_saved.clear();
             unknown_saved.clear();
             CallCls(f, args)
         }
         ArrayGet(arr, idx) => {
-            conv_array_get(arr, idx, None, consts, tyenv, aliases, saved, unknown_saved)
+            conv_array_get(arr, idx, None, params, disabled, indep_saved, unknown_saved)
         }
         ArrayPut(arr, idx, x) => conv_array_put(
             arr,
             idx,
             x,
             None,
-            consts,
-            tyenv,
-            aliases,
-            saved,
+            params,
+            disabled,
+            indep_saved,
             unknown_saved,
         ),
-        TupleGet(tup, idx) => conv_tuple_get(tup, idx, None, aliases, saved),
+        Var(x) if params.tyenv.get(&x).unwrap().is_array() => {
+            disable_dep(&x, params, disabled, indep_saved);
+            Var(x)
+        }
+        Tuple(xs) => {
+            for x in &xs {
+                disable_dep(x, params, disabled, indep_saved);
+            }
+
+            Tuple(xs)
+        }
+        AllocArray(num, t, Some(x)) => {
+            disable_dep(&x, params, disabled, indep_saved);
+
+            AllocArray(num, t, Some(x))
+        }
+        Continue(ps) => {
+            for (_, x) in &ps {
+                disable_dep(x, params, disabled, indep_saved);
+            }
+            Continue(ps)
+        }
+        MakeCls(label, xs) => {
+            for x in &xs {
+                disable_dep(x, params, disabled, indep_saved);
+            }
+
+            MakeCls(label, xs)
+        }
+        Assign(label, x) => {
+            if label.0 != x {
+                disable_dep(&x, params, disabled, indep_saved);
+            }
+
+            Assign(label, x)
+        }
+        TupleGet(tup, idx) => conv_tuple_get(tup, idx, None, params, indep_saved),
         Loop { vars, init, body } => {
-            cleanse_cache(&body, consts, tyenv, aliases, saved, unknown_saved);
+            for x in &init {
+                disable_dep(x, params, disabled, indep_saved);
+            }
+            cleanse_cache(&body, params, disabled, indep_saved, unknown_saved);
 
             let body = conv(
                 body,
-                globals,
-                consts,
-                tyenv,
-                aliases,
-                &mut saved.clone(),
+                params,
+                disabled,
+                &mut indep_saved.clone(),
                 &mut unknown_saved.clone(),
             );
             Loop { vars, init, body }
@@ -405,15 +549,13 @@ fn conv<'a>(
             delta,
             body,
         } => {
-            cleanse_cache(&body, consts, tyenv, aliases, saved, unknown_saved);
+            cleanse_cache(&body, params, disabled, indep_saved, unknown_saved);
 
             let body = conv(
                 body,
-                globals,
-                consts,
-                tyenv,
-                aliases,
-                &mut saved.clone(),
+                params,
+                disabled,
+                &mut indep_saved.clone(),
                 &mut unknown_saved.clone(),
             );
             DoAll {
@@ -431,56 +573,51 @@ fn conv<'a>(
 
 pub fn eliminate_get(mut p: Program, use_strict_aliasing: bool) -> Program {
     let consts = crate::common::collect_consts(&p);
-    let aliases = crate::alias::analyze_aliases(&p, use_strict_aliasing);
-    let globals = p
-        .globals
-        .iter()
-        .filter_map(|g| {
-            p.tyenv
-                .get_key_value(g)
-                .filter(|(_, t)| t.is_array())
-                .map(|(x, _)| x.clone())
-        })
-        .collect();
+    let (independents, aliases) = crate::alias::analyze_aliases(&p, use_strict_aliasing);
+    let infected_globals_byfunc = collect_global_invalidation(&p, &independents);
 
-    let mut saved = Saved::default();
+    let params = Parameters {
+        tyenv: &p.tyenv,
+        consts,
+        independents,
+        aliases,
+        infected_globals_byfunc,
+    };
+
+    let mut disabled = Set::default();
+    let mut indep_saved = Saved::default();
     let mut unknown_saved = SavedUnknown::default();
+
     {
         let mut buf = Box::new(ExprKind::dummy());
         std::mem::swap(&mut p.global_init, &mut buf);
         p.global_init = conv(
             buf,
-            &globals,
-            &consts,
-            &p.tyenv,
-            &aliases,
-            &mut saved,
+            &params,
+            &mut disabled,
+            &mut indep_saved,
             &mut unknown_saved,
         );
     }
-    p.main = conv(
-        p.main,
-        &globals,
-        &consts,
-        &p.tyenv,
-        &aliases,
-        &mut saved,
-        &mut unknown_saved,
-    );
-
     for Fundef { body, .. } in &mut p.fundefs {
         let mut buf = Box::new(ExprKind::dummy());
         std::mem::swap(body, &mut buf);
         *body = conv(
             buf,
-            &globals,
-            &consts,
-            &p.tyenv,
-            &aliases,
-            &mut Saved::default(),
-            &mut SavedUnknown::default(),
+            &params,
+            &mut disabled.clone(),
+            &mut indep_saved.clone(),
+            &mut unknown_saved.clone(),
         );
     }
+
+    p.main = conv(
+        p.main,
+        &params,
+        &mut disabled,
+        &mut indep_saved,
+        &mut unknown_saved,
+    );
 
     p
 }

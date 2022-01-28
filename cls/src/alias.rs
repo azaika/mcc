@@ -1,5 +1,5 @@
 use ast::closure::*;
-use util::{ Id, Set, Map };
+use util::{Id, Map, Set};
 
 use crate::common;
 
@@ -98,18 +98,27 @@ fn analyze_loop(
 
         if old == vars_aliases {
             // ループ変数が取りうる変数の範囲を定める
-            for (v, Some(a)) in vars.iter().zip(vars_aliases) {
-                aliases.insert(v.clone(), a.into_iter().collect());
+            for (v, a) in vars.iter().zip(vars_aliases) {
+                if let Some(a) = a {
+                    aliases.insert(v.clone(), a.into_iter().collect());
+                }
             }
             return;
         }
+
+        old = vars_aliases.clone();
     }
 
     // 一定回数繰り返しても安定しない場合は解析失敗。何もしない
 }
 
 // alias: independent であるか、そうではないが CreateArray で作られているもの
-fn analyze_aliases_impl(e: &Expr, consts: &common::ConstMap, independent: &Set<Id>, aliases: &mut AliasMap) {
+fn analyze_aliases_impl(
+    e: &Expr,
+    consts: &common::ConstMap,
+    independent: &Set<Id>,
+    aliases: &mut AliasMap,
+) {
     use ExprKind::*;
     match &e.item {
         Let(v, e1, e2) => {
@@ -153,15 +162,15 @@ fn analyze_aliases_impl(e: &Expr, consts: &common::ConstMap, independent: &Set<I
                     }
                     aliases.insert(v.clone(), alias);
                 }
-                e => e.map_ref(|e| analyze_aliases_impl(e1, consts, independent, aliases)),
+                e => e.map_ref(|e| analyze_aliases_impl(e, consts, independent, aliases)),
             }
 
             analyze_aliases_impl(e2, consts, independent, aliases);
-        },
+        }
         Loop { vars, init, body } => {
             analyze_loop(vars, init, body, consts, aliases);
             analyze_aliases_impl(body, consts, independent, aliases);
-        },
+        }
         e => e.map_ref(|e| analyze_aliases_impl(e, consts, independent, aliases)),
     }
 }
@@ -170,11 +179,12 @@ fn analyze_aliases_impl(e: &Expr, consts: &common::ConstMap, independent: &Set<I
 fn eliminate_dependent(e: &Expr, tyenv: &TyMap, independent: &mut Set<Id>) {
     use ExprKind::*;
     match &e.item {
-        Var(x) | AllocArray(_, _, Some(x)) => {
+        Var(x) | AllocArray(_, _, Some(x)) | ArrayPut(_, _, x) => {
             independent.remove(x);
         }
         Assign(Label(lab), x) if lab != x => {
             independent.remove(x);
+            independent.remove(lab);
         }
         Let(v, e1, e2) => {
             match &e1.item {
@@ -184,12 +194,13 @@ fn eliminate_dependent(e: &Expr, tyenv: &TyMap, independent: &mut Set<Id>) {
                 TupleGet(tup, _) if tyenv.get(tup).unwrap().is_pointer() => {
                     independent.remove(v);
                 }
-                Var(_) | If(..) | Loop { .. } | DoAll { .. } => {
+                Var(_) | If(..) | Let(..) | Loop { .. } | DoAll { .. } | CallDir(..) | CallCls(..) | ExtArray(..) => {
                     independent.remove(v);
                 }
                 _ => (),
             };
 
+            eliminate_dependent(e1, tyenv, independent);
             eliminate_dependent(e2, tyenv, independent);
         }
         Tuple(xs) | CallDir(_, xs) | CallCls(_, xs) | MakeCls(_, xs) | Asm(_, xs) => {
@@ -239,7 +250,7 @@ fn collect_independent(p: &Program, use_strict_aliasing: bool) -> Set<Id> {
     independent
 }
 
-pub fn analyze_aliases(p: &Program, use_strict_aliasing: bool) -> AliasMap {
+pub fn analyze_aliases(p: &Program, use_strict_aliasing: bool) -> (Set<Id>, AliasMap) {
     let consts = common::collect_consts(p);
 
     let independent = collect_independent(p, use_strict_aliasing);
@@ -248,7 +259,8 @@ pub fn analyze_aliases(p: &Program, use_strict_aliasing: bool) -> AliasMap {
     for Fundef { body, args, .. } in &p.fundefs {
         if use_strict_aliasing {
             for x in args {
-                if p.tyenv.get(x).unwrap().is_array() {
+                let t = p.tyenv.get(x).unwrap();
+                if t.is_array() || t.is_tuple() {
                     aliases.insert(
                         x.clone(),
                         vec![Alias {
@@ -274,5 +286,5 @@ pub fn analyze_aliases(p: &Program, use_strict_aliasing: bool) -> AliasMap {
         }
     }
 
-    aliases
+    (independent, aliases)
 }

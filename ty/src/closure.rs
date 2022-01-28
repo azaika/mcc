@@ -72,7 +72,7 @@ impl Ty {
             Ty::Fun(..) => true,
             Ty::TuplePtr(ts) | Ty::Tuple(ts) => ts.iter().any(|t| t.has_func()),
             Ty::Array(t, _) | Ty::ArrayPtr(t) => t.has_func(),
-            _ => false
+            _ => false,
         }
     }
 

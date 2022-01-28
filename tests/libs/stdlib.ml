@@ -22,6 +22,7 @@ let rec fabs x =
   let c = b *. 1.0 in
   b
 in
+let abs_float = fabs in
 let rec atan x =
   let a = x *. 1.0 in
   let b = _asm"fatan" x in
