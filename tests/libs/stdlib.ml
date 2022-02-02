@@ -49,8 +49,7 @@ let rec floor x =
   let c = b *. 1.0 in
   b
 in
-let rec print_newline x =
-  x;
+let rec print_newline _ =
   let x = 10 in (* '\n' = 10 *)
   _asmE"out" x;
   ()
@@ -163,14 +162,12 @@ let rec print_int x =
     print_int_final res 9 false
   )
 in
-let rec read_float x =
-  x;
+let rec read_float _ =
   let a = _asmE"in" in
   let b = a *. 1.0 in
   a
 in
-let rec read_int x =
-  x;
+let rec read_int _ =
   let a = _asmE"in" in
   let b = a * 1 in
   a
