@@ -8,5 +8,6 @@ members = [
     "typing",
     "knorm",
     "cls",
+    "arch"
     # "cfg"
 ]
