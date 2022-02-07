@@ -319,16 +319,33 @@ fn conv(
                 formal_fv,
                 body: e1,
             });
+            p.tyenv.insert(fundef.fvar.name.clone(), fundef.fvar.t.clone().into());
 
             // make closure (if needed) and convert following programs
             if emerge(&e2, &fundef.fvar.name) {
                 let e2 = conv(e2, tyenv, known, zeros, global, p);
                 let f = fundef.fvar.name.clone();
-                lift(ExprKind::Let(
-                    fundef.fvar.name,
-                    lift(ExprKind::MakeCls(closure::Label(f), fvs)),
-                    e2,
-                ))
+
+                if global.contains(&f) {
+                    insert_global(p, f.clone(), |_, cont| {
+                        lift(ExprKind::Let(
+                            f.clone(),
+                            lift(ExprKind::MakeCls(closure::Label(f.clone()), fvs)),
+                            cont,
+                        ))
+                    });
+
+                    e2
+                }
+                else {
+                    lift(ExprKind::Let(
+                        fundef.fvar.name,
+                        lift(ExprKind::MakeCls(closure::Label(f), fvs)),
+                        e2,
+                    ))
+                }
+
+                
             } else {
                 conv(e2, tyenv, known, zeros, global, p)
             }
@@ -392,6 +409,7 @@ fn collect_global(e: &knormal::Expr, last: &Id, res: &mut Set) {
             collect_global(e2, last, res);
         }
         knormal::ExprKind::LetRec(fundef, e2) => {
+            res.insert(fundef.fvar.name.clone());
             if &fundef.fvar.name == last {
                 return;
             }
