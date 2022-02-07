@@ -241,7 +241,7 @@ pub type TyMap = util::Map<Id, Ty>;
 #[derive(Debug, Clone, PartialEq)]
 pub struct Program {
     pub tyenv: TyMap,
-    pub globals: Vec<Id>,
+    pub globals: Vec<(Id, usize)>,
     pub fundefs: Vec<Fundef>,
     pub main: Box<Expr>,
 }
@@ -265,8 +265,8 @@ impl fmt::Display for Program {
             writeln!(f, "    {x}: {t}")?;
         }
         write!(f, "\n[Globals]\n")?;
-        for g in &self.globals {
-            writeln!(f, "    ({g}: {})", self.tyenv.get(g).unwrap())?;
+        for (g, s) in &self.globals {
+            writeln!(f, "    ({g}: {}, {s})", self.tyenv.get(g).unwrap())?;
         }
         write!(f, "\n[Fundefs]\n")?;
         for fundef in &self.fundefs {

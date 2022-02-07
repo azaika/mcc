@@ -364,6 +364,13 @@ fn concat_expr(mut e: Box<closure::Expr>, r: Box<closure::Expr>) -> Box<closure:
 
 pub fn convert(cls: closure::Program, consts: &ConstMap) -> Program {
     let mut p = Program::new();
+    for g in cls.globals {
+        let t = cls.tyenv.get(&g).unwrap();
+        let s = common::type_size(t);
+
+        p.globals.push((g, s));
+    }
+    
     let main = concat_expr(cls.global_init, cls.main);
     p.main = conv(main, &mut p, &cls.tyenv, consts);
 
