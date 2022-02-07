@@ -17,3 +17,4 @@ pub use eliminate_get::eliminate_get;
 pub use eliminate_var::eliminate_var;
 pub use flatten::flatten;
 pub use fold_const::fold_const;
+pub use common::collect_consts;

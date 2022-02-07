@@ -224,7 +224,7 @@ pub fn compile(args: Args) -> Result<()> {
         )?;
     }
 
-    let _opt_closure = if args.optimize {
+    let opt_closure = if args.optimize {
         let r = optimize_closure(closured, &args);
 
         if args.verbose {
@@ -238,6 +238,12 @@ pub fn compile(args: Args) -> Result<()> {
     } else {
         closured
     };
+
+    let consts = cls::collect_consts(&opt_closure);
+    let virt = arch::convert(opt_closure, &consts);
+    if args.verbose {
+        debug_output(Path::new("virtual.txt"), format!("[[virtual]]\n{}", virt))?;
+    }
 
     // let mir = cfg::convert(opt_closure);
     // if args.verbose {

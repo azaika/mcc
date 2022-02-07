@@ -11,7 +11,7 @@ pub fn type_size(t: &Ty) -> usize {
 
 pub fn tuple_offsets(t: &Ty) -> Vec<usize> {
     match t {
-        Ty::Tuple(ts) => {
+        Ty::Tuple(ts) | Ty::TuplePtr(ts) => {
             let mut acc: usize = 0;
             let mut res = Vec::new();
             for t in ts {

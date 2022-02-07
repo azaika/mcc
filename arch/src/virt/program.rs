@@ -189,6 +189,7 @@ impl ExprKind {
                     write!(f, "Let: {d}\n")?;
                     e1.item.format_indented(f, level + 1)?;
                 } else {
+                    write!(f, "\n")?;
                     e1.item.format_indented(f, level)?;
                 }
                 e2.item.format_indented(f, level)

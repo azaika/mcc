@@ -118,6 +118,10 @@ fn conv(
                     let e1 = lift(ExprKind::LoadLabel(label.clone()));
                     return lift(ExprKind::Let(Some(v), e1, e2));
                 }
+                closure::ExprKind::Load(label) => {
+                    let e1 = lift(ExprKind::GetLabel(label.clone()));
+                    return lift(ExprKind::Let(Some(v), e1, e2));
+                }
                 closure::ExprKind::MakeCls(label, args) => {
                     let offsets = match vt {
                         Ty::Fun(ts, _) => common::tuple_offsets(&Ty::Tuple(ts.clone())),
@@ -308,7 +312,7 @@ fn conv(
             ))
         }
         closure::ExprKind::MakeCls(..) => panic!("found MakeCls left alone"),
-        closure::ExprKind::Load(..) => panic!("found Load left alone"),
+        closure::ExprKind::Load(label) => panic!("found Load {label} left alone"),
         closure::ExprKind::Asm(inst, args) => {
             let k = if inst == "in" {
                 ExprKind::In
