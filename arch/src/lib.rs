@@ -1,7 +1,7 @@
 #![feature(int_log)]
 
-mod virt;
 mod common;
+mod virt;
 
-pub use virt::Program;
 pub use virt::convert;
+pub use virt::Program;

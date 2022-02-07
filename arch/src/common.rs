@@ -20,7 +20,7 @@ pub fn tuple_offsets(t: &Ty) -> Vec<usize> {
             }
             res.push(acc);
             res
-        },
-        _ => panic!("non-tuple type in tuple_offsets")
+        }
+        _ => panic!("non-tuple type in tuple_offsets"),
     }
 }

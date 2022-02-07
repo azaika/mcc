@@ -1,5 +1,5 @@
-mod program;
 mod convert;
+mod program;
 
-pub use convert::convert;
 pub use self::program::Program;
+pub use convert::convert;

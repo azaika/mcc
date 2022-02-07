@@ -158,11 +158,7 @@ fn conv(mut e: Box<Expr>, tyenv: &mut TyMap, consts: &mut ConstMap) -> Box<Expr>
 // 定数畳み込みを行う
 pub fn fold_const(mut p: Program) -> Program {
     let mut consts = ConstMap::default();
-    {
-        let mut buf = Box::new(ExprKind::dummy());
-        std::mem::swap(&mut p.global_init, &mut buf);
-        p.global_init = conv(buf, &mut p.tyenv, &mut consts);
-    }
+    p.global_init = conv(p.global_init, &mut p.tyenv, &mut consts);
 
     for Fundef { body, .. } in &mut p.fundefs {
         let mut buf = Box::new(ExprKind::dummy());

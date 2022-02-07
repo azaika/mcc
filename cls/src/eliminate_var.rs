@@ -152,11 +152,7 @@ pub fn eliminate_var(mut p: Program) -> Program {
     }
     p.main = conv(p.main, &p.globals, &mut used, &mut p.tyenv);
 
-    {
-        let mut buf = Box::new(ExprKind::dummy());
-        std::mem::swap(&mut p.global_init, &mut buf);
-        p.global_init = conv(buf, &p.globals, &mut used, &mut p.tyenv);
-    }
+    p.global_init = conv(p.global_init, &p.globals, &mut used, &mut p.tyenv);
 
     p
 }

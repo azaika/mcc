@@ -10,7 +10,7 @@ pub type Label = closure::Label;
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Value {
     Var(Id),
-    Imm(i16)
+    Imm(i16),
 }
 
 impl fmt::Display for Value {
@@ -109,7 +109,7 @@ pub enum ExprKind {
     },
     Continue(Vec<(Id, Id)>), // only in Loop.body
     In,
-    Out(Id)
+    Out(Id),
 }
 
 pub type Expr = Spanned<ExprKind>;
@@ -188,8 +188,7 @@ impl ExprKind {
                 if let Some(d) = d {
                     write!(f, "Let: {d}\n")?;
                     e1.item.format_indented(f, level + 1)?;
-                }
-                else {
+                } else {
                     e1.item.format_indented(f, level)?;
                 }
                 e2.item.format_indented(f, level)

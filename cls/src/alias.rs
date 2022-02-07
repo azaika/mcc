@@ -105,8 +105,7 @@ fn analyze_loop(
         for (v, a) in vars.iter().zip(&vars_aliases) {
             if let Some(a) = a {
                 aliases.insert(v.clone(), a.iter().cloned().collect());
-            }
-            else {
+            } else {
                 aliases.remove(v);
             }
         }
@@ -208,7 +207,14 @@ fn eliminate_dependent(e: &Expr, tyenv: &TyMap, independent: &mut Set<Id>) {
                 TupleGet(tup, _) if tyenv.get(tup).unwrap().is_pointer() => {
                     independent.remove(v);
                 }
-                Var(_) | If(..) | Let(..) | Loop { .. } | DoAll { .. } | CallDir(..) | CallCls(..) | ExtArray(..) => {
+                Var(_)
+                | If(..)
+                | Let(..)
+                | Loop { .. }
+                | DoAll { .. }
+                | CallDir(..)
+                | CallCls(..)
+                | ExtArray(..) => {
                     independent.remove(v);
                 }
                 _ => (),

@@ -37,7 +37,11 @@ fn retain_immut_global_compound(
         CallDir(label, _) => {
             // 呼び出し先の関数でも変更されないものだけを変更されないとする
             // 外部関数呼び出しでは全て変更されうる
-            immut_global.retain(|x| current_immut.get(label).map_or(false, |set| set.contains(x)))
+            immut_global.retain(|x| {
+                current_immut
+                    .get(label)
+                    .map_or(false, |set| set.contains(x))
+            })
         }
         e => e.map_ref(|e| retain_immut_global_compound(e, current_immut, immut_global)),
     }
@@ -63,7 +67,7 @@ fn collect_global_invalidation(p: &Program, independents: &Set<Id>) -> Map<Label
     }
 
     let mut current = simple_immut;
-    
+
     for _ in 0..p.fundefs.len() {
         for Fundef { name, body, .. } in &p.fundefs {
             retain_immut_global_compound(
@@ -211,7 +215,7 @@ fn conv_array_put<'a>(
     disabled: &mut Set<Id>,
     indep_saved: &mut Saved,
     unknown_saved: &mut SavedUnknown,
-    do_save: bool
+    do_save: bool,
 ) -> ExprKind {
     use ExprKind::*;
 
@@ -235,7 +239,7 @@ fn conv_array_put<'a>(
 
         if a.len() == 1 {
             // 候補が一つだけならキャッシュを上書き
-            let a =a.drain(0..1).next().unwrap();
+            let a = a.drain(0..1).next().unwrap();
             if do_save {
                 indep_saved.insert(a, x.clone());
             }
@@ -282,7 +286,7 @@ fn cleanse_cache<'a>(
                 disabled,
                 indep_saved,
                 unknown_saved,
-                false
+                false,
             );
         }
         Var(x) | AllocArray(_, _, Some(x)) => {
@@ -389,7 +393,7 @@ fn conv<'a>(
                             }
                         }
                     }
-                    
+
                     AllocArray(num, t, Some(init))
                 }
                 TupleGet(tup, idx) => {
@@ -449,14 +453,13 @@ fn conv<'a>(
                             indep_saved.remove(a);
                         }
                     }
-    
+
                     let t = params.tyenv.get(infected).unwrap();
                     if let Some(arr_saved) = unknown_saved.get_mut(&t) {
                         arr_saved.clear();
                     }
                 }
-            }
-            else {
+            } else {
                 // 外部関数呼び出し
                 indep_saved.clear();
                 unknown_saved.clear();
@@ -480,7 +483,7 @@ fn conv<'a>(
             disabled,
             indep_saved,
             unknown_saved,
-            true
+            true,
         ),
         Var(x) if params.tyenv.get(&x).unwrap().is_array() => {
             disable_dep(&x, params, disabled, indep_saved);
@@ -579,17 +582,13 @@ pub fn eliminate_get(mut p: Program, use_strict_aliasing: bool) -> Program {
     let mut indep_saved = Saved::default();
     let mut unknown_saved = SavedUnknown::default();
 
-    {
-        let mut buf = Box::new(ExprKind::dummy());
-        std::mem::swap(&mut p.global_init, &mut buf);
-        p.global_init = conv(
-            buf,
-            &params,
-            &mut disabled,
-            &mut indep_saved,
-            &mut unknown_saved,
-        );
-    }
+    p.global_init = conv(
+        p.global_init,
+        &params,
+        &mut disabled,
+        &mut indep_saved,
+        &mut unknown_saved,
+    );
 
     p.main = conv(
         p.main,
