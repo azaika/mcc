@@ -32,7 +32,7 @@ fn dummy_arg_minrt(path: &str) -> Args {
         debug: false,
         lib: Some(vec![
             "../tests/minrt/globals.ml".to_string(),
-            "../tests/libs/stdlib.ml".to_string(),
+            "../tests/libs/stdlib_minrt.ml".to_string(),
         ]),
         source: path.to_string(),
     }

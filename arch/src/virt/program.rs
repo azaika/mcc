@@ -79,7 +79,7 @@ impl Fundef {
         write!(f, "\n{}formal_fv: ", indent(level + 1))?;
         util::format_vec(f, &self.formal_fv, "[", ", ", "]")?;
         write!(f, "\n{}body:\n", indent(level + 1))?;
-        self.body.item.format_indented(f, level + 2)
+        self.body.item.format_indented(f, level + 2, false)
     }
 }
 
@@ -156,10 +156,12 @@ impl ExprMap for ExprKind {
 }
 
 impl ExprKind {
-    fn format_indented(&self, f: &mut fmt::Formatter, level: usize) -> fmt::Result {
+    fn format_indented(&self, f: &mut fmt::Formatter, level: usize, noindent: bool) -> fmt::Result {
         // print indentation
         let indent = |level: usize| "    ".repeat(level);
-        write!(f, "{}", indent(level))?;
+        if !noindent {
+            write!(f, "{}", indent(level))?;
+        }
 
         use ExprKind::*;
         match self {
@@ -174,25 +176,24 @@ impl ExprKind {
             FloatOp(op, x, y) => write!(f, "{:?} {x}, {y}\n", op),
             If(kind, x, y, e1, e2) => {
                 write!(f, "If {:?} {x}, {y}:\n", kind)?;
-                e1.item.format_indented(f, level + 1)?;
+                e1.item.format_indented(f, level + 1, false)?;
                 write!(f, "{}Else:\n", indent(level))?;
-                e2.item.format_indented(f, level + 1)
+                e2.item.format_indented(f, level + 1, false)
             }
             IfF(kind, x, y, e1, e2) => {
                 write!(f, "IfF {:?} {x}, {y}:\n", kind)?;
-                e1.item.format_indented(f, level + 1)?;
+                e1.item.format_indented(f, level + 1, false)?;
                 write!(f, "{}Else:\n", indent(level))?;
-                e2.item.format_indented(f, level + 1)
+                e2.item.format_indented(f, level + 1, false)
             }
             Let(d, e1, e2) => {
                 if let Some(d) = d {
                     write!(f, "Let: {d}\n")?;
-                    e1.item.format_indented(f, level + 1)?;
+                    e1.item.format_indented(f, level + 1, false)?;
                 } else {
-                    write!(f, "\n")?;
-                    e1.item.format_indented(f, level)?;
+                    e1.item.format_indented(f, level, true)?;
                 }
-                e2.item.format_indented(f, level)
+                e2.item.format_indented(f, level, false)
             }
             AllocHeap(x) => write!(f, "AllocHeap {x}\n"),
             CallDir(func, args) => {
@@ -211,7 +212,7 @@ impl ExprKind {
                 write!(f, "\n{}init = ", indent(level))?;
                 util::format_vec(f, init, "[", ", ", "]")?;
                 write!(f, "\n{}body =\n", indent(level))?;
-                body.item.format_indented(f, level + 1)
+                body.item.format_indented(f, level + 1, false)
             }
             Continue(xs) => {
                 write!(f, "Continue ")?;
@@ -232,7 +233,7 @@ impl ExprKind {
 
 impl fmt::Display for ExprKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        self.format_indented(f, 0)
+        self.format_indented(f, 0, false)
     }
 }
 
@@ -274,6 +275,6 @@ impl fmt::Display for Program {
             write!(f, "\n")?;
         }
         write!(f, "\n[main]\n")?;
-        self.main.item.format_indented(f, 1)
+        self.main.item.format_indented(f, 1, false)
     }
 }
