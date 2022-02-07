@@ -139,6 +139,15 @@ fn analyze_aliases_impl(
                 Var(x) if aliases.contains_key(x) => {
                     aliases.insert(v.clone(), aliases.get(x).unwrap().clone());
                 }
+                Load(..) if independent.contains(v) => {
+                    aliases.insert(
+                        v.clone(),
+                        vec![Alias {
+                            top: v.clone(),
+                            belongs: vec![],
+                        }],
+                    );
+                }
                 AllocArray(..) => {
                     aliases.insert(
                         v.clone(),
@@ -275,6 +284,8 @@ pub fn analyze_aliases(p: &Program, use_strict_aliasing: bool) -> (Set<Id>, Alia
 
     let independent = collect_independent(p, use_strict_aliasing);
     let mut aliases = AliasMap::default();
+
+    log::debug!("{:#?}", independent);
     analyze_aliases_impl(&p.global_init, &consts, &independent, &mut aliases);
     for Fundef { body, args, .. } in &p.fundefs {
         if use_strict_aliasing {
