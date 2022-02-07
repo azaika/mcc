@@ -18,13 +18,6 @@ fn get_float(consts: &ConstMap, x: &Id) -> Option<f32> {
     }
 }
 
-fn is_alloc_array(e: &Expr) -> bool {
-    match e.item {
-        ExprKind::AllocArray(..) => true,
-        _ => false,
-    }
-}
-
 // consts: 定数テーブル
 fn conv(mut e: Box<Expr>, tyenv: &mut TyMap, consts: &mut ConstMap) -> Box<Expr> {
     use ast::knormal::ConstKind::*;
@@ -110,24 +103,6 @@ fn conv(mut e: Box<Expr>, tyenv: &mut TyMap, consts: &mut ConstMap) -> Box<Expr>
             let e2 = conv(e2, tyenv, consts);
 
             ExprKind::If(kind, x, y, e1, e2)
-        }
-        ExprKind::Let(d, e1, e2) if is_alloc_array(&e1) => {
-            let (num, t) = match &e1.item {
-                ExprKind::AllocArray(num, t, _) => (num, t),
-                _ => unreachable!(),
-            };
-
-            if let Some(s) = get_int(consts, num) {
-                let arr_t = tyenv.get_mut(&d).unwrap();
-                // if s < 0, the result is undefined
-                // so we regard `s` as 1
-                if s < 0 {
-                    log::warn!("detected negative sized array `{d}`");
-                }
-                *arr_t = Ty::Array(Box::new(t.clone()), s.max(1) as usize);
-            };
-
-            ExprKind::Let(d, e1, conv(e2, tyenv, consts))
         }
         ExprKind::Let(d, e1, e2) => {
             let e1 = conv(e1, tyenv, consts);

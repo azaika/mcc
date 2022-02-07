@@ -123,6 +123,7 @@ fn optimize_closure(mut p: ast::closure::Program, option: &Args) -> ast::closure
     for i in 0..100 {
         log::info!("closure opt loop: {}", i + 1);
         p = cls::fold_const(p);
+        p = cls::flatten(p, option.use_strict_aliasing);
         p = cls::eliminate_get(p, option.use_strict_aliasing);
         p = cls::beta_reduction(p);
         p = cls::eliminate_var(p);
