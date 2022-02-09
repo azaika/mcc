@@ -89,7 +89,7 @@ fn conv(
             match &e1.item {
                 closure::ExprKind::AllocArray(_, _, None) if !vt.is_pointer() => {
                     let e1 = lift(ExprKind::AllocHeap(Value::Imm(
-                        common::type_size(&vt) as i16
+                        common::type_size(&vt).try_into().unwrap(),
                     )));
                     return lift(ExprKind::Let(Some(v), e1, e2));
                 }
@@ -101,7 +101,7 @@ fn conv(
 
                     let mut e2 = e2;
                     for i in (0..num).rev() {
-                        let offset = Value::Imm((i * size) as i16);
+                        let offset = Value::Imm((i * size).try_into().unwrap());
                         e2 = lift(ExprKind::Let(
                             None,
                             lift(ExprKind::Sw(v.clone(), offset, init.clone())),
@@ -110,7 +110,7 @@ fn conv(
                     }
 
                     let e1 = lift(ExprKind::AllocHeap(Value::Imm(
-                        common::type_size(&vt) as i16
+                        common::type_size(&vt).try_into().unwrap(),
                     )));
                     return lift(ExprKind::Let(Some(v), e1, e2));
                 }
@@ -134,7 +134,7 @@ fn conv(
                             None,
                             lift(ExprKind::Sw(
                                 v.clone(),
-                                Value::Imm((idx + 1) as i16),
+                                Value::Imm((idx + 1).try_into().unwrap()),
                                 x.clone(),
                             )),
                             e2,
@@ -146,7 +146,7 @@ fn conv(
                     let e2 = lift(ExprKind::Let(Some(lab), lift(GetLabel(label.clone())), e2));
 
                     let e1 = lift(ExprKind::AllocHeap(Value::Imm(
-                        (1 + offsets.last().unwrap()) as i16,
+                        (1 + offsets.last().unwrap()).try_into().unwrap(),
                     )));
                     return lift(ExprKind::Let(Some(v), e1, e2));
                 }
@@ -183,13 +183,17 @@ fn conv(
             for (offset, x) in offsets.into_iter().zip(xs).rev() {
                 e2 = lift(ExprKind::Let(
                     None,
-                    lift(ExprKind::Sw(name.clone(), Value::Imm(offset as i16), x)),
+                    lift(ExprKind::Sw(
+                        name.clone(),
+                        Value::Imm(offset.try_into().unwrap()),
+                        x,
+                    )),
                     e2,
                 ));
             }
             let e2 = lift(ExprKind::Let(
                 Some(name),
-                lift(ExprKind::AllocHeap(Value::Imm(size as i16))),
+                lift(ExprKind::AllocHeap(Value::Imm(size.try_into().unwrap()))),
                 e2,
             ));
 
@@ -215,7 +219,7 @@ fn conv(
             if let Some(num) = num_i {
                 // 10 回以下なら展開
                 for i in (0..num).rev() {
-                    let offset = Value::Imm(i as i16); // Array of pointer or int or float
+                    let offset = Value::Imm(i.try_into().unwrap()); // Array of pointer or int or float
                     e2 = lift(ExprKind::Let(
                         None,
                         lift(ExprKind::Sw(name.clone(), offset, init.clone())),
@@ -261,17 +265,17 @@ fn conv(
         closure::ExprKind::ExtArray(label) => lift(GetLabel(label)),
         closure::ExprKind::ArrayGet(arr, idx) => {
             let t = tyenv.get(&arr).unwrap().elem_t();
-            let size = common::type_size(t) as i32;
+            let size: i32 = common::type_size(t).try_into().unwrap();
             if (t.is_array() || t.is_tuple()) && !t.is_pointer() {
                 if let Some(ConstKind::CInt(idx)) = consts.get(&idx) {
-                    let offset = (*idx * size) as i16;
+                    let offset = (*idx * size).try_into().unwrap();
                     lift(ExprKind::IntOp(IntOpKind::Add, arr, Value::Imm(offset)))
                 } else {
                     let offset_v = gen_new_var(p, Ty::Int);
                     let offset = lift(ExprKind::IntOp(
                         IntOpKind::Mul16,
                         idx,
-                        Value::Imm(size as i16),
+                        Value::Imm(size.try_into().unwrap()),
                     ));
                     let add = lift(ExprKind::IntOp(
                         IntOpKind::Add,
@@ -288,7 +292,10 @@ fn conv(
         closure::ExprKind::TupleGet(x, idx) => {
             let t = tyenv.get(&x).unwrap();
             let offsets = common::tuple_offsets(t);
-            lift(ExprKind::Lw(x, Value::Imm(offsets[idx] as i16)))
+            lift(ExprKind::Lw(
+                x,
+                Value::Imm(offsets[idx].try_into().unwrap()),
+            ))
         }
         closure::ExprKind::Loop { vars, init, body } => lift(ExprKind::Loop {
             vars,
@@ -304,12 +311,18 @@ fn conv(
         }),
         closure::ExprKind::Continue(ps) => lift(Continue(ps)),
         closure::ExprKind::Assign(label, x) => {
-            let lab = gen_new_var(p, Ty::Tuple(vec![Ty::Int]));
-            lift(ExprKind::Let(
-                Some(lab.clone()),
-                lift(GetLabel(label)),
-                lift(ExprKind::Sw(lab.clone(), Value::Imm(0), x)),
-            ))
+            if consts.get(&x).is_none() {
+                // const global でない場合はグローバル領域の初期化を行う
+                let lab = gen_new_var(p, Ty::Tuple(vec![Ty::Int]));
+                lift(ExprKind::Let(
+                    Some(lab.clone()),
+                    lift(GetLabel(label)),
+                    lift(ExprKind::Sw(lab.clone(), Value::Imm(0), x)),
+                ))
+            } else {
+                // const global の場合は assign が不要なので消す
+                lift(Nop)
+            }
         }
         closure::ExprKind::MakeCls(..) => panic!("found MakeCls left alone"),
         closure::ExprKind::Load(label) => panic!("found Load {label} left alone"),
@@ -368,9 +381,22 @@ pub fn convert(cls: closure::Program, consts: &ConstMap) -> Program {
         let t = cls.tyenv.get(&g).unwrap();
         let s = common::type_size(t);
 
-        p.globals.push((g, s));
+        use GlobalData::*;
+        let data = match consts.get(&g).cloned() {
+            Some(ConstKind::CInt(i)) => {
+                if let Ok(i) = i.try_into() {
+                    GInt16(i)
+                } else {
+                    GInt32(i)
+                }
+            }
+            Some(ConstKind::CFloat(x)) => GFloat(x),
+            Some(ConstKind::CUnit) | None => GSpace(s),
+        };
+
+        p.globals.push((g, data));
     }
-    
+
     let main = concat_expr(cls.global_init, cls.main);
     p.main = conv(main, &mut p, &cls.tyenv, consts);
 

@@ -245,6 +245,18 @@ pub fn compile(args: Args) -> Result<()> {
         debug_output(Path::new("virtual.txt"), format!("[[virtual]]\n{}", virt))?;
     }
 
+    let opt_virt = if args.optimize {
+        arch::optimize_virtual(virt)
+    } else {
+        virt
+    };
+    if args.verbose {
+        debug_output(
+            Path::new("virtual_opt.txt"),
+            format!("[[virtual_opt]]\n{}", opt_virt),
+        )?;
+    }
+
     // let mir = cfg::convert(opt_closure);
     // if args.verbose {
     //     debug_output(Path::new("mir.txt"), format!("[[mir]]\n{}", mir))?;

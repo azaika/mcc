@@ -240,9 +240,56 @@ impl fmt::Display for ExprKind {
 pub type TyMap = util::Map<Id, Ty>;
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum GlobalData {
+    GInt16(i16),
+    GInt32(i32),
+    GFloat(f32),
+    GSpace(usize),
+}
+
+impl GlobalData {
+    pub fn is_space(&self) -> bool {
+        match self {
+            Self::GSpace(_) => true,
+            _ => false,
+        }
+    }
+    pub fn get_space(&self) -> Option<usize> {
+        match self {
+            Self::GSpace(s) => Some(*s),
+            _ => None,
+        }
+    }
+    pub fn is_int(&self) -> bool {
+        match self {
+            Self::GInt16(_) | Self::GInt32(_) => true,
+            _ => false,
+        }
+    }
+    pub fn get_int(&self) -> Option<i32> {
+        match self {
+            Self::GInt16(i) => Some(*i as i32),
+            Self::GInt32(i) => Some(*i),
+            _ => None,
+        }
+    }
+}
+
+impl fmt::Display for GlobalData {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::GInt16(i) => write!(f, "I16({i})"),
+            Self::GInt32(i) => write!(f, "Int({i})"),
+            Self::GFloat(x) => write!(f, "Float({x})"),
+            Self::GSpace(s) => write!(f, "Space({s})"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct Program {
     pub tyenv: TyMap,
-    pub globals: Vec<(Id, usize)>,
+    pub globals: Vec<(Id, GlobalData)>,
     pub fundefs: Vec<Fundef>,
     pub main: Box<Expr>,
 }

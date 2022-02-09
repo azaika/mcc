@@ -319,7 +319,8 @@ fn conv(
                 formal_fv,
                 body: e1,
             });
-            p.tyenv.insert(fundef.fvar.name.clone(), fundef.fvar.t.clone().into());
+            p.tyenv
+                .insert(fundef.fvar.name.clone(), fundef.fvar.t.clone().into());
 
             // make closure (if needed) and convert following programs
             if emerge(&e2, &fundef.fvar.name) {
@@ -336,16 +337,13 @@ fn conv(
                     });
 
                     e2
-                }
-                else {
+                } else {
                     lift(ExprKind::Let(
                         fundef.fvar.name,
                         lift(ExprKind::MakeCls(closure::Label(f), fvs)),
                         e2,
                     ))
                 }
-
-                
             } else {
                 conv(e2, tyenv, known, zeros, global, p)
             }
