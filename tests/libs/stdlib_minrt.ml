@@ -59,8 +59,12 @@ let rec print_char x =
   _asmE"out" x;
   ()
 in
-let rec rem x a d =
-  if x >= a then rem (x - a) a (d + 1) else (d, x)
+let rec rem10 x d =
+  let dd = d * 10 in
+  if x >= dd then (
+    print_char (d + 48);
+    x - dd
+  ) else rem10 x (d - 1)
 in
 let rec print_byte x = (* assume `0 <= x < 256` *)
   let x = if x >= 200 then (
@@ -74,13 +78,8 @@ let rec print_byte x = (* assume `0 <= x < 256` *)
     x
   ) in
   (* x < 100 *)
-  if x < 10 then
-    print_char (x + 48)
-  else (
-    let (d, r) = rem x 10 0 in
-    print_char (d + 48);
-    print_char (r + 48)
-  )
+  let r = rem10 x 9 in
+  print_char (r + 48)
 in
 let print_int = print_byte in
 let rec read_float _ =
