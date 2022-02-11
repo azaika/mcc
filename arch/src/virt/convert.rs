@@ -297,18 +297,29 @@ fn conv(
                 Value::Imm(offsets[idx].try_into().unwrap()),
             ))
         }
-        closure::ExprKind::Loop { vars, init, body } => lift(ExprKind::Loop {
-            vars,
-            init: init.into_iter().map(|x| Value::Var(x)).collect(),
-            body: conv(body, p, tyenv, consts),
-        }),
+        closure::ExprKind::Loop { vars, init, body } => {
+            for v in &vars {
+                let t = tyenv.get(v).unwrap().clone();
+                p.tyenv.insert(v.clone(), t);
+            }
+            lift(ExprKind::Loop {
+                vars,
+                init: init.into_iter().map(|x| Value::Var(x)).collect(),
+                body: conv(body, p, tyenv, consts),
+            })
+        }
         closure::ExprKind::DoAll {
             idx, range, body, ..
-        } => lift(ExprKind::Loop {
+        } => {
+            let t = tyenv.get(&idx).unwrap().clone();
+            p.tyenv.insert(idx.clone(), t);
+
+            lift(ExprKind::Loop {
             vars: vec![idx],
             init: vec![Value::Var(range.0)],
             body: conv(body, p, tyenv, consts),
-        }),
+        })
+    },
         closure::ExprKind::Continue(ps) => lift(Continue(ps)),
         closure::ExprKind::Assign(label, x) => {
             if consts.get(&x).is_none() {
@@ -408,6 +419,13 @@ pub fn convert(cls: closure::Program, consts: &ConstMap) -> Program {
         body,
     } in cls.fundefs
     {
+        let ft = cls.tyenv.get(&name).unwrap().clone();
+        p.tyenv.insert(name.clone(), ft);
+        for x in args.iter().chain(&formal_fv) {
+            let t = cls.tyenv.get(x).unwrap().clone();
+            p.tyenv.insert(x.clone(), t);
+        }
+
         let body = conv(body, &mut p, &cls.tyenv, consts);
         p.fundefs.push(Fundef {
             name,

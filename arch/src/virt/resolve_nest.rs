@@ -20,6 +20,7 @@ fn conv(mut e: Box<Expr>) -> Box<Expr> {
     use ExprKind::*;
     e.item = match e.item {
         If(kind, x, y, e1, e2) => If(kind, x, y, conv(e1), conv(e2)),
+        IfF(kind, x, y, e1, e2) => IfF(kind, x, y, conv(e1), conv(e2)),
         Let(decl, e1, e2) => return rotate(decl, e2, e.loc, conv(e1)),
         Loop { vars, init, body } => Loop {
             vars,

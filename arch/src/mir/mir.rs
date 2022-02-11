@@ -1,74 +1,33 @@
+use crate::virt::program as virt;
 use id_arena::Arena;
 
-pub use ty::mir::Ty;
+pub use ty::closure::Ty;
 use util::{Id, Map, Spanned};
 
 use std::fmt;
 
-#[derive(Debug, Clone, PartialEq, Hash)]
-pub struct Label(pub Id);
-
-impl fmt::Display for Label {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, ".L({})", self.0)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum ConstKind {
-    CUnit,
-    CInt(i32),
-    CFloat(f32),
-}
-
-impl From<i32> for ConstKind {
-    fn from(i: i32) -> Self {
-        Self::CInt(i)
-    }
-}
-impl From<f32> for ConstKind {
-    fn from(f: f32) -> Self {
-        Self::CFloat(f)
-    }
-}
-
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub enum UnOpKind {
-    Neg,
-    FNeg,
-}
-
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub enum BinOpKind {
-    Add,
-    Sub,
-    FAdd,
-    FSub,
-    Mul,
-    Div,
-    FMul,
-    FDiv,
-}
+pub use virt::{FloatOpKind, IfKind, IntOpKind, Label, UnOpKind, Value};
 
 // SSA の右辺
 // 関数間解析をしないので ExtApp は CallDir に統合する
 #[derive(Debug, Clone, PartialEq)]
 pub enum InstKind {
-    Const(ConstKind),
-    Var(Id),
+    Nop,
+    Mv(Id),
+    Li(i32),
+    FLi(f32),
+    GetLabel(Label),
+    LoadLabel(Label),
     UnOp(UnOpKind, Id),
-    BinOp(BinOpKind, Id, Id),
-    Tuple(Vec<Id>),
+    IntOp(IntOpKind, Id, Value),
+    FloatOp(FloatOpKind, Id, Id),
     CallDir(Label, Vec<Id>),
     CallCls(Id, Vec<Id>),
-    AllocArray(Id, Ty),
-    Assign(Label, Id),
-    Load(Label),
-    ExtArray(Label),
-    TupleGet(Id, usize),
-    ArrayGet(Id, Id),
-    ArrayPut(Id, Id, Id),
-    MakeCls(Label, Vec<Id>), // (label, actual_fv)
+    AllocHeap(Value),
+    Lw(Id, Value),
+    Sw(Id, Value, Id),
+    In,
+    Out(Id),
 }
 
 pub type Inst = Spanned<InstKind>;
@@ -77,55 +36,37 @@ impl fmt::Display for InstKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use InstKind::*;
         match self {
-            Const(c) => write!(f, "{:?}", c),
-            Var(v) => write!(f, "Var {v}"),
-            ExtArray(x) => write!(f, "ExtArray {x}"),
+            Nop => write!(f, "Nop"),
+            Mv(v) => write!(f, "Mv {v}"),
+            Li(x) => write!(f, "Li {x}"),
+            FLi(x) => write!(f, "FLi {x}"),
+            GetLabel(label) => write!(f, "GetLabel {label}"),
+            LoadLabel(label) => write!(f, "LoadLabel {label}"),
             UnOp(op, x) => write!(f, "{:?} {x}", op),
-            BinOp(op, x, y) => write!(f, "{:?} {x}, {y}", op),
-            Tuple(xs) => {
-                write!(f, "Tuple ")?;
-                util::format_vec(f, xs, "(", ", ", ")")
-            }
-            CallDir(lab, args) => {
-                write!(f, "CallDir {lab}")?;
+            IntOp(op, x, y) => write!(f, "{:?} {x}, {y}", op),
+            FloatOp(op, x, y) => write!(f, "{:?} {x}, {y}", op),
+            AllocHeap(x) => write!(f, "AllocHeap {x}"),
+            CallDir(func, args) => {
+                write!(f, "CallDir {func}")?;
                 util::format_vec(f, args, "(", ", ", ")")
             }
             CallCls(func, args) => {
                 write!(f, "CallCls {func}")?;
                 util::format_vec(f, args, "(", ", ", ")")
             }
-            AllocArray(num, t) => write!(f, "AllocArray<{t}>({num})"),
-            Assign(x, y) => write!(f, "Assign {x} := {y}"),
-            Load(x) => write!(f, "Load {x}"),
-            ArrayGet(arr, idx) => write!(f, "ArrayGet {arr}[{idx}]"),
-            ArrayPut(arr, idx, e) => write!(f, "ArrayPut {arr}[{idx}] <- {e}"),
-            TupleGet(arr, idx) => write!(f, "TupleGet {arr}.{idx}"),
-            MakeCls(lab, actual_fv) => {
-                write!(f, "MakeCls {lab}")?;
-                util::format_vec(f, actual_fv, "[", ", ", "]")
-            }
+            Lw(x, y) => write!(f, "Lw {x}, {y}"),
+            Sw(x, y, z) => write!(f, "Sw {x}, {y}, {z}"),
+            In => write!(f, "In"),
+            Out(x) => write!(f, "Out {x}"),
         }
     }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum IfKind {
-    IfEq,
-    IfLE,
 }
 
 // basic block の末尾にあるもの
 #[derive(Debug, Clone, PartialEq)]
 pub enum TailKind {
-    If(IfKind, Id, Id, BlockId, BlockId),
-    IntLoop {
-        idx: Id,
-        range: (Id, Id),
-        delta: i32,
-        element_wise: Vec<Id>,
-        body: BlockId,
-        cont: BlockId,
-    },
+    If(IfKind, Id, Value, BlockId, BlockId),
+    IfF(IfKind, Id, Id, BlockId, BlockId),
     Jump(BlockId),
     Return(Option<Id>),
 }
@@ -137,24 +78,16 @@ impl TailKind {
             If(kind, x, y, b1, b2) => {
                 write!(
                     f,
-                    "{:?} {}, {} => {} | {}",
+                    "If {:?} {}, {} => {} | {}",
                     kind, x, y, arena[*b1].name, arena[*b2].name
                 )
             }
-            IntLoop {
-                idx,
-                range,
-                delta,
-                element_wise,
-                body,
-                cont,
-            } => {
+            IfF(kind, x, y, b1, b2) => {
                 write!(
                     f,
-                    "IntLoop {idx}: ({}..{}).by({delta}) => {} ? {} ",
-                    range.0, range.1, arena[*body].name, arena[*cont].name
-                )?;
-                util::format_vec(f, element_wise, "(arr? = [", ", ", "])")
+                    "IfF {:?} {}, {} => {} | {}",
+                    kind, x, y, arena[*b1].name, arena[*b2].name
+                )
             }
             Jump(block) => write!(f, "Jump {}", arena[*block].name),
             Return(r) => {
@@ -260,16 +193,18 @@ pub struct Program {
     pub globals: Vec<Label>,
     pub fundefs: Vec<Fundef>,
     pub entry: BlockId,
+    pub exit: BlockId,
 }
 
 impl Program {
-    pub fn new(block_arena: Arena<Block>, entry: BlockId) -> Self {
+    pub fn new(block_arena: Arena<Block>, entry: BlockId, exit: BlockId) -> Self {
         Self {
             tymap: Map::default(),
             block_arena,
             globals: vec![],
             fundefs: vec![],
             entry,
+            exit,
         }
     }
 
@@ -280,10 +215,7 @@ impl Program {
         used.insert(bid);
 
         match self.block_arena[bid].tail.item {
-            TailKind::If(_, _, _, b1, b2)
-            | TailKind::IntLoop {
-                body: b1, cont: b2, ..
-            } => {
+            TailKind::If(_, _, _, b1, b2) | TailKind::IfF(_, _, _, b1, b2) => {
                 self.collect_used_impl(b1, used);
                 self.collect_used_impl(b2, used);
             }

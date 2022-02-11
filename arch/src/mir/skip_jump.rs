@@ -1,4 +1,4 @@
-use ast::mir::*;
+use super::mir::*;
 
 type Set = util::Set<BlockId>;
 
@@ -14,7 +14,7 @@ fn can_skip(b: &Block) -> Option<BlockId> {
         Some(jump)
     } else {
         let (dest, inst) = &b.body[0];
-        if dest.is_none() && inst.item == InstKind::Const(ConstKind::CUnit) {
+        if dest.is_none() && inst.item == InstKind::Nop {
             Some(jump)
         } else {
             None
@@ -29,10 +29,7 @@ fn conv(bid: BlockId, p: &mut Program, arrived: &mut Set) {
     arrived.insert(bid);
 
     let (o1, o2) = match p.block_arena[bid].tail.item {
-        TailKind::If(_, _, _, b1, b2)
-        | TailKind::IntLoop {
-            body: b1, cont: b2, ..
-        } => {
+        TailKind::If(_, _, _, b1, b2) | TailKind::IfF(_, _, _, b1, b2) => {
             conv(b1, p, arrived);
             conv(b2, p, arrived);
             (can_skip(&p.block_arena[b1]), can_skip(&p.block_arena[b2]))
@@ -47,19 +44,9 @@ fn conv(bid: BlockId, p: &mut Program, arrived: &mut Set) {
     let name = p.block_arena[bid].name.clone();
     let item = &mut p.block_arena[bid].tail.item;
     match item {
-        TailKind::If(_, _, _, b1, b2) => {
+        TailKind::If(_, _, _, b1, b2) | TailKind::IfF(_, _, _, b1, b2) => {
             *b1 = o1.unwrap_or(*b1);
             *b2 = o2.unwrap_or(*b2);
-        }
-        TailKind::IntLoop { cont: b2, .. } => {
-            let b = o2.unwrap_or(*b2);
-            if o1.is_some() {
-                // unnecessary loop
-                log::debug!("eliminating for-each `{name}`.");
-                *item = TailKind::Jump(b)
-            } else {
-                *b2 = b;
-            }
         }
         TailKind::Jump(b) => {
             if o1.is_some() {

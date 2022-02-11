@@ -11,13 +11,6 @@ fn can_remove(e: &Expr) -> bool {
     }
 }
 
-fn is_global_load(e: &Expr) -> bool {
-    match &e.item {
-        ExprKind::GetLabel(..) | ExprKind::LoadLabel(..) => true,
-        _ => false
-    }
-}
-
 fn conv(
     mut e: Box<Expr>,
     tyenv: &mut TyMap,
@@ -34,9 +27,6 @@ fn conv(
         Let(Some(v), e1, e2) => {
             let e2 = conv(e2, tyenv, used, global_used);
             if !used.contains(&v) {
-                if !is_global_load(&e1) {
-                    tyenv.remove(&v);
-                }
                 if can_remove(&e1) {
                     return e2;
                 } else {
@@ -167,9 +157,6 @@ pub fn eliminate(mut p: Program) -> Program {
     for (g, data) in p.globals {
         if global_used.contains(&Label(g.clone())) {
             new_globals.push((g, data));
-        }
-        else {
-            p.tyenv.remove(&g);
         }
     }
     p.globals = new_globals;

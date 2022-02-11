@@ -10,3 +10,4 @@ util = { path = "../util" }
 ast = { path = "../ast" }
 ty = { path = "../ty" }
 log = "0.4.0"
+id-arena = "2"

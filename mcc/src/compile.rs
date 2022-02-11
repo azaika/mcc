@@ -240,7 +240,7 @@ pub fn compile(args: Args) -> Result<()> {
     };
 
     let consts = cls::collect_consts(&opt_closure);
-    let virt = arch::convert(opt_closure, &consts);
+    let virt = arch::to_virtual(opt_closure, &consts);
     if args.verbose {
         debug_output(Path::new("virtual.txt"), format!("[[virtual]]\n{}", virt))?;
     }
@@ -255,6 +255,22 @@ pub fn compile(args: Args) -> Result<()> {
         debug_output(
             Path::new("virtual_opt.txt"),
             format!("[[virtual_opt]]\n{}", opt_virt),
+        )?;
+    }
+
+    let mir = arch::to_mir(opt_virt);
+    if args.verbose {
+        debug_output(Path::new("mir.txt"), format!("[[mir]]\n{mir}"))?;
+    }
+    let mir_opt = if args.optimize {
+        arch::optimize_mir(mir)
+    } else {
+        mir
+    };
+    if args.verbose {
+        debug_output(
+            Path::new("mir_opt.txt"),
+            format!("[[mir_opt]]\n{}", mir_opt),
         )?;
     }
 
