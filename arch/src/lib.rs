@@ -22,6 +22,12 @@ pub fn finalize_virt(mut p: Virtual) -> Virtual {
 }
 
 pub fn optimize_mir(mut p: Mir) -> Mir {
-    p = mir::skip_jump(p);
+    let prev = p.clone();
+    for _ in 0..100 {
+        p = mir::skip_jump(p);
+        if p == prev {
+            break;
+        }
+    }
     p
 }

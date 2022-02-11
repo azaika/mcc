@@ -14,7 +14,7 @@ fn can_skip(b: &Block) -> Option<BlockId> {
         Some(jump)
     } else {
         let (dest, inst) = &b.body[0];
-        if dest.is_none() && inst.item == InstKind::Nop {
+        if dest.is_none() || inst.item == InstKind::Nop {
             Some(jump)
         } else {
             None
