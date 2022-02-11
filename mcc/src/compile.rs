@@ -246,9 +246,10 @@ pub fn compile(args: Args) -> Result<()> {
     }
 
     let opt_virt = if args.optimize {
-        arch::optimize_virtual(virt)
+        let virt = arch::optimize_virtual(virt);
+        arch::finalize_virt(virt)
     } else {
-        virt
+        arch::finalize_virt(virt)
     };
     if args.verbose {
         debug_output(

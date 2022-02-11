@@ -12,3 +12,8 @@ pub fn optimize_virtual(mut p: Program) -> Program {
     p = virt::eliminate(p);
     p
 }
+
+pub fn finalize_virt(mut p: Program) -> Program {
+    p = virt::resolve_nest(p);
+    p
+}
