@@ -190,7 +190,7 @@ impl Fundef {
 pub struct Program {
     pub tymap: Map<Id, Ty>,
     pub block_arena: Arena<Block>,
-    pub globals: Vec<Label>,
+    pub globals: Vec<(Label, usize)>,
     pub fundefs: Vec<Fundef>,
     pub entry: BlockId,
     pub exit: BlockId,
@@ -241,8 +241,8 @@ impl fmt::Display for Program {
         write!(f, "Entry: {}\n\n", self.block_arena[self.entry].name)?;
 
         write!(f, "Globals: [\n")?;
-        for g in &self.globals {
-            write!(f, "    {},\n", g)?;
+        for (label, size) in &self.globals {
+            write!(f, "    ({label}, {size}),\n")?;
         }
 
         write!(f, "]\n\nFundefs:\n")?;

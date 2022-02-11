@@ -229,6 +229,16 @@ pub fn convert(prog: virt::Program) -> mir::Program {
     let exit = arena.alloc(mir::Block::with_name("_min_caml_end".to_string()));
     let mut p = mir::Program::new(arena, entry, exit);
 
+    for (label, data) in prog.globals {
+        let size = match data {
+            virt::GlobalData::GInt16(_) => 1,
+            virt::GlobalData::GInt32(_) => 1,
+            virt::GlobalData::GFloat(_) => 1,
+            virt::GlobalData::GSpace(s) => s,
+        };
+        p.globals.push((Label(label), size));
+    }
+
     convert_fundef(prog.fundefs, &prog.tyenv, &mut p);
 
     conv(
