@@ -143,6 +143,8 @@ fn conv(
             let loop_id = p
                 .block_arena
                 .alloc(mir::Block::with_name(id::gen_tmp_var_with(".loop")));
+            
+            p.block_arena[bid].tail.item = TailKind::Jump(loop_id);
             conv(e1, tyenv, p, loop_id, res, tail, Some(loop_id));
         }
         ExprKind::Continue(xs) => {
