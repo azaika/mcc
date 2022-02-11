@@ -417,6 +417,74 @@ fn collect_global(e: &knormal::Expr, last: &Id, res: &mut Set) {
     }
 }
 
+fn used_global_impl(e: &closure::Expr, unused: &mut Set) {
+    use closure::ExprKind::*;
+    match &e.item {
+        Var(x) | UnOp(_, x) | AllocArray(x, _, None) | TupleGet(x, _) => { unused.remove(x); },
+        BinOp(_, x, y) | AllocArray(x, _, Some(y)) | ArrayGet(x, y) => {
+            unused.remove(x);
+            unused.remove(y);
+        },
+        If(_, x, y, e1, e2) => {
+            unused.remove(x);
+            unused.remove(y);
+            used_global_impl(e1, unused);
+            used_global_impl(e2, unused);
+        },
+        Let(_, e1, e2) => {
+            used_global_impl(e1, unused);
+            used_global_impl(e2, unused);
+        },
+        Tuple(xs) | CallDir(_, xs) | MakeCls(_, xs) | Asm(_, xs) => {
+            for x in xs {
+                unused.remove(x);
+            }
+        },
+        CallCls(f, xs) => {
+            unused.remove(f);
+            for x in xs {
+                unused.remove(x);
+            }
+        },
+        ArrayPut(x, y, z) => {
+            unused.remove(x);
+            unused.remove(y);
+            unused.remove(z);
+        },
+        Loop { init, body, .. } => {
+            for x in init {
+                unused.remove(x);
+            }
+            used_global_impl(body, unused);
+        },
+        DoAll { range: (x, y), body, .. } => {
+            unused.remove(x);
+            unused.remove(y);
+            used_global_impl(body, unused);
+        },
+        Continue(ps) => {
+            for (_, x) in ps {
+                unused.remove(x);
+            }
+        },
+        Assign(..) | Load(..) => panic!(),
+        Const(_) | ExtArray(_) => ()
+    };
+}
+
+fn insert_load(mut e: Box<closure::Expr>, globals: &[Id]) -> Box<closure::Expr> {
+    let mut unused = globals.iter().cloned().collect();
+    used_global_impl(&e, &mut unused);
+
+    let span = e.loc;
+    for g in globals.iter().filter(|x| !unused.contains(*x)).rev() {
+        let load = Box::new(closure::ExprKind::Load(closure::Label(g.clone())).with_span(span));
+        e = Box::new(closure::ExprKind::Let(g.clone(), load, e).with_span(span));
+    }
+
+    e
+}
+
 pub fn convert(e: knormal::Expr, tyenv: knormal::TyMap) -> closure::Program {
     let mut p = closure::Program::new();
     let last = find_last_letrec(&e);
@@ -435,6 +503,12 @@ pub fn convert(e: knormal::Expr, tyenv: knormal::TyMap) -> closure::Program {
     );
 
     p.globals.reverse();
+
+    for closure::Fundef { body, .. } in &mut p.fundefs {
+        let mut buf = Box::new(closure::ExprKind::dummy());
+        std::mem::swap(body, &mut buf);
+        *body = insert_load(buf, &p.globals);
+    }
 
     p
 }

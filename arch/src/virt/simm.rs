@@ -35,13 +35,13 @@ fn conv(
                 Var(x)
             }
         }
-        LoadLabel(label) => {
+        GetLabel(label) => {
             if let Some(x) = global_int.get(&label.0) {
                 Li(*x)
             } else if let Some(x) = global_float.get(&label.0) {
                 FLi(*x)
             } else {
-                LoadLabel(label)
+                GetLabel(label)
             }
         }
         IntOp(kind, x, Value::Var(y)) => {
@@ -109,7 +109,7 @@ fn conv(
             let e1 = conv(e1, global_int, global_float, env);
             let e2 = conv(e2, global_int, global_float, env);
             If(kind, x, map!(y), e1, e2)
-        },
+        }
         Let(v, e1, e2) => {
             let e1 = conv(e1, global_int, global_float, env);
             if let Some(v) = &v {
