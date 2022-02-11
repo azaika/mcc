@@ -4,21 +4,11 @@ mod common;
 mod virt;
 
 pub use virt::convert;
-pub use virt::simm;
 pub use virt::Program;
 
 pub fn optimize_virtual(mut p: Program) -> Program {
-    let mut prev = p.clone();
-
-    for i in 0..100 {
-        log::info!("virtual opt loop: {}", i + 1);
-        p = simm(p);
-
-        if p == prev {
-            break;
-        }
-        prev = p.clone();
-    }
-
+    log::info!("virtual opt started");
+    p = virt::simm(p);
+    p = virt::eliminate(p);
     p
 }

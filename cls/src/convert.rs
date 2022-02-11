@@ -420,55 +420,61 @@ fn collect_global(e: &knormal::Expr, last: &Id, res: &mut Set) {
 fn used_global_impl(e: &closure::Expr, unused: &mut Set) {
     use closure::ExprKind::*;
     match &e.item {
-        Var(x) | UnOp(_, x) | AllocArray(x, _, None) | TupleGet(x, _) => { unused.remove(x); },
+        Var(x) | UnOp(_, x) | AllocArray(x, _, None) | TupleGet(x, _) => {
+            unused.remove(x);
+        }
         BinOp(_, x, y) | AllocArray(x, _, Some(y)) | ArrayGet(x, y) => {
             unused.remove(x);
             unused.remove(y);
-        },
+        }
         If(_, x, y, e1, e2) => {
             unused.remove(x);
             unused.remove(y);
             used_global_impl(e1, unused);
             used_global_impl(e2, unused);
-        },
+        }
         Let(_, e1, e2) => {
             used_global_impl(e1, unused);
             used_global_impl(e2, unused);
-        },
+        }
         Tuple(xs) | CallDir(_, xs) | MakeCls(_, xs) | Asm(_, xs) => {
             for x in xs {
                 unused.remove(x);
             }
-        },
+        }
         CallCls(f, xs) => {
             unused.remove(f);
             for x in xs {
                 unused.remove(x);
             }
-        },
+        }
         ArrayPut(x, y, z) => {
             unused.remove(x);
             unused.remove(y);
             unused.remove(z);
-        },
+        }
         Loop { init, body, .. } => {
             for x in init {
                 unused.remove(x);
             }
             used_global_impl(body, unused);
-        },
-        DoAll { range: (x, y), body, .. } => {
+        }
+        DoAll {
+            range: (x, y),
+            body,
+            ..
+        } => {
             unused.remove(x);
             unused.remove(y);
             used_global_impl(body, unused);
-        },
+        }
         Continue(ps) => {
             for (_, x) in ps {
                 unused.remove(x);
             }
-        },
+        }
         Assign(..) | Load(..) => panic!(),
-        Const(_) | ExtArray(_) => ()
+        Const(_) | ExtArray(_) => (),
     };
 }
 
