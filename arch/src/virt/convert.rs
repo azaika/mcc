@@ -199,8 +199,14 @@ fn conv(
 
             e2
         }
-        closure::ExprKind::CallDir(label, args) => lift(CallDir(label, args)),
-        closure::ExprKind::CallCls(cls, args) => lift(CallCls(cls, args)),
+        closure::ExprKind::CallDir(label, args) => {
+            let args = args.into_iter().map(|x| Value::Var(x)).collect();
+            lift(CallDir(label, args))
+        }
+        closure::ExprKind::CallCls(cls, args) => {
+            let args = args.into_iter().map(|x| Value::Var(x)).collect();
+            lift(CallCls(cls, args))
+        }
         closure::ExprKind::AllocArray(num, _, None) => lift(ExprKind::AllocHeap(Value::Var(num))),
         closure::ExprKind::AllocArray(num, t, Some(init)) => {
             let name = gen_new_var(p, Ty::ArrayPtr(Box::new(t)));

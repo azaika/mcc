@@ -21,8 +21,8 @@ pub enum InstKind {
     UnOp(UnOpKind, Id),
     IntOp(IntOpKind, Id, Value),
     FloatOp(FloatOpKind, Id, Id),
-    CallDir(Label, Vec<Id>),
-    CallCls(Id, Vec<Id>),
+    CallDir(Label),
+    CallCls,
     AllocHeap(Value),
     Lw(Id, Value),
     Sw(Id, Value, Id),
@@ -46,14 +46,8 @@ impl fmt::Display for InstKind {
             IntOp(op, x, y) => write!(f, "{:?} {x}, {y}", op),
             FloatOp(op, x, y) => write!(f, "{:?} {x}, {y}", op),
             AllocHeap(x) => write!(f, "AllocHeap {x}"),
-            CallDir(func, args) => {
-                write!(f, "CallDir {func}")?;
-                util::format_vec(f, args, "(", ", ", ")")
-            }
-            CallCls(func, args) => {
-                write!(f, "CallCls {func}")?;
-                util::format_vec(f, args, "(", ", ", ")")
-            }
+            CallDir(func) => write!(f, "CallDir {func}"),
+            CallCls => write!(f, "CallCls"),
             Lw(x, y) => write!(f, "Lw {x}, {y}"),
             Sw(x, y, z) => write!(f, "Sw {x}, {y}, {z}"),
             In => write!(f, "In"),

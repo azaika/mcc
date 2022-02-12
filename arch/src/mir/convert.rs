@@ -1,5 +1,5 @@
 use super::mir;
-use crate::virt::program as virt;
+use crate::{virt::program as virt, common};
 
 use ast::closure::Label;
 use id_arena::Arena;
@@ -17,8 +17,6 @@ fn conv_simple(e: virt::ExprKind) -> mir::InstKind {
         virt::ExprKind::UnOp(kind, x) => InstKind::UnOp(kind, x),
         virt::ExprKind::IntOp(kind, x, y) => InstKind::IntOp(kind, x, y),
         virt::ExprKind::FloatOp(kind, x, y) => InstKind::FloatOp(kind, x, y),
-        virt::ExprKind::CallDir(l, args) => InstKind::CallDir(l, args),
-        virt::ExprKind::CallCls(f, args) => InstKind::CallCls(f, args),
         virt::ExprKind::AllocHeap(x) => InstKind::AllocHeap(x),
         virt::ExprKind::Lw(x, y) => InstKind::Lw(x, y),
         virt::ExprKind::Sw(x, y, z) => InstKind::Sw(x, y, z),
@@ -92,6 +90,23 @@ fn conv_let(
             v
         ),
         virt::ExprKind::Continue(_) => unreachable!(),
+        virt::ExprKind::CallDir(label, xs) => {
+            if xs.len() > common::REGS.len() {
+                panic!("too many arguments!!!");
+            }
+
+            for (x, r) in xs.into_iter().zip(common::REGS) {
+                let reg = format!("%{}", r);
+                let kind = match x {
+                    virt::Value::Var(x) => mir::InstKind::Mv(x),
+                    virt::Value::Imm(x) => mir::InstKind::Li(x as i32),
+                };
+                body.push((Some(reg), kind.with_span(span)));
+            }
+
+            body.push((res.clone(), mir::InstKind::CallDir(label).with_span(span)));
+        }
+        virt::ExprKind::CallCls(..) => unimplemented!("I have no time"),
         _ => body.push((res.clone(), conv_simple(e1.item).with_span(span))),
     }
 
@@ -202,6 +217,25 @@ fn conv(
 
             arena[bid].tail = Box::new(TailKind::Jump(loop_id.unwrap()).with_span(e.loc));
         }
+        ExprKind::CallDir(label, xs) => {
+            if xs.len() > common::REGS.len() {
+                panic!("too many arguments!!!");
+            }
+
+            let block = &mut arena[bid];
+            for (x, r) in xs.into_iter().zip(common::REGS) {
+                let reg = format!("%{}", r);
+                let kind = match x {
+                    virt::Value::Var(x) => InstKind::Mv(x),
+                    virt::Value::Imm(x) => InstKind::Li(x as i32),
+                };
+                block.body.push((Some(reg), kind.with_span(e.loc)));
+            }
+
+            block.body.push((res, InstKind::CallDir(label).with_span(e.loc)));
+            block.tail = Box::new(tail.with_span(e.loc));
+        }
+        ExprKind::CallCls(..) => unimplemented!("I have no time"),
         _ => {
             let block = &mut arena[bid];
             block.body.push((res, conv_simple(e.item).with_span(e.loc)));

@@ -87,14 +87,18 @@ fn conv(
         CallDir(label, xs) => {
             global_used.insert(label.clone());
             for x in &xs {
-                used.insert(x.clone());
+                if let Value::Var(x) = x {
+                    used.insert(x.clone());
+                }
             }
             CallDir(label, xs)
         }
         CallCls(f, xs) => {
             used.insert(f.clone());
             for x in &xs {
-                used.insert(x.clone());
+                if let Value::Var(x) = x {
+                    used.insert(x.clone());
+                }
             }
             CallCls(f, xs)
         }

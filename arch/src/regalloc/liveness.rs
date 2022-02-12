@@ -71,17 +71,6 @@ pub fn prepare(
                 | AllocHeap(Value::Var(x))
                 | Lw(x, _)
                 | Out(x) => push(x),
-                CallDir(_, xs) => {
-                    for x in xs {
-                        push(x);
-                    }
-                }
-                CallCls(f, xs) => {
-                    push(f);
-                    for x in xs {
-                        push(x);
-                    }
-                }
                 _ => (),
             }
         }

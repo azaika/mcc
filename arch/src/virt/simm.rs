@@ -138,6 +138,14 @@ fn conv(
             let body = conv(body, global_int, global_float, env);
             Loop { vars, init, body }
         }
+        CallDir(label, args) => {
+            let args = args.into_iter().map(|x| map!(x)).collect();
+            CallDir(label, args)
+        }
+        CallCls(f, args) => {
+            let args = args.into_iter().map(|x| map!(x)).collect();
+            CallCls(f, args)
+        }
         item => item,
     };
 

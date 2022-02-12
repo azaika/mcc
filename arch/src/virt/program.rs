@@ -97,8 +97,8 @@ pub enum ExprKind {
     If(IfKind, Id, Value, Box<Expr>, Box<Expr>),
     IfF(IfKind, Id, Id, Box<Expr>, Box<Expr>),
     Let(Option<Id>, Box<Expr>, Box<Expr>),
-    CallDir(Label, Vec<Id>),
-    CallCls(Id, Vec<Id>),
+    CallDir(Label, Vec<Value>),
+    CallCls(Id, Vec<Value>),
     AllocHeap(Value),
     Lw(Id, Value),
     Sw(Id, Value, Id), // (dest, offset, v)
