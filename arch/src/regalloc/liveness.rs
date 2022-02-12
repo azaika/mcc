@@ -143,8 +143,7 @@ pub fn prepare(
 pub fn analyze(
     arena: &Arena<Block>,
     entry: BlockId,
-    num_var: usize,
-    vars: util::Map<Var, usize>,
+    n: usize,
     def: &util::Set<LiveId>,
     used: &util::Set<LiveId>,
     follow: &util::Map<ProgramPoint, Follow>,
@@ -158,7 +157,7 @@ pub fn analyze(
         let block = &arena[bid];
         for i in 0..(block.body.len()) {
             let pp = ProgramPoint::new(bid, i);
-            for j in 0..num_var {
+            for j in 0..n {
                 queue.insert(((pp, j), false));
                 queue.insert(((pp, j), true));
             }

@@ -229,16 +229,28 @@ fn conv(
             } else {
                 let var = gen_new_var(p, Ty::Int);
                 let end = gen_new_var(p, Ty::Int);
+                let v_next = gen_new_var(p, Ty::Int);
 
-                let body = lift(ExprKind::If(
-                    IfKind::IfLE,
-                    var.clone(),
-                    Value::Var(end.clone()),
+                let body = lift(ExprKind::Let(
+                    Some(v_next.clone()),
+                    lift(ExprKind::IntOp(IntOpKind::Add, var.clone(), Value::Imm(1))),
+                    lift(ExprKind::Continue(vec![(var.clone(), v_next.clone())])),
+                ));
+                let body = lift(ExprKind::Let(
+                    None,
                     lift(ExprKind::Sw(
                         name.clone(),
                         Value::Var(var.clone()),
                         init.clone(),
                     )),
+                    body,
+                ));
+
+                let body = lift(ExprKind::If(
+                    IfKind::IfLE,
+                    var.clone(),
+                    Value::Var(end.clone()),
+                    body,
                     lift(ExprKind::Nop),
                 ));
 
@@ -249,11 +261,13 @@ fn conv(
                 });
 
                 e2 = lift(ExprKind::Let(None, lop, e2));
-                e2 = lift(ExprKind::Let(
-                    Some(end),
-                    lift(ExprKind::IntOp(IntOpKind::Sub, num.clone(), Value::Imm(1))),
-                    e2,
-                ));
+
+                let end_def = if let Some(ConstKind::CInt(num)) = consts.get(&num) {
+                    ExprKind::Li(*num - 1)
+                } else {
+                    ExprKind::IntOp(IntOpKind::Sub, num.clone(), Value::Imm(1))
+                };
+                e2 = lift(ExprKind::Let(Some(end), lift(end_def), e2));
             }
 
             lift(ExprKind::Let(

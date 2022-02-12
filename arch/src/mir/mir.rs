@@ -189,7 +189,6 @@ impl Fundef {
         f: &mut fmt::Formatter,
         tymap: &Map<Id, Ty>,
         level: usize,
-        arena: &Arena<Block>,
     ) -> fmt::Result {
         // print indentation
         let indent = |level: usize| "    ".repeat(level);
@@ -208,7 +207,7 @@ impl Fundef {
             f,
             "\n{}entry: {}\n",
             indent(level + 1),
-            arena[self.entry].name
+            self.block_arena[self.entry].name
         )?;
 
         write!(f, "{}blocks:\n", indent(level + 1))?;
@@ -264,7 +263,7 @@ impl fmt::Display for Program {
 
         write!(f, "]\n\nFundefs:\n")?;
         for fun in &self.fundefs {
-            fun.format_indented(f, &self.tymap, 1, &self.main_arena)?;
+            fun.format_indented(f, &self.tymap, 1)?;
             write!(f, "\n")?;
         }
 
