@@ -25,8 +25,11 @@ pub fn tuple_offsets(t: &Ty) -> Vec<usize> {
     }
 }
 
+pub type Color = &'static str;
+
 #[allow(dead_code)]
 pub static REG_ZERO: &'static str = "r0";
+pub static REG_RET: &'static str = "r2";
 #[allow(dead_code)]
 pub static REG_STACK: &'static str = "r3";
 #[allow(dead_code)]

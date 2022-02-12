@@ -286,13 +286,11 @@ fn convert_fundef(fundefs: Vec<virt::Fundef>, tyenv: &virt::TyMap, p: &mut mir::
                     arena,
                     entry_id,
                     None,
-                    mir::TailKind::Return(None),
+                    mir::TailKind::Return,
                     None,
                 );
             } else {
-                let ret_var = util::id::gen_tmp_var_with(rt.short());
-                p.tymap.insert(ret_var.clone(), (**rt).clone());
-
+                let ret_var = format!("%{}", common::REG_RET);
                 conv(
                     body,
                     tyenv,
@@ -300,7 +298,7 @@ fn convert_fundef(fundefs: Vec<virt::Fundef>, tyenv: &virt::TyMap, p: &mut mir::
                     arena,
                     entry_id,
                     Some(ret_var.clone()),
-                    mir::TailKind::Return(Some(ret_var.clone())),
+                    mir::TailKind::Return,
                     None,
                 );
             }

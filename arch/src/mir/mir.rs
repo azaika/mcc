@@ -62,7 +62,7 @@ pub enum TailKind {
     If(IfKind, Id, Value, BlockId, BlockId),
     IfF(IfKind, Id, Id, BlockId, BlockId),
     Jump(BlockId),
-    Return(Option<Id>),
+    Return,
 }
 
 impl TailKind {
@@ -84,13 +84,7 @@ impl TailKind {
                 )
             }
             Jump(block) => write!(f, "Jump {}", arena[*block].name),
-            Return(r) => {
-                if let Some(r) = r {
-                    write!(f, "Return {}", r)
-                } else {
-                    write!(f, "Return")
-                }
-            }
+            Return => write!(f, "Return")
         }
     }
 }
@@ -112,7 +106,7 @@ impl Block {
         Self {
             name,
             body: vec![],
-            tail: Box::new(Spanned::new(TailKind::Return(None), (0, 0))),
+            tail: Box::new(Spanned::new(TailKind::Return, (0, 0))),
         }
     }
 
@@ -154,7 +148,7 @@ fn collect_used_impl(arena: &Arena<Block>, bid: BlockId, used: &mut util::Set<Bl
             collect_used_impl(arena, b2, used);
         }
         TailKind::Jump(b) => collect_used_impl(arena, b, used),
-        TailKind::Return(_) => {}
+        TailKind::Return => {}
     }
 }
 

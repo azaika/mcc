@@ -40,7 +40,7 @@ fn conv(bid: BlockId, arena: &mut Arena<Block>, arrived: &mut Set) {
             conv(b, arena, arrived);
             (can_skip(&arena[b]), None)
         }
-        TailKind::Return(_) => return,
+        TailKind::Return => return,
     };
 
     let name = arena[bid].name.clone();
@@ -56,7 +56,7 @@ fn conv(bid: BlockId, arena: &mut Arena<Block>, arrived: &mut Set) {
             }
             *b = o1.unwrap_or(*b);
         }
-        TailKind::Return(_) => unreachable!(),
+        TailKind::Return => unreachable!(),
     }
 }
 

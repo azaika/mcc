@@ -1,5 +1,7 @@
+use std::fmt::format;
+
 use super::types::*;
-use crate::mir::mir::*;
+use crate::{mir::mir::*, common::{Color, REG_RET, REGS}};
 use id_arena::Arena;
 use util::Id as Var;
 
@@ -25,7 +27,7 @@ fn gen_varmap(p: &Program) -> (util::Map<Var, usize>, util::Map<usize, Var>) {
     (m1, m2)
 }
 
-pub fn prepare(
+fn prepare_impl(
     arena: &Arena<Block>,
     entry: BlockId,
     var_idx: &util::Map<Var, usize>,
@@ -33,6 +35,7 @@ pub fn prepare(
     used: &mut util::Set<LiveId>,
     follow: &mut util::Map<ProgramPoint, Follow>,
     prev: &mut util::Map<BlockId, Vec<ProgramPoint>>,
+    precolor: &mut util::Map<usize, Color>
 ) {
     for bid in collect_used(arena, entry) {
         let block = &arena[bid];
@@ -71,7 +74,28 @@ pub fn prepare(
                 | AllocHeap(Value::Var(x))
                 | Lw(x, _)
                 | Out(x) => push(x),
-                _ => (),
+                CallDir(_) => {
+                    if let Some(d) = d {
+                        let d = *var_idx.get(d).unwrap();
+                        precolor.insert(d, REG_RET);
+                        for r in REGS {
+                            if *r == REG_RET {
+                                continue;
+                            }
+                            let r = format!("%{r}");
+                            let r = *var_idx.get(&r).unwrap();
+                            def.insert((pp.clone(), r));
+                        }
+                    }
+                    else {
+                        for r in REGS {
+                            let r = format!("%{r}");
+                            let r = *var_idx.get(&r).unwrap();
+                            def.insert((pp.clone(), r));
+                        }
+                    }
+                },
+                _ => ()
             }
         }
 
@@ -110,12 +134,6 @@ pub fn prepare(
                 let f2 = ProgramPoint::new(*b2, 0);
                 follow.insert(pp, Follow::Two(f1, f2));
             }
-            TailKind::Return(x) => {
-                if let Some(x) = x {
-                    let x = *var_idx.get(x).unwrap();
-                    used.insert((ProgramPoint::new(bid, n), x));
-                }
-            }
             TailKind::Jump(b) => {
                 let pp = ProgramPoint::new(bid, n);
 
@@ -124,12 +142,13 @@ pub fn prepare(
                 let f = ProgramPoint::new(*b, 0);
                 follow.insert(pp, Follow::One(f));
             }
+            TailKind::Return => (),
         };
     }
 }
 
 // returns: (live_in, live_out)
-pub fn analyze(
+fn analyze_impl(
     arena: &Arena<Block>,
     entry: BlockId,
     n: usize,
@@ -137,7 +156,7 @@ pub fn analyze(
     used: &util::Set<LiveId>,
     follow: &util::Map<ProgramPoint, Follow>,
     prev: &util::Map<BlockId, Vec<ProgramPoint>>,
-) -> (Liveness, Liveness) {
+) -> Liveness {
     let mut live_in = util::Set::default();
     let mut live_out = util::Set::default();
 
@@ -197,23 +216,32 @@ pub fn analyze(
         }
     }
 
-    let mut r_in: Liveness = util::Map::default();
-    let mut r_out: Liveness = util::Map::default();
+    let mut res: Liveness = util::Map::default();
     for (pp, i_v) in live_in {
-        r_in.entry(pp).or_default().insert(i_v);
+        res.entry(pp).or_default().insert(i_v);
     }
     for (pp, i_v) in live_out {
-        r_out.entry(pp).or_default().insert(i_v);
+        res.entry(pp).or_default().insert(i_v);
     }
 
-    for bid in collect_used(arena, entry) {
-        let block = &arena[bid];
-        for i in 0..(block.body.len()) {
-            let pp = ProgramPoint::new(bid, i);
-            r_in.entry(pp).or_default();
-            r_in.entry(pp).or_default();
-        }
-    }
-
-    (r_in, r_out)
+    res
 }
+
+pub fn analyze(
+    arena: &Arena<Block>,
+    entry: BlockId,
+    n: usize,
+    var_idx: &util::Map<Var, usize>,
+) -> (Liveness, util::Map<usize, Color>) {
+    let mut def = util::Set::default();
+    let mut used = util::Set::default();
+    let mut follow = util::Map::default();
+    let mut prev = util::Map::default();
+    let mut precolor = util::Map::default();
+    prepare_impl(arena, entry, var_idx, &mut def, &mut used, &mut follow, &mut prev, &mut precolor);
+
+    let r = analyze_impl(arena, entry, n, &def, &used, &follow, &prev);
+
+    (r, precolor)
+}
+
