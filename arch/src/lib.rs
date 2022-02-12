@@ -25,6 +25,7 @@ pub fn optimize_mir(mut p: Mir) -> Mir {
     let prev = p.clone();
     for _ in 0..100 {
         p = mir::skip_jump(p);
+        p = mir::merge_block(p);
         if p == prev {
             break;
         }
