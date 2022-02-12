@@ -315,11 +315,11 @@ fn conv(
             p.tyenv.insert(idx.clone(), t);
 
             lift(ExprKind::Loop {
-            vars: vec![idx],
-            init: vec![Value::Var(range.0)],
-            body: conv(body, p, tyenv, consts),
-        })
-    },
+                vars: vec![idx],
+                init: vec![Value::Var(range.0)],
+                body: conv(body, p, tyenv, consts),
+            })
+        }
         closure::ExprKind::Continue(ps) => lift(Continue(ps)),
         closure::ExprKind::Assign(label, x) => {
             if consts.get(&x).is_none() {

@@ -1,3 +1,5 @@
+use id_arena::Arena;
+
 use super::mir::*;
 
 type Set = util::Set<BlockId>;
@@ -22,27 +24,27 @@ fn can_skip(b: &Block) -> Option<BlockId> {
     }
 }
 
-fn conv(bid: BlockId, p: &mut Program, arrived: &mut Set) {
+fn conv(bid: BlockId, arena: &mut Arena<Block>, arrived: &mut Set) {
     if arrived.contains(&bid) {
         return;
     }
     arrived.insert(bid);
 
-    let (o1, o2) = match p.block_arena[bid].tail.item {
+    let (o1, o2) = match arena[bid].tail.item {
         TailKind::If(_, _, _, b1, b2) | TailKind::IfF(_, _, _, b1, b2) => {
-            conv(b1, p, arrived);
-            conv(b2, p, arrived);
-            (can_skip(&p.block_arena[b1]), can_skip(&p.block_arena[b2]))
+            conv(b1, arena, arrived);
+            conv(b2, arena, arrived);
+            (can_skip(&arena[b1]), can_skip(&arena[b2]))
         }
         TailKind::Jump(b) => {
-            conv(b, p, arrived);
-            (can_skip(&p.block_arena[b]), None)
+            conv(b, arena, arrived);
+            (can_skip(&arena[b]), None)
         }
         TailKind::Return(_) => return,
     };
 
-    let name = p.block_arena[bid].name.clone();
-    let item = &mut p.block_arena[bid].tail.item;
+    let name = arena[bid].name.clone();
+    let item = &mut arena[bid].tail.item;
     match item {
         TailKind::If(_, _, _, b1, b2) | TailKind::IfF(_, _, _, b1, b2) => {
             *b1 = o1.unwrap_or(*b1);
@@ -60,8 +62,15 @@ fn conv(bid: BlockId, p: &mut Program, arrived: &mut Set) {
 
 pub fn skip_jump(mut p: Program) -> Program {
     let mut arrived = Set::default();
-    for bid in p.collect_used() {
-        conv(bid, &mut p, &mut arrived);
+    for bid in p.collect_main_used() {
+        conv(bid, &mut p.main_arena, &mut arrived);
+    }
+
+    for f in &mut p.fundefs {
+        arrived.clear();
+        for bid in f.collect_used() {
+            conv(bid, &mut f.block_arena, &mut arrived);
+        }
     }
 
     p

@@ -2,6 +2,7 @@ use super::mir;
 use crate::virt::program as virt;
 
 use ast::closure::Label;
+use id_arena::Arena;
 use util::{id, Id, ToSpanned};
 
 fn conv_simple(e: virt::ExprKind) -> mir::InstKind {
@@ -31,20 +32,21 @@ fn conv_let(
     v: Option<Id>,
     e1: Box<virt::Expr>,
     span: util::Span,
-    tyenv: &virt::TyMap,
-    p: &mut mir::Program,
+    old_tyenv: &virt::TyMap,
+    tyenv: &mut mir::TyMap,
+    arena: &mut Arena<mir::Block>,
     bid: id_arena::Id<mir::Block>,
 ) -> Option<mir::BlockId> {
     use mir::TailKind;
-    let body = &mut p.block_arena[bid].body;
+    let body = &mut arena[bid].body;
 
     // これ以降は unit 型の変数は不要
     let v = if let Some(v) = v {
-        let t = tyenv.get(&v).unwrap();
+        let t = old_tyenv.get(&v).unwrap();
         if t == &virt::Ty::Unit {
             None
         } else {
-            p.tymap.insert(v.clone(), t.clone());
+            tyenv.insert(v.clone(), t.clone());
             Some(v)
         }
     } else {
@@ -54,20 +56,41 @@ fn conv_let(
     let res = v.clone();
     match e1.item {
         virt::ExprKind::If(..) | virt::ExprKind::IfF(..) => {
-            let cont_id = p.block_arena.alloc(mir::Block::new());
+            let cont_id = arena.alloc(mir::Block::new());
 
-            conv(e1, tyenv, p, bid, res, TailKind::Jump(cont_id), None);
+            conv(
+                e1,
+                old_tyenv,
+                tyenv,
+                arena,
+                bid,
+                res,
+                TailKind::Jump(cont_id),
+                None,
+            );
 
             return Some(cont_id);
         }
         virt::ExprKind::Loop { .. } => {
-            let cont_id = p.block_arena.alloc(mir::Block::new());
+            let cont_id = arena.alloc(mir::Block::new());
 
-            conv(e1, tyenv, p, bid, res, TailKind::Jump(cont_id), None);
+            conv(
+                e1,
+                old_tyenv,
+                tyenv,
+                arena,
+                bid,
+                res,
+                TailKind::Jump(cont_id),
+                None,
+            );
 
             return Some(cont_id);
         }
-        virt::ExprKind::Let(v, _, _) => panic!("virt::Expr should be let-flattened in this point (`{:?}`)", v),
+        virt::ExprKind::Let(v, _, _) => panic!(
+            "virt::Expr should be let-flattened in this point (`{:?}`)",
+            v
+        ),
         virt::ExprKind::Continue(_) => unreachable!(),
         _ => body.push((res.clone(), conv_simple(e1.item).with_span(span))),
     }
@@ -78,8 +101,9 @@ fn conv_let(
 
 fn conv(
     e: Box<virt::Expr>,
-    tyenv: &virt::TyMap,
-    p: &mut mir::Program,
+    old_tyenv: &virt::TyMap,
+    tyenv: &mut mir::TyMap,
+    arena: &mut Arena<mir::Block>,
     bid: id_arena::Id<mir::Block>,
     res: Option<Id>,
     tail: mir::TailKind,
@@ -91,29 +115,45 @@ fn conv(
 
     match e.item {
         ExprKind::If(kind, x, y, e1, e2) => {
-            let b1_id = p.block_arena.alloc(mir::Block::new());
-            let b2_id = p.block_arena.alloc(mir::Block::new());
+            let b1_id = arena.alloc(mir::Block::new());
+            let b2_id = arena.alloc(mir::Block::new());
 
-            conv(e1, tyenv, p, b1_id, res.clone(), tail.clone(), loop_id);
-            conv(e2, tyenv, p, b2_id, res, tail, loop_id);
+            conv(
+                e1,
+                old_tyenv,
+                tyenv,
+                arena,
+                b1_id,
+                res.clone(),
+                tail.clone(),
+                loop_id,
+            );
+            conv(e2, old_tyenv, tyenv, arena, b2_id, res, tail, loop_id);
 
-            p.block_arena[bid].tail =
-                Box::new(TailKind::If(kind, x, y, b1_id, b2_id).with_span(e.loc));
+            arena[bid].tail = Box::new(TailKind::If(kind, x, y, b1_id, b2_id).with_span(e.loc));
         }
         ExprKind::IfF(kind, x, y, e1, e2) => {
-            let b1_id = p.block_arena.alloc(mir::Block::new());
-            let b2_id = p.block_arena.alloc(mir::Block::new());
+            let b1_id = arena.alloc(mir::Block::new());
+            let b2_id = arena.alloc(mir::Block::new());
 
-            conv(e1, tyenv, p, b1_id, res.clone(), tail.clone(), loop_id);
-            conv(e2, tyenv, p, b2_id, res, tail, loop_id);
+            conv(
+                e1,
+                old_tyenv,
+                tyenv,
+                arena,
+                b1_id,
+                res.clone(),
+                tail.clone(),
+                loop_id,
+            );
+            conv(e2, old_tyenv, tyenv, arena, b2_id, res, tail, loop_id);
 
-            p.block_arena[bid].tail =
-                Box::new(TailKind::IfF(kind, x, y, b1_id, b2_id).with_span(e.loc));
+            arena[bid].tail = Box::new(TailKind::IfF(kind, x, y, b1_id, b2_id).with_span(e.loc));
         }
         ExprKind::Let(d, e1, e2) => {
-            let bid = conv_let(d, e1, e.loc, tyenv, p, bid).unwrap_or(bid);
+            let bid = conv_let(d, e1, e.loc, old_tyenv, tyenv, arena, bid).unwrap_or(bid);
 
-            conv(e2, tyenv, p, bid, res, tail, loop_id);
+            conv(e2, old_tyenv, tyenv, arena, bid, res, tail, loop_id);
         }
         ExprKind::Loop {
             vars,
@@ -122,12 +162,12 @@ fn conv(
         } => {
             assert!(vars.len() == init.len());
 
-            let body = &mut p.block_arena[bid].body;
+            let body = &mut arena[bid].body;
             for i in 0..vars.len() {
                 let v = vars[i].clone();
-                let t = tyenv.get(&v).unwrap();
+                let t = old_tyenv.get(&v).unwrap();
 
-                p.tymap.insert(v.clone(), t.clone());
+                tyenv.insert(v.clone(), t.clone());
 
                 match init[i].clone() {
                     mir::Value::Var(x) => {
@@ -140,23 +180,30 @@ fn conv(
             }
 
             // create loop block and convert
-            let loop_id = p
-                .block_arena
-                .alloc(mir::Block::with_name(id::gen_tmp_var_with(".loop")));
-            
-            p.block_arena[bid].tail.item = TailKind::Jump(loop_id);
-            conv(e1, tyenv, p, loop_id, res, tail, Some(loop_id));
+            let loop_id = arena.alloc(mir::Block::with_name(id::gen_tmp_var_with(".loop")));
+
+            arena[bid].tail.item = TailKind::Jump(loop_id);
+            conv(
+                e1,
+                old_tyenv,
+                tyenv,
+                arena,
+                loop_id,
+                res,
+                tail,
+                Some(loop_id),
+            );
         }
         ExprKind::Continue(xs) => {
-            let body = &mut p.block_arena[bid].body;
+            let body = &mut arena[bid].body;
             for (v, x) in xs {
                 body.push((Some(v), InstKind::Mv(x).with_span(e.loc)));
             }
 
-            p.block_arena[bid].tail = Box::new(TailKind::Jump(loop_id.unwrap()).with_span(e.loc));
+            arena[bid].tail = Box::new(TailKind::Jump(loop_id.unwrap()).with_span(e.loc));
         }
         _ => {
-            let block = &mut p.block_arena[bid];
+            let block = &mut arena[bid];
             block.body.push((res, conv_simple(e.item).with_span(e.loc)));
             block.tail = Box::new(tail.with_span(e.loc));
         }
@@ -181,9 +228,8 @@ fn convert_fundef(fundefs: Vec<virt::Fundef>, tyenv: &virt::TyMap, p: &mut mir::
             p.tymap.insert(x.clone(), t.clone().into());
         }
 
-        let entry_id = p
-            .block_arena
-            .alloc(mir::Block::with_name(format!(".Entry@{}", name)));
+        let mut arena = id_arena::Arena::new();
+        let entry_id = arena.alloc(mir::Block::with_name(format!(".Entry@{}", name)));
 
         // register fundef
         p.fundefs.push(mir::Fundef {
@@ -191,7 +237,10 @@ fn convert_fundef(fundefs: Vec<virt::Fundef>, tyenv: &virt::TyMap, p: &mut mir::
             args,
             formal_fv,
             entry: entry_id,
+            block_arena: arena,
         });
+
+        let arena = &mut p.fundefs.last_mut().unwrap().block_arena;
 
         if let mir::Ty::Fun(_, rt) = ft {
             let is_unit = rt.as_ref() == &mir::Ty::Unit;
@@ -199,7 +248,8 @@ fn convert_fundef(fundefs: Vec<virt::Fundef>, tyenv: &virt::TyMap, p: &mut mir::
                 conv(
                     body,
                     tyenv,
-                    p,
+                    &mut p.tymap,
+                    arena,
                     entry_id,
                     None,
                     mir::TailKind::Return(None),
@@ -212,7 +262,8 @@ fn convert_fundef(fundefs: Vec<virt::Fundef>, tyenv: &virt::TyMap, p: &mut mir::
                 conv(
                     body,
                     tyenv,
-                    p,
+                    &mut p.tymap,
+                    arena,
                     entry_id,
                     Some(ret_var.clone()),
                     mir::TailKind::Return(Some(ret_var.clone())),
@@ -246,7 +297,8 @@ pub fn convert(prog: virt::Program) -> mir::Program {
     conv(
         prog.main,
         &prog.tyenv,
-        &mut p,
+        &mut p.tymap,
+        &mut p.main_arena,
         entry,
         None,
         mir::TailKind::Jump(exit),

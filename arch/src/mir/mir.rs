@@ -6,7 +6,7 @@ use util::{Id, Map, Spanned};
 
 use std::fmt;
 
-pub use virt::{FloatOpKind, IfKind, IntOpKind, Label, UnOpKind, Value};
+pub use virt::{FloatOpKind, IfKind, IntOpKind, Label, TyMap, UnOpKind, Value};
 
 // SSA の右辺
 // 関数間解析をしないので ExtApp は CallDir に統合する
@@ -148,15 +148,42 @@ impl Block {
 
 pub type BlockId = id_arena::Id<Block>;
 
+fn collect_used_impl(arena: &Arena<Block>, bid: BlockId, used: &mut util::Set<BlockId>) {
+    if used.contains(&bid) {
+        return;
+    }
+    used.insert(bid);
+
+    match arena[bid].tail.item {
+        TailKind::If(_, _, _, b1, b2) | TailKind::IfF(_, _, _, b1, b2) => {
+            collect_used_impl(arena, b1, used);
+            collect_used_impl(arena, b2, used);
+        }
+        TailKind::Jump(b) => collect_used_impl(arena, b, used),
+        TailKind::Return(_) => {}
+    }
+}
+
+pub fn collect_used(arena: &Arena<Block>, entry: BlockId) -> util::Set<BlockId> {
+    let mut used = util::Set::default();
+    collect_used_impl(arena, entry, &mut used);
+    used
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Fundef {
     pub name: Label,
     pub args: Vec<Id>,
     pub formal_fv: Vec<Id>,
     pub entry: BlockId,
+    pub block_arena: Arena<Block>,
 }
 
 impl Fundef {
+    pub fn collect_used(&self) -> util::Set<BlockId> {
+        collect_used(&self.block_arena, self.entry)
+    }
+
     fn format_indented(
         &self,
         f: &mut fmt::Formatter,
@@ -182,14 +209,22 @@ impl Fundef {
             "\n{}entry: {}\n",
             indent(level + 1),
             arena[self.entry].name
-        )
+        )?;
+
+        write!(f, "{}blocks:\n", indent(level + 1))?;
+        for bid in &self.collect_used() {
+            self.block_arena[*bid].format_indented(f, level + 2, &self.block_arena)?;
+            write!(f, "\n")?;
+        }
+
+        Ok(())
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Program {
-    pub tymap: Map<Id, Ty>,
-    pub block_arena: Arena<Block>,
+    pub tymap: TyMap,
+    pub main_arena: Arena<Block>,
     pub globals: Vec<(Label, usize)>,
     pub fundefs: Vec<Fundef>,
     pub entry: BlockId,
@@ -200,45 +235,15 @@ impl Program {
     pub fn new(block_arena: Arena<Block>, entry: BlockId, exit: BlockId) -> Self {
         Self {
             tymap: Map::default(),
-            block_arena,
+            main_arena: block_arena,
             globals: vec![],
             fundefs: vec![],
             entry,
             exit,
         }
     }
-
-    fn collect_used_impl(&self, bid: BlockId, used: &mut util::Set<BlockId>) {
-        if used.contains(&bid) {
-            return;
-        }
-        used.insert(bid);
-
-        match self.block_arena[bid].tail.item {
-            TailKind::If(_, _, _, b1, b2) | TailKind::IfF(_, _, _, b1, b2) => {
-                self.collect_used_impl(b1, used);
-                self.collect_used_impl(b2, used);
-            }
-            TailKind::Jump(b) => self.collect_used_impl(b, used),
-            TailKind::Return(_) => {}
-        }
-    }
-
-    pub fn collect_used(&self) -> util::Set<BlockId> {
-        let mut used = util::Set::default();
-
-        self.collect_used_impl(self.entry, &mut used);
-        for f in &self.fundefs {
-            self.collect_used_impl(f.entry, &mut used);
-        }
-
-        used
-    }
-
-    pub fn collect_used_with(&self, entry: BlockId) -> util::Set<BlockId> {
-        let mut used = util::Set::default();
-        self.collect_used_impl(entry, &mut used);
-        used
+    pub fn collect_main_used(&self) -> util::Set<BlockId> {
+        collect_used(&self.main_arena, self.entry)
     }
 }
 
@@ -250,7 +255,7 @@ impl fmt::Display for Program {
         }
         write!(f, "]\n\n")?;
 
-        write!(f, "Entry: {}\n\n", self.block_arena[self.entry].name)?;
+        write!(f, "Entry: {}\n\n", self.main_arena[self.entry].name)?;
 
         write!(f, "Globals: [\n")?;
         for (label, size) in &self.globals {
@@ -259,13 +264,13 @@ impl fmt::Display for Program {
 
         write!(f, "]\n\nFundefs:\n")?;
         for fun in &self.fundefs {
-            fun.format_indented(f, &self.tymap, 1, &self.block_arena)?;
+            fun.format_indented(f, &self.tymap, 1, &self.main_arena)?;
             write!(f, "\n")?;
         }
 
         write!(f, "Blocks:\n")?;
-        for bid in &self.collect_used() {
-            self.block_arena[*bid].format_indented(f, 1, &self.block_arena)?;
+        for bid in &self.collect_main_used() {
+            self.main_arena[*bid].format_indented(f, 1, &self.main_arena)?;
             write!(f, "\n")?;
         }
 
