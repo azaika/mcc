@@ -13,8 +13,8 @@ fn can_skip(b: &Block) -> Option<BlockId> {
     } else if b.body.is_empty() {
         Some(jump)
     } else {
-        let (dest, inst) = &b.body[0];
-        if dest.is_none() || inst.item == InstKind::Nop {
+        let (_, inst) = &b.body[0];
+        if inst.item == InstKind::Nop {
             Some(jump)
         } else {
             None

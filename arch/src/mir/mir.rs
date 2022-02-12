@@ -234,10 +234,22 @@ impl Program {
 
         used
     }
+
+    pub fn collect_used_with(&self, entry: BlockId) -> util::Set<BlockId> {
+        let mut used = util::Set::default();
+        self.collect_used_impl(entry, &mut used);
+        used
+    }
 }
 
 impl fmt::Display for Program {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Variables: [\n")?;
+        for (x, t) in &self.tymap {
+            write!(f, "    {x}: {t},\n")?;
+        }
+        write!(f, "]\n\n")?;
+
         write!(f, "Entry: {}\n\n", self.block_arena[self.entry].name)?;
 
         write!(f, "Globals: [\n")?;

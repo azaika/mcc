@@ -3,6 +3,7 @@
 mod common;
 mod mir;
 mod virt;
+mod regalloc;
 
 pub use mir::convert as to_mir;
 pub use mir::mir::Program as Mir;

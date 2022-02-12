@@ -26,6 +26,8 @@ pub fn format_vec<T: fmt::Display>(
 pub use fnv::FnvHashMap as Map;
 pub use fnv::FnvHashSet as Set;
 
+pub use fnv::FnvBuildHasher as Hasher;
+
 pub fn restore<V>(m: &mut Map<Id, V>, key: &str, t: Option<V>) {
     match t {
         Some(t) => m.insert(key.to_string(), t),
