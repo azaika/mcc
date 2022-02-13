@@ -9,15 +9,15 @@ use super::types::*;
 pub fn estimate_cost(tyenv: &TyMap, arena: &Arena<Block>, entry: BlockId) -> Map<Id, usize> {
     let mut count = Map::default();
     let mut first_depth = Map::default();
-    let mut pp_depth: Map<BlockId, usize> = Map::default();
+    let mut block_depth: Map<BlockId, usize> = Map::default();
 
     for (x, _) in tyenv {
         count.insert(x.clone(), 0);
         first_depth.insert(x.clone(), usize::MAX);
     }
+    block_depth.insert(entry, 0);
 
     let mut visited = Set::default();
-    visited.insert(ProgramPoint::new(entry, 0));
     let mut que = VecDeque::new();
     que.push_back(ProgramPoint::new(entry, 0));
     while let Some(pp) = que.pop_front() {
@@ -26,7 +26,7 @@ pub fn estimate_cost(tyenv: &TyMap, arena: &Arena<Block>, entry: BlockId) -> Map
         }
 
         visited.insert(pp);
-        let d = pp_depth.get(&pp.bid).unwrap() + pp.idx;
+        let d = block_depth.get(&pp.bid).unwrap() + pp.idx;
 
         let block = &arena[pp.bid];
         if pp.idx < block.body.len() {
@@ -69,36 +69,36 @@ pub fn estimate_cost(tyenv: &TyMap, arena: &Arena<Block>, entry: BlockId) -> Map
                 TailKind::If(_, x, Value::Imm(_), b1, b2) => {
                     count.get_mut(x).unwrap().add_assign(1);
 
-                    let nd1 = pp_depth.entry(*b1).or_insert(usize::MAX);
+                    let nd1 = block_depth.entry(*b1).or_insert(usize::MAX);
                     *nd1 = (*nd1).min(d + 1);
-                    let nd2 = pp_depth.entry(*b2).or_insert(usize::MAX);
+                    let nd2 = block_depth.entry(*b2).or_insert(usize::MAX);
                     *nd2 = (*nd2).min(d + 1);
 
                     if !visited.contains(&ProgramPoint::new(*b1, 0)) {
                         que.push_back(ProgramPoint::new(*b1, 0));
                     }
                     if !visited.contains(&ProgramPoint::new(*b2, 0)) {
-                        que.push_back(ProgramPoint::new(*b1, 0));
+                        que.push_back(ProgramPoint::new(*b2, 0));
                     }
                 },
                 TailKind::If(_, x, Value::Var(y), b1, b2) | TailKind::IfF(_, x, y, b1, b2) => {
                     count.get_mut(x).unwrap().add_assign(1);
                     count.get_mut(y).unwrap().add_assign(1);
 
-                    let nd1 = pp_depth.entry(*b1).or_insert(usize::MAX);
+                    let nd1 = block_depth.entry(*b1).or_insert(usize::MAX);
                     *nd1 = (*nd1).min(d + 1);
-                    let nd2 = pp_depth.entry(*b2).or_insert(usize::MAX);
+                    let nd2 = block_depth.entry(*b2).or_insert(usize::MAX);
                     *nd2 = (*nd2).min(d + 1);
 
                     if !visited.contains(&ProgramPoint::new(*b1, 0)) {
                         que.push_back(ProgramPoint::new(*b1, 0));
                     }
                     if !visited.contains(&ProgramPoint::new(*b2, 0)) {
-                        que.push_back(ProgramPoint::new(*b1, 0));
+                        que.push_back(ProgramPoint::new(*b2, 0));
                     }
                 },
                 TailKind::Jump(b) => {
-                    let nd = pp_depth.entry(*b).or_insert(usize::MAX);
+                    let nd = block_depth.entry(*b).or_insert(usize::MAX);
                     *nd = (*nd).min(d + 1);
 
                     if !visited.contains(&ProgramPoint::new(*b, 0)) {
