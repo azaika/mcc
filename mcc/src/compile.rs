@@ -274,25 +274,5 @@ pub fn compile(args: Args) -> Result<()> {
         )?;
     }
 
-    // let mir = cfg::convert(opt_closure);
-    // if args.verbose {
-    //     debug_output(Path::new("mir.txt"), format!("[[mir]]\n{}", mir))?;
-    // }
-
-    // let _opt_mir = if args.optimize {
-    //     let r = optimize_mir(mir);
-
-    //     if args.verbose {
-    //         debug_output(
-    //             Path::new("mir_opt.txt"),
-    //             format!("[[optimized_mir]]\n{}", r),
-    //         )?;
-    //     }
-
-    //     r
-    // } else {
-    //     mir
-    // };
-
     Ok(())
 }

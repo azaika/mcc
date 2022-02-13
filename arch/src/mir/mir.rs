@@ -84,7 +84,7 @@ impl TailKind {
                 )
             }
             Jump(block) => write!(f, "Jump {}", arena[*block].name),
-            Return => write!(f, "Return")
+            Return => write!(f, "Return"),
         }
     }
 }

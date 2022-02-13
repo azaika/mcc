@@ -1,5 +1,5 @@
 use super::mir;
-use crate::{virt::program as virt, common};
+use crate::{common, virt::program as virt};
 
 use ast::closure::Label;
 use id_arena::Arena;
@@ -232,7 +232,9 @@ fn conv(
                 block.body.push((Some(reg), kind.with_span(e.loc)));
             }
 
-            block.body.push((res, InstKind::CallDir(label).with_span(e.loc)));
+            block
+                .body
+                .push((res, InstKind::CallDir(label).with_span(e.loc)));
             block.tail = Box::new(tail.with_span(e.loc));
         }
         ExprKind::CallCls(..) => unimplemented!("I have no time"),

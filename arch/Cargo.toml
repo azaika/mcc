@@ -11,3 +11,4 @@ ast = { path = "../ast" }
 ty = { path = "../ty" }
 log = "0.4.0"
 id-arena = "2"
+petgraph = "0.6.0"

@@ -1,7 +1,8 @@
-use std::fmt::format;
-
 use super::types::*;
-use crate::{mir::mir::*, common::{Color, REG_RET, REGS}};
+use crate::{
+    common::{Color, REGS, REG_RET},
+    mir::mir::*,
+};
 use id_arena::Arena;
 use util::Id as Var;
 
@@ -14,19 +15,6 @@ pub enum Follow {
     Two(ProgramPoint, ProgramPoint),
 }
 
-fn gen_varmap(p: &Program) -> (util::Map<Var, usize>, util::Map<usize, Var>) {
-    let mut i: usize = 0;
-    let mut m1 = util::Map::default();
-    let mut m2 = util::Map::default();
-    for (x, _) in &p.tymap {
-        m1.insert(x.clone(), i);
-        m2.insert(i, x.clone());
-        i += 1;
-    }
-
-    (m1, m2)
-}
-
 fn prepare_impl(
     arena: &Arena<Block>,
     entry: BlockId,
@@ -35,7 +23,8 @@ fn prepare_impl(
     used: &mut util::Set<LiveId>,
     follow: &mut util::Map<ProgramPoint, Follow>,
     prev: &mut util::Map<BlockId, Vec<ProgramPoint>>,
-    precolor: &mut util::Map<usize, Color>
+    precolor: &mut util::Map<usize, Color>,
+    moves: &mut Vec<(ProgramPoint, (usize, usize))>,
 ) {
     for bid in collect_used(arena, entry) {
         let block = &arena[bid];
@@ -56,24 +45,12 @@ fn prepare_impl(
 
             use InstKind::*;
             match &inst.item {
-                Sw(x, Value::Var(y), z) => {
+                Mv(x) => {
                     push(x);
-                    push(y);
-                    push(z);
+                    let d = *var_idx.get(d.as_ref().unwrap()).unwrap();
+                    let x = *var_idx.get(x).unwrap();
+                    moves.push((pp, (d, x)));
                 }
-                IntOp(_, x, Value::Var(y))
-                | FloatOp(_, x, y)
-                | Lw(x, Value::Var(y))
-                | Sw(x, _, y) => {
-                    push(x);
-                    push(y);
-                }
-                Mv(x)
-                | UnOp(_, x)
-                | IntOp(_, x, _)
-                | AllocHeap(Value::Var(x))
-                | Lw(x, _)
-                | Out(x) => push(x),
                 CallDir(_) => {
                     if let Some(d) = d {
                         let d = *var_idx.get(d).unwrap();
@@ -86,16 +63,30 @@ fn prepare_impl(
                             let r = *var_idx.get(&r).unwrap();
                             def.insert((pp.clone(), r));
                         }
-                    }
-                    else {
+                    } else {
                         for r in REGS {
                             let r = format!("%{r}");
                             let r = *var_idx.get(&r).unwrap();
                             def.insert((pp.clone(), r));
                         }
                     }
-                },
-                _ => ()
+                }
+                Sw(x, Value::Var(y), z) => {
+                    push(x);
+                    push(y);
+                    push(z);
+                }
+                IntOp(_, x, Value::Var(y))
+                | FloatOp(_, x, y)
+                | Lw(x, Value::Var(y))
+                | Sw(x, _, y) => {
+                    push(x);
+                    push(y);
+                }
+                UnOp(_, x) | IntOp(_, x, _) | AllocHeap(Value::Var(x)) | Lw(x, _) | Out(x) => {
+                    push(x)
+                }
+                _ => (),
             }
         }
 
@@ -142,7 +133,10 @@ fn prepare_impl(
                 let f = ProgramPoint::new(*b, 0);
                 follow.insert(pp, Follow::One(f));
             }
-            TailKind::Return => (),
+            TailKind::Return => {
+                let pp = ProgramPoint::new(bid, n);
+                follow.insert(pp, Follow::Zero);
+            }
         };
     }
 }
@@ -160,14 +154,49 @@ fn analyze_impl(
     let mut live_in = util::Set::default();
     let mut live_out = util::Set::default();
 
-    let mut queue = util::Set::with_capacity_and_hasher(arena.len() * 4, util::Hasher::default());
+    let mut queue = util::Set::default();
     for bid in collect_used(arena, entry) {
         let block = &arena[bid];
         for i in 0..(block.body.len()) {
             let pp = ProgramPoint::new(bid, i);
             for j in 0..n {
-                queue.insert(((pp, j), false));
-                queue.insert(((pp, j), true));
+                {
+                    let k = (pp, j);
+                    let d = def.contains(&k);
+                    let u = used.contains(&k);
+
+                    let b = (live_out.contains(&k) && !d) || u;
+                    if b != live_in.contains(&k) {
+                        if b {
+                            live_in.insert(k);
+                        } else {
+                            live_in.remove(&k);
+                        }
+                        if j == 0 {
+                            for next in prev.get(&pp.bid).unwrap() {
+                                queue.insert(((next.clone(), j), false));
+                            }
+                        }
+                    }
+                }
+                {
+                    let k = (pp, j);
+                    let b = match follow.get(&pp).unwrap() {
+                        Follow::Zero => false,
+                        Follow::One(p1) => live_in.contains(&(p1.clone(), j)),
+                        Follow::Two(p1, p2) => {
+                            live_in.contains(&(p1.clone(), j)) || live_in.contains(&(p2.clone(), j))
+                        }
+                    };
+                    if b != live_out.contains(&k) {
+                        if b {
+                            live_out.insert(k.clone());
+                        } else {
+                            live_out.remove(&k);
+                        }
+                        queue.insert((k, true));
+                    }
+                }
             }
         }
     }
@@ -183,7 +212,7 @@ fn analyze_impl(
             let d = def.contains(&k);
             let u = used.contains(&k);
 
-            let b = live_out.contains(&k) && !d || u;
+            let b = (live_out.contains(&k) && !d) || u;
             if b != live_in.contains(&k) {
                 if b {
                     live_in.insert(k);
@@ -232,16 +261,35 @@ pub fn analyze(
     entry: BlockId,
     n: usize,
     var_idx: &util::Map<Var, usize>,
-) -> (Liveness, util::Map<usize, Color>) {
+) -> (
+    Liveness,
+    util::Map<usize, Color>,
+    Vec<(ProgramPoint, (usize, usize))>,
+) {
     let mut def = util::Set::default();
     let mut used = util::Set::default();
     let mut follow = util::Map::default();
     let mut prev = util::Map::default();
     let mut precolor = util::Map::default();
-    prepare_impl(arena, entry, var_idx, &mut def, &mut used, &mut follow, &mut prev, &mut precolor);
+    let mut moves = vec![];
+    prepare_impl(
+        arena,
+        entry,
+        var_idx,
+        &mut def,
+        &mut used,
+        &mut follow,
+        &mut prev,
+        &mut precolor,
+        &mut moves,
+    );
 
     let r = analyze_impl(arena, entry, n, &def, &used, &follow, &prev);
 
-    (r, precolor)
-}
+    for (pp, y) in &r {
+        let name = &arena[pp.bid].name;
+        println!("{name}[{}] = {:#?}", pp.idx, y);
+    }
 
+    (r, precolor, moves)
+}

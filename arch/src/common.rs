@@ -28,13 +28,13 @@ pub fn tuple_offsets(t: &Ty) -> Vec<usize> {
 pub type Color = &'static str;
 
 #[allow(dead_code)]
-pub static REG_ZERO: &'static str = "r0";
-pub static REG_RET: &'static str = "r2";
+pub const REG_ZERO: &'static str = "r0";
+pub const REG_RET: &'static str = "r2";
 #[allow(dead_code)]
-pub static REG_STACK: &'static str = "r3";
+pub const REG_STACK: &'static str = "r3";
 #[allow(dead_code)]
-pub static REG_HEAP: &'static str = "r4";
-pub static REGS: &'static [&'static str] = &[
+pub const REG_HEAP: &'static str = "r4";
+pub const REGS: &'static [&'static str] = &[
     "r1", "r2", "r5", "r6", "r7", "r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15", "r16",
     "r17", "r18", "r19", "r20", "r21", "r22", "r23", "r24", "r25", "r26", "r27", "r28", "r29",
     "r30", "r31", "r32", "r33", "r34", "r35", "r36", "r37", "r38", "r39", "r40", "r41", "r42",
@@ -42,4 +42,4 @@ pub static REGS: &'static [&'static str] = &[
     "r56", "r57", "r58", "r59", "r60", "r61", "r62",
 ];
 #[allow(dead_code)]
-pub static REG_TMP: &'static str = "r63";
+pub const REG_TMP: &'static str = "r63";
