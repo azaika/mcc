@@ -1,5 +1,8 @@
 use super::mir;
-use crate::{common, virt::program as virt};
+use crate::{
+    common::{self, REGS},
+    virt::program as virt,
+};
 
 use ast::closure::Label;
 use id_arena::Arena;
@@ -270,13 +273,24 @@ fn convert_fundef(fundefs: Vec<virt::Fundef>, tyenv: &virt::TyMap, p: &mut mir::
         // register fundef
         p.fundefs.push(mir::Fundef {
             name: Label(name),
-            args,
-            formal_fv,
             entry: entry_id,
             block_arena: arena,
         });
 
         let arena = &mut p.fundefs.last_mut().unwrap().block_arena;
+
+        // load args
+        if formal_fv.is_empty() {
+            let block = &mut arena[entry_id];
+            for (i, x) in args.into_iter().enumerate() {
+                let r = format!("%{}", REGS[i]);
+                block
+                    .body
+                    .push((Some(x), mir::InstKind::Mv(r).with_span(body.loc)));
+            }
+        } else {
+            unimplemented!()
+        }
 
         if let mir::Ty::Fun(_, rt) = ft {
             let is_unit = rt.as_ref() == &mir::Ty::Unit;

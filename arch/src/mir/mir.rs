@@ -22,6 +22,7 @@ pub enum InstKind {
     IntOp(IntOpKind, Id, Value),
     FloatOp(FloatOpKind, Id, Id),
     CallDir(Label),
+    #[allow(dead_code)]
     CallCls,
     AllocHeap(Value),
     Lw(Id, Value),
@@ -161,8 +162,6 @@ pub fn collect_used(arena: &Arena<Block>, entry: BlockId) -> util::Set<BlockId> 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Fundef {
     pub name: Label,
-    pub args: Vec<Id>,
-    pub formal_fv: Vec<Id>,
     pub entry: BlockId,
     pub block_arena: Arena<Block>,
 }
@@ -187,13 +186,9 @@ impl Fundef {
             self.name,
             tymap.get(&self.name.0).unwrap()
         )?;
-        write!(f, "{}args: ", indent(level + 1))?;
-        util::format_vec(f, &self.args, "[", ", ", "]")?;
-        write!(f, "\n{}formal_fv: ", indent(level + 1))?;
-        util::format_vec(f, &self.formal_fv, "[", ", ", "]")?;
         write!(
             f,
-            "\n{}entry: {}\n",
+            "{}entry: {}\n",
             indent(level + 1),
             self.block_arena[self.entry].name
         )?;
