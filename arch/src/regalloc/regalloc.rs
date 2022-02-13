@@ -18,20 +18,8 @@ enum NodeState {
     SimplifyWorkset,
     FreezeWorkset,
     SpillWorkset,
-    Spilled,
     Coalesced,
-    Colored,
     SelectStack,
-}
-
-impl NodeState {
-    fn is_workset(&self) -> bool {
-        use NodeState::*;
-        match self {
-            SimplifyWorkset | FreezeWorkset | SpillWorkset => true,
-            _ => false,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -63,7 +51,7 @@ fn is_real_adj(states: &Vec<NodeState>, u: usize) -> bool {
 pub struct RegAllocator {
     precolored: Map<usize, Color>,
     coalesced: Set<usize>,
-    selected_stack: Vec<usize>,
+    select_stack: Vec<usize>,
     move_states: Map<ProgramPoint, MoveState>,
     node_states: Vec<NodeState>,
 
@@ -147,7 +135,7 @@ impl RegAllocator {
         Self {
             precolored,
             coalesced: Set::default(),
-            selected_stack: vec![],
+            select_stack: vec![],
             move_states,
             node_states,
 
@@ -201,7 +189,8 @@ impl RegAllocator {
 
     fn simplify(&mut self) {
         let u = set_pop(&mut self.simplify_workset).unwrap();
-        self.selected_stack.push(u);
+        self.select_stack.push(u);
+        self.node_states[u] = NodeState::SelectStack;
         let x: Vec<_> = self.edges[u]
             .iter()
             .filter_map(|v| {
@@ -411,7 +400,7 @@ impl RegAllocator {
         let (u_idx, u) = costs
             .iter()
             .enumerate()
-            .find(|(idx, x)| self.spill_workset.contains(*x))
+            .find(|(_, x)| self.spill_workset.contains(*x))
             .unwrap();
         let u = *u;
         costs.remove(u_idx);
@@ -443,8 +432,8 @@ impl RegAllocator {
         for (u, c) in self.precolored {
             colored.insert(u, c);
         }
-        while !self.selected_stack.is_empty() {
-            let u = self.selected_stack.pop().unwrap();
+        while !self.select_stack.is_empty() {
+            let u = self.select_stack.pop().unwrap();
             let mut cand: Set<_> = REGS.iter().collect();
             for v in &self.edges[u] {
                 let v = self.alias.find(*v);
@@ -474,16 +463,41 @@ impl RegAllocator {
     }
 }
 
+fn make_varmap(tyenv: &TyMap) -> (Map<Var, usize>, Map<usize, Var>) {
+    let mut i: usize = 0;
+    let mut m1 = Map::default();
+    let mut m2 = Map::default();
+    for (x, _) in tyenv {
+        m1.insert(x.clone(), i);
+        m2.insert(i, x.clone());
+        i += 1;
+    }
+
+    for r in common::REGS {
+        let r = format!("%{r}");
+        m1.insert(r.clone(), i);
+        m2.insert(i, r.clone());
+        i += 1;
+    }
+
+    (m1, m2)
+}
+
+pub type RegMap = Map<Var, Color>;
+
 fn alloc_impl(
     arena: &mut Arena<Block>,
     tyenv: &mut TyMap,
     entry: BlockId,
-    globals: &Set<usize>,
-    var_idx: &Map<Var, usize>,
-    idx_var: &Map<usize, Var>,
-) -> Map<usize, Color> {
+    globals: &Set<Var>,
+) -> RegMap {
+    let (var_idx, idx_var) = make_varmap(tyenv);
+
     match RegAllocator::new(&arena, entry, &var_idx).do_alloc(vec![]) {
-        Ok(colored) => colored,
+        Ok(colored) => colored
+            .into_iter()
+            .map(|(u, c)| (idx_var.get(&u).unwrap().clone(), c))
+            .collect(),
         Err(spilled) => {
             let spilled = spilled
                 .iter()
@@ -495,11 +509,27 @@ fn alloc_impl(
 
             super::spill::insert_save_restore(arena, entry, tyenv, &spilled);
 
-            alloc_impl(arena, tyenv, entry, globals, var_idx, idx_var)
+            alloc_impl(arena, tyenv, entry, globals)
         }
     }
 }
 
-pub fn alloc(mut p: &mut Program) -> Map<Var, Map<Var, Color>> {
-    todo!()
+pub fn do_regalloc(mut p: Program) -> (Program, RegMap, Map<Label, RegMap>) {
+    let globals: Set<_> = p.globals.iter().map(|(l, _)| l.0.clone()).collect();
+
+    let mut fres: Map<Label, RegMap> = Map::default();
+    for Fundef {
+        name,
+        entry,
+        block_arena,
+        ..
+    } in &mut p.fundefs
+    {
+        let m = alloc_impl(block_arena, &mut p.tymap, *entry, &globals);
+
+        fres.insert(name.clone(), m);
+    }
+
+    let m = alloc_impl(&mut p.main_arena, &mut p.tymap, p.entry, &globals);
+    (p, m, fres)
 }
