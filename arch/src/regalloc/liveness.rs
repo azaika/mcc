@@ -172,10 +172,13 @@ fn analyze_impl(
                         } else {
                             live_in.remove(&k);
                         }
-                        if j == 0 {
-                            for next in prev.get(&pp.bid).unwrap() {
+                        if i == 0 {
+                            for next in prev.get(&pp.bid).iter().flat_map(|x| *x) {
                                 queue.insert(((next.clone(), j), false));
                             }
+                        }
+                        else {
+                            queue.insert(((ProgramPoint::new(bid, i - 1), j), false));
                         }
                     }
                 }
@@ -219,10 +222,13 @@ fn analyze_impl(
                 } else {
                     live_in.remove(&k);
                 }
-                if i_v == 0 {
-                    for next in prev.get(&pp.bid).unwrap() {
+                if pp.idx == 0 {
+                    for next in prev.get(&pp.bid).iter().flat_map(|x| *x) {
                         queue.insert(((next.clone(), i_v), false));
                     }
+                }
+                else {
+                    queue.insert(((ProgramPoint::new(pp.bid, pp.idx - 1), i_v), false));
                 }
             }
         } else {
