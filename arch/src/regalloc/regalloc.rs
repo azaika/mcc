@@ -103,6 +103,10 @@ impl RegAllocator {
                 let precolored = precolored.contains_key(u);
                 let u = *u;
                 for v in &set {
+                    if *v == u {
+                        continue;
+                    }
+                    
                     all_edges.insert((u, *v));
                     if !precolored {
                         degrees[u] += 1;
@@ -117,7 +121,7 @@ impl RegAllocator {
         let mut freeze_workset = Set::default();
         let mut spill_workset = Set::default();
         for v in 0..n {
-            if edges[v].len() >= REGS.len() {
+            if degrees[v] >= REGS.len() {
                 spill_workset.insert(v);
                 node_states.push(NodeState::SpillWorkset);
             } else if move_lists.contains_key(&v) {
