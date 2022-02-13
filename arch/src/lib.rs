@@ -1,10 +1,12 @@
 #![feature(int_log)]
 
 mod common;
+mod emit;
 mod mir;
 mod regalloc;
 mod virt;
 
+pub use emit::emit;
 pub use mir::convert as to_mir;
 pub use mir::mir::Program as Mir;
 pub use regalloc::do_regalloc;

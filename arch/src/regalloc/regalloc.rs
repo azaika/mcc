@@ -1,7 +1,6 @@
 use std::hash::Hash;
 
 use id_arena::Arena;
-use petgraph::unionfind::UnionFind;
 
 use super::types::*;
 use crate::common::{self, REGS};
@@ -66,7 +65,7 @@ pub struct RegAllocator {
     degrees: Vec<usize>,
 
     move_lists: Map<usize, Vec<(ProgramPoint, (usize, usize))>>,
-    alias: UnionFind<usize>,
+    alias: Vec<usize>,
 }
 
 impl RegAllocator {
@@ -130,7 +129,7 @@ impl RegAllocator {
             }
         }
 
-        let alias = UnionFind::new(n);
+        let alias = (0..n).collect();
 
         Self {
             precolored,
@@ -149,6 +148,14 @@ impl RegAllocator {
             degrees,
             move_lists,
             alias,
+        }
+    }
+
+    fn alias_root(&self, u: usize) -> usize {
+        if self.node_states[u] == NodeState::Coalesced {
+            self.alias_root(self.alias[u])
+        } else {
+            u
         }
     }
 
@@ -176,7 +183,7 @@ impl RegAllocator {
 
         if d == REGS.len() {
             self.enable_moves(u);
-            self.spill_workset.remove(&u);
+            assert!(self.spill_workset.remove(&u));
             if self.is_move_related(u) {
                 self.node_states[u] = NodeState::FreezeWorkset;
                 self.freeze_workset.insert(u);
@@ -239,7 +246,7 @@ impl RegAllocator {
         self.node_states[v] = NodeState::Coalesced;
         self.coalesced.insert(v);
 
-        self.alias.union(u, v);
+        self.alias[v] = u;
 
         let unified: Vec<_> = self
             .move_lists
@@ -250,7 +257,6 @@ impl RegAllocator {
             .cloned()
             .collect();
         *self.move_lists.get_mut(&u).unwrap() = unified.clone();
-        *self.move_lists.get_mut(&v).unwrap() = unified;
 
         let adj_v: Vec<_> = self.edges[v]
             .iter()
@@ -287,9 +293,9 @@ impl RegAllocator {
             self.spill_workset.insert(u);
         }
 
-        if !self.precolored.contains_key(&v)
-            && !self.is_move_related(v)
-            && self.degrees[v] < REGS.len()
+        if !self.precolored.contains_key(&u)
+            && !self.is_move_related(u)
+            && self.degrees[u] < REGS.len()
         {
             self.node_states[u] = NodeState::SimplifyWorkset;
             assert!(self.freeze_workset.remove(&u));
@@ -325,8 +331,8 @@ impl RegAllocator {
 
     fn coalesce(&mut self) {
         let (pp, (x, y)) = set_pop(&mut self.move_workset).unwrap();
-        let x = self.alias.find(x);
-        let y = self.alias.find(y);
+        let x = self.alias_root(x);
+        let y = self.alias_root(y);
         let (u, v) = if self.precolored.contains_key(&y) {
             (y, x)
         } else {
@@ -373,10 +379,10 @@ impl RegAllocator {
 
     fn freeze_move(&mut self, u: usize) {
         for (pp, (x, y)) in self.actual_moves(u) {
-            let v = if self.alias.equiv(y, u) {
-                self.alias.find(x)
+            let v = if self.alias_root(y) == self.alias_root(u) {
+                self.alias_root(x)
             } else {
-                self.alias.find(y)
+                self.alias_root(y)
             };
 
             *self.move_states.get_mut(&pp).unwrap() = MoveState::Frozen;
@@ -406,7 +412,7 @@ impl RegAllocator {
         costs.remove(u_idx);
 
         self.node_states[u] = NodeState::SimplifyWorkset;
-        self.spill_workset.remove(&u);
+        assert!(self.spill_workset.remove(&u));
         self.simplify_workset.insert(u);
 
         self.freeze_move(u)
@@ -429,14 +435,14 @@ impl RegAllocator {
 
         let mut colored = Map::default();
         let mut spilled = Set::default();
-        for (u, c) in self.precolored {
-            colored.insert(u, c);
+        for (u, c) in &self.precolored {
+            colored.insert(*u, *c);
         }
         while !self.select_stack.is_empty() {
             let u = self.select_stack.pop().unwrap();
             let mut cand: Set<_> = REGS.iter().collect();
             for v in &self.edges[u] {
-                let v = self.alias.find(*v);
+                let v = self.alias_root(*v);
                 if let Some(c) = colored.get(&v) {
                     cand.remove(c);
                 }
@@ -451,9 +457,9 @@ impl RegAllocator {
         }
 
         if spilled.is_empty() {
-            for u in self.coalesced {
-                let w = self.alias.find(u);
-                colored.insert(u, colored.get(&w).unwrap());
+            for u in &self.coalesced {
+                let w = self.alias_root(*u);
+                colored.insert(*u, colored.get(&w).unwrap());
             }
 
             Ok(colored)

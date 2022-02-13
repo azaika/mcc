@@ -274,5 +274,16 @@ pub fn compile(args: Args) -> Result<()> {
         )?;
     }
 
+    let (regalloc, m1, m2) = arch::do_regalloc(mir_opt);
+    if args.verbose {
+        debug_output(
+            Path::new("regalloc.txt"),
+            format!("[[regalloc]]\n{}", regalloc),
+        )?;
+    }
+
+    let mut file = std::fs::File::create(Path::new("out.a")).context("failed to open debug file")?;
+    arch::emit(&mut file, regalloc, (m1, m2))?;
+
     Ok(())
 }
