@@ -2,7 +2,7 @@ use std::hash::Hash;
 
 use id_arena::Arena;
 
-use super::types::*;
+use super::{types::*, spill};
 use crate::common::{self, REGS};
 use crate::mir::mir::*;
 use crate::regalloc::liveness;
@@ -106,7 +106,7 @@ impl RegAllocator {
                     if *v == u {
                         continue;
                     }
-                    
+
                     all_edges.insert((u, *v));
                     if !precolored {
                         degrees[u] += 1;
@@ -403,14 +403,14 @@ impl RegAllocator {
         self.freeze_move(u)
     }
 
-    fn select_spill(&mut self, costs: &mut Vec<usize>) {
-        let (u_idx, u) = costs
+    fn select_spill(&mut self, costs: &mut Map<usize, usize>) {
+        let (u, _) = costs
             .iter()
-            .enumerate()
-            .find(|(_, x)| self.spill_workset.contains(*x))
+            .filter(|(x, _)| self.spill_workset.contains(*x))
+            .min_by(|(_, c1), (_, c2)| c1.cmp(c2))
             .unwrap();
         let u = *u;
-        costs.remove(u_idx);
+        costs.remove(&u);
 
         self.node_states[u] = NodeState::SimplifyWorkset;
         assert!(self.spill_workset.remove(&u));
@@ -419,7 +419,7 @@ impl RegAllocator {
         self.freeze_move(u)
     }
 
-    pub fn do_alloc(mut self, mut costs: Vec<usize>) -> Result<Map<usize, Color>, Set<usize>> {
+    pub fn do_alloc(mut self, mut costs: Map<usize, usize>) -> Result<Map<usize, Color>, Set<usize>> {
         loop {
             if !self.simplify_workset.is_empty() {
                 self.simplify();
@@ -500,7 +500,8 @@ fn alloc_impl(
 ) -> RegMap {
     let (var_idx, idx_var) = make_varmap(tyenv);
 
-    match RegAllocator::new(&arena, entry, &var_idx).do_alloc(vec![]) {
+    let costs = spill::estimate_cost(tyenv, arena, entry).into_iter().map(|(x, c)| (*var_idx.get(&x).unwrap(), c)).collect();
+    match RegAllocator::new(&arena, entry, &var_idx).do_alloc(costs) {
         Ok(colored) => colored
             .into_iter()
             .map(|(u, c)| (idx_var.get(&u).unwrap().clone(), c))
