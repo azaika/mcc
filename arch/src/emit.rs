@@ -26,7 +26,7 @@ fn emit_inst<W: Write>(w: &mut W, v: &Option<Id>, inst: &Inst, regmap: &RegMap) 
             } else {
                 let v = reg_v!();
                 let i = *i as u32;
-                let lo = i ^ ((i << 16) >> 16);
+                let lo = (i << 16) >> 16;
                 let ha = (i ^ lo) >> 16;
                 write!(w, "\taddis\t{v}, {REG_ZERO}, {ha}\n")?;
                 write!(w, "\tori\t\t{v}, {v}, {lo}")?;
@@ -35,7 +35,7 @@ fn emit_inst<W: Write>(w: &mut W, v: &Option<Id>, inst: &Inst, regmap: &RegMap) 
         FLi(x) => {
             let v = reg_v!();
             let x = x.to_bits();
-            let lo = x ^ ((x << 16) >> 16);
+            let lo = (x << 16) >> 16;
             let ha = (x ^ lo) >> 16;
             write!(w, "\taddis\t{v}, {REG_ZERO}, {ha}\n")?;
             write!(w, "\tori\t\t{v}, {v}, {lo}")?

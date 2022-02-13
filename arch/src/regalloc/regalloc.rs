@@ -160,11 +160,8 @@ impl RegAllocator {
     }
 
     fn enable_moves(&mut self, u: usize) {
-        for u in self.edges[u].iter().chain(&Some(u)).cloned() {
-            if !is_real_adj(&self.node_states, u) {
-                continue;
-            }
-
+        let adj_u = self.edges[u].iter().filter(|x| !is_real_adj(&self.node_states, **x));
+        for u in adj_u.chain(&Some(u)).cloned() {
             for m in self.actual_moves(u) {
                 let state = self.move_states.get_mut(&m.0).unwrap();
                 if state == &MoveState::Active {
@@ -270,6 +267,7 @@ impl RegAllocator {
             .collect();
         for t in adj_v {
             if t == u || self.all_edges.contains(&(t, u)) {
+                self.separate_edge(t);
                 continue;
             }
             self.all_edges.insert((t, u));
@@ -339,21 +337,20 @@ impl RegAllocator {
             (x, y)
         };
 
-        let pu = self.node_states[v] == NodeState::PreColored;
+        let pu = self.node_states[u] == NodeState::PreColored;
         let pv = self.node_states[v] == NodeState::PreColored;
 
         const K: usize = REGS.len();
 
         macro_rules! add_workset {
-            ($name: expr) => {
-                let u = $name;
-                if self.node_states[u] != NodeState::PreColored
-                    && !self.is_move_related(u)
-                    && self.degrees[u] < K
+            ($u: ident) => {
+                if self.node_states[$u] != NodeState::PreColored
+                    && !self.is_move_related($u)
+                    && self.degrees[$u] < K
                 {
-                    self.node_states[u] = NodeState::SimplifyWorkset;
-                    assert!(self.freeze_workset.remove(&u));
-                    self.simplify_workset.insert(u);
+                    self.node_states[$u] = NodeState::SimplifyWorkset;
+                    assert!(self.freeze_workset.remove(&$u));
+                    self.simplify_workset.insert($u);
                 }
             };
         }
