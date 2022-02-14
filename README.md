@@ -15,7 +15,7 @@ cd mcc
 rustup install nightly # mcc uses nightly-rust
 rustup override add nightly
 # compiles raytracing and emits debug outputs in debug/
-cargo run --release -- -l ./tests/minrt/globals.ml -l ./tests/libs/stdlib.ml ./tests/minrt/minrt.ml -v -o -d --inline 2000 --use-strict-aliasing > debug/out.txt
+cargo run --release -- -l ./tests/minrt/globals.ml -l ./tests/libs/stdlib_minrt.ml ./tests/minrt/minrt.ml -v -o -d --inline 1000 --use-strict-aliasing > debug/out.txt
 ```
 
 ## Known Bug
