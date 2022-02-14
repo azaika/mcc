@@ -110,6 +110,8 @@ pub enum ExprKind {
     Continue(Vec<(Id, Id)>), // only in Loop.body
     In,
     Out(Id),
+    Save(Id, Id), // (tag, data)
+    Restore(Id)
 }
 
 pub type Expr = Spanned<ExprKind>;
@@ -223,6 +225,8 @@ impl ExprKind {
             Sw(x, y, z) => write!(f, "Sw {x}, {y}, {z}\n"),
             In => write!(f, "In\n"),
             Out(x) => write!(f, "Out {x}\n"),
+            Save(tag, x) => write!(f, "Save ${tag} <- `{x}`\n"),
+            Restore(tag) => write!(f, "Restore ${tag}\n"),
         }
     }
 

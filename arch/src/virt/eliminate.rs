@@ -6,7 +6,7 @@ fn can_remove(e: &Expr) -> bool {
     use ExprKind::*;
     match &e.item {
         Nop | Var(_) | Li(_) | FLi(_) | GetLabel(_) | LoadLabel(_) | UnOp(..) | IntOp(..)
-        | FloatOp(..) | AllocHeap(_) | Lw(..) => true,
+        | FloatOp(..) | AllocHeap(_) | Lw(..) | Restore(_) => true,
         _ => false,
     }
 }
@@ -140,6 +140,10 @@ fn conv(
         Out(x) => {
             used.insert(x.clone());
             Out(x)
+        }
+        Save(tag, x) => {
+            used.insert(x.clone());
+            Save(tag, x)
         }
         _ => e.item,
     };

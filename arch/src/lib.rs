@@ -15,13 +15,19 @@ pub use virt::Program as Virtual;
 
 pub fn optimize_virtual(mut p: Virtual) -> Virtual {
     log::info!("virtual opt started");
+    p = virt::resolve_nest(p);
     p = virt::simm(p);
     p = virt::eliminate(p);
     p
 }
 
-pub fn finalize_virt(mut p: Virtual) -> Virtual {
+pub fn finalize_virt(mut p: Virtual, do_opt: bool) -> Virtual {
+    p = virt::split_lifetime(p);
+    if do_opt {
+        p = virt::eliminate(p);
+    }
     p = virt::resolve_nest(p);
+    
     p
 }
 

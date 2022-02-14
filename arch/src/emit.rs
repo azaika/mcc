@@ -65,7 +65,12 @@ fn emit_inst<W: Write>(
             let v = reg_v!();
             let f = match kind {
                 UnOpKind::Neg => {
-                    return write!(w, "\tsub\t\t{v}, {REG_ZERO}, {}\t\t\t\t# {}", reg!(x), inst.loc.0);
+                    return write!(
+                        w,
+                        "\tsub\t\t{v}, {REG_ZERO}, {}\t\t\t\t# {}\n",
+                        reg!(x),
+                        inst.loc.0
+                    );
                 }
                 UnOpKind::FNeg => "fneg",
                 UnOpKind::FAbs => "fabs",
@@ -85,7 +90,14 @@ fn emit_inst<W: Write>(
                 IntOpKind::Add => "addi",
                 IntOpKind::Sub => {
                     assert!(*y != i16::MIN);
-                    return write!(w, "\taddi\t{}, {}, {}\t\t\t\t# {}", reg_v!(), reg!(x), (-y) as i16, inst.loc.0);
+                    return write!(
+                        w,
+                        "\taddi\t{}, {}, {}\t\t\t\t# {}\n",
+                        reg_v!(),
+                        reg!(x),
+                        (-y) as i16,
+                        inst.loc.0
+                    );
                 }
                 IntOpKind::Mul16 => "mul16i",
                 IntOpKind::Shl => {
@@ -147,7 +159,7 @@ fn emit_inst<W: Write>(
         Out(x) => write!(w, "\tout\t\t{}", reg!(x))?,
     }
 
-    write!(w, "\t\t\t\t# {}", inst.loc.0)
+    write!(w, "\t\t\t\t# {}\n", inst.loc.0)
 }
 
 fn emit_block<W: Write>(
@@ -168,7 +180,6 @@ fn emit_block<W: Write>(
     write!(w, "{}:\n", block.name)?;
     for (v, inst) in &block.body {
         emit_inst(w, v, inst, &regmap, stackmap, stack_size)?;
-        write!(w, "\n")?;
     }
 
     macro_rules! reg {

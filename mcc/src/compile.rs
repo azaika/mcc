@@ -247,9 +247,9 @@ pub fn compile(args: Args) -> Result<()> {
 
     let opt_virt = if args.optimize {
         let virt = arch::optimize_virtual(virt);
-        arch::finalize_virt(virt)
+        arch::finalize_virt(virt, args.optimize)
     } else {
-        arch::finalize_virt(virt)
+        arch::finalize_virt(virt, args.optimize)
     };
     if args.verbose {
         debug_output(
@@ -283,7 +283,7 @@ pub fn compile(args: Args) -> Result<()> {
     }
 
     let mut file =
-        std::fs::File::create(Path::new("out.a")).context("failed to open debug file")?;
+        std::fs::File::create(Path::new("out.s")).context("failed to open debug file")?;
     arch::emit(&mut file, regalloc, (m1, m2))?;
 
     Ok(())
