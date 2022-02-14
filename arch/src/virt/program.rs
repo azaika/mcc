@@ -111,7 +111,7 @@ pub enum ExprKind {
     In,
     Out(Id),
     Save(Id, Id), // (tag, data)
-    Restore(Id)
+    Restore(Id),
 }
 
 pub type Expr = Spanned<ExprKind>;

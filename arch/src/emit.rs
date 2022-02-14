@@ -10,7 +10,7 @@ fn emit_inst<W: Write>(
     v: &Option<Id>,
     inst: &Inst,
     regmap: &RegMap,
-    _stackmap: &Map<Id, i32>,
+    stackmap: &mut Map<Id, i32>,
     stack_size: &mut i32,
 ) -> Result<()> {
     use InstKind::*;
@@ -157,6 +157,19 @@ fn emit_inst<W: Write>(
         Sw(x, Value::Var(y), z) => write!(w, "\tswx\t\t{}, {}, {}", reg!(z), reg!(y), reg!(x))?,
         In => write!(w, "\tin")?,
         Out(x) => write!(w, "\tout\t\t{}", reg!(x))?,
+        Save(tag, x) => {
+            if let Some(offset) = stackmap.get(tag) {
+                write!(w, "\tsw\t\t{}, {offset}({REG_STACK})", reg!(x))?;
+            } else {
+                stackmap.insert(tag.clone(), *stack_size);
+                write!(w, "\tsw\t\t{}, {}({REG_STACK})", reg!(x), -*stack_size)?;
+                *stack_size += 1;
+            }
+        }
+        Restore(tag) => {
+            let offset = -stackmap.get(tag).unwrap();
+            write!(w, "\tlw\t\t{}, {offset}({REG_STACK})", reg_v!())?;
+        }
     }
 
     write!(w, "\t\t\t\t# {}\n", inst.loc.0)
@@ -255,6 +268,7 @@ pub fn emit<W: Write>(w: &mut W, p: Program, regmaps: (RegMap, Map<Label, RegMap
     } in &p.fundefs
     {
         write!(w, "\t# {}\n", name.0)?;
+        write!(w, "{}:\n", name.0)?;
         emit_block(
             w,
             *entry,

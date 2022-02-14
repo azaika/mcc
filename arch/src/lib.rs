@@ -27,7 +27,7 @@ pub fn finalize_virt(mut p: Virtual, do_opt: bool) -> Virtual {
         p = virt::eliminate(p);
     }
     p = virt::resolve_nest(p);
-    
+
     p
 }
 

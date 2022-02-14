@@ -25,6 +25,8 @@ fn conv_simple(e: virt::ExprKind) -> mir::InstKind {
         virt::ExprKind::Sw(x, y, z) => InstKind::Sw(x, y, z),
         virt::ExprKind::In => InstKind::In,
         virt::ExprKind::Out(x) => InstKind::Out(x),
+        virt::ExprKind::Save(tag, x) => InstKind::Save(tag, x),
+        virt::ExprKind::Restore(tag) => InstKind::Restore(tag),
         _ => panic!("non-simple ExprKind has been passed: {}", e),
     }
 }

@@ -29,6 +29,8 @@ pub enum InstKind {
     Sw(Id, Value, Id),
     In,
     Out(Id),
+    Save(Id, Id),
+    Restore(Id),
 }
 
 pub type Inst = Spanned<InstKind>;
@@ -53,6 +55,8 @@ impl fmt::Display for InstKind {
             Sw(x, y, z) => write!(f, "Sw {x}, {y}, {z}"),
             In => write!(f, "In"),
             Out(x) => write!(f, "Out {x}"),
+            Save(tag, x) => write!(f, "Save ${tag} <- {x}"),
+            Restore(tag) => write!(f, "Restore ${tag}"),
         }
     }
 }

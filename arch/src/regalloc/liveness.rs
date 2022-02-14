@@ -1,5 +1,5 @@
 use super::types::*;
-use crate::{common::REGS, mir::mir::*};
+use crate::mir::mir::*;
 use id_arena::Arena;
 use util::Id as Var;
 
@@ -48,11 +48,11 @@ fn prepare_impl(
                     moves.push((pp, (d, x)));
                 }
                 CallDir(_) => {
-                    for r in REGS {
-                        let r = format!("%{r}");
-                        let r = *var_idx.get(&r).unwrap();
-                        def.insert((pp.clone(), r));
-                    }
+                    // for r in REGS {
+                    //     let r = format!("%{r}");
+                    //     let r = *var_idx.get(&r).unwrap();
+                    //     def.insert((pp.clone(), r));
+                    // }
                 }
                 Sw(x, Value::Var(y), z) => {
                     push(x);
@@ -66,9 +66,12 @@ fn prepare_impl(
                     push(x);
                     push(y);
                 }
-                UnOp(_, x) | IntOp(_, x, _) | AllocHeap(Value::Var(x)) | Lw(x, _) | Out(x) => {
-                    push(x)
-                }
+                UnOp(_, x)
+                | IntOp(_, x, _)
+                | AllocHeap(Value::Var(x))
+                | Lw(x, _)
+                | Out(x)
+                | Save(_, x) => push(x),
                 _ => (),
             }
         }
