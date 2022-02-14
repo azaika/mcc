@@ -148,7 +148,7 @@ fn analyze_impl(
     let mut queue = Set::default();
     for bid in collect_used(arena, entry) {
         let block = &arena[bid];
-        for i in 0..(block.body.len()) {
+        for i in 0..(block.body.len() + 1) {
             let pp = ProgramPoint::new(bid, i);
             for j in 0..n {
                 {

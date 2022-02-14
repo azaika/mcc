@@ -43,6 +43,9 @@ pub fn estimate_cost(tyenv: &TyMap, arena: &Arena<Block>, entry: BlockId) -> Map
             match &inst.item {
                 Mv(x) => {
                     if !x.starts_with("%") {
+                        if !count.contains_key(x) {
+                            panic!("var `{x}` is not in `count`!!!!");
+                        }
                         count.get_mut(x).unwrap().add_assign(1);
                     }
                 }

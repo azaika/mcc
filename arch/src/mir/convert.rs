@@ -1,7 +1,7 @@
 use super::mir;
 use crate::{
     common::{self, REGS},
-    virt::program as virt,
+    virt::program::{self as virt, Ty},
 };
 
 use ast::closure::Label;
@@ -103,7 +103,13 @@ fn conv_let(
             for (x, r) in xs.into_iter().zip(common::REGS) {
                 let reg = format!("%{}", r);
                 let kind = match x {
-                    virt::Value::Var(x) => mir::InstKind::Mv(x),
+                    virt::Value::Var(x) => {
+                        if old_tyenv.get(&x).unwrap() == &Ty::Unit {
+                            continue;
+                        }
+
+                        mir::InstKind::Mv(x)
+                    },
                     virt::Value::Imm(x) => mir::InstKind::Li(x as i32),
                 };
                 body.push((Some(reg), kind.with_span(span)));
@@ -238,7 +244,13 @@ fn conv(
             for (x, r) in xs.into_iter().zip(common::REGS) {
                 let reg = format!("%{}", r);
                 let kind = match x {
-                    virt::Value::Var(x) => InstKind::Mv(x),
+                    virt::Value::Var(x) => {
+                        if old_tyenv.get(&x).unwrap() == &Ty::Unit {
+                            continue;
+                        }
+
+                        InstKind::Mv(x)
+                    },
                     virt::Value::Imm(x) => InstKind::Li(x as i32),
                 };
                 block.body.push((Some(reg), kind.with_span(e.loc)));
@@ -296,6 +308,10 @@ fn convert_fundef(fundefs: Vec<virt::Fundef>, tyenv: &virt::TyMap, p: &mut mir::
         if formal_fv.is_empty() {
             let block = &mut arena[entry_id];
             for (i, x) in args.into_iter().enumerate() {
+                if tyenv.get(&x).unwrap() == &Ty::Unit {
+                    continue;
+                }
+
                 let r = format!("%{}", REGS[i]);
                 block
                     .body
