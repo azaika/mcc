@@ -114,12 +114,12 @@ fn conv(
                     )));
                     return lift(ExprKind::Let(Some(v), e1, e2));
                 }
-                closure::ExprKind::Load(label) if vt.is_pointer() => {
-                    let e1 = lift(ExprKind::LoadLabel(label.clone()));
+                closure::ExprKind::Load(label) if (vt.is_array() || vt.is_tuple()) && !vt.is_pointer() => {
+                    let e1 = lift(ExprKind::GetLabel(label.clone()));
                     return lift(ExprKind::Let(Some(v), e1, e2));
                 }
                 closure::ExprKind::Load(label) => {
-                    let e1 = lift(ExprKind::GetLabel(label.clone()));
+                    let e1 = lift(ExprKind::LoadLabel(label.clone()));
                     return lift(ExprKind::Let(Some(v), e1, e2));
                 }
                 closure::ExprKind::MakeCls(label, args) => {

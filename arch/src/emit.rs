@@ -52,13 +52,16 @@ fn emit_inst<W: Write>(
             let x = x.to_bits();
             let lo = (x << 16) >> 16;
             let ha = (x ^ lo) >> 16;
-            write!(w, "\taddis\t{v}, {REG_ZERO}, {ha}\n")?;
-            write!(w, "\tori\t\t{v}, {v}, {lo}")?
+            if ha == 0 {
+                write!(w, "\taddi\t{v}, {REG_ZERO}, {lo}")?;
+            }
+            else {
+                write!(w, "\taddis\t{v}, {REG_ZERO}, {ha}\n")?;
+                write!(w, "\tori\t\t{v}, {v}, {lo}")?
+            }
         }
         GetLabel(label) => {
-            let v = reg_v!();
-            write!(w, "\taddis\t{v}, {REG_ZERO}, ha16({})\n", label.0)?;
-            write!(w, "\tori\t\t{v}, {v}, lo16({})", label.0)?
+            write!(w, "\tlli\t\t{}, {}", reg_v!(), label.0)?
         }
         LoadLabel(label) => write!(w, "\tlwi\t\t{}, {}", reg_v!(), label.0)?,
         UnOp(kind, x) => {
@@ -159,7 +162,7 @@ fn emit_inst<W: Write>(
         Out(x) => write!(w, "\tout\t\t{}", reg!(x))?,
         Save(tag, x) => {
             if let Some(offset) = stackmap.get(tag) {
-                write!(w, "\tsw\t\t{}, {offset}({REG_STACK})", reg!(x))?;
+                write!(w, "\tsw\t\t{}, {}({REG_STACK})", reg!(x), -offset)?;
             } else {
                 stackmap.insert(tag.clone(), *stack_size);
                 write!(w, "\tsw\t\t{}, {}({REG_STACK})", reg!(x), -*stack_size)?;

@@ -74,7 +74,8 @@ fn conv_single(
         | IntOp(_, x, _)
         | AllocHeap(Value::Var(x))
         | Out(x)
-        | If(_, x, _, _, _) => f(x),
+        | If(_, x, _, _, _)
+        | Lw(x, _) => f(x),
         Continue(ps) => {
             for (_, x) in ps {
                 f(x);
