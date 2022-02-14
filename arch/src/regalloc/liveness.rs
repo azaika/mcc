@@ -1,7 +1,8 @@
 use super::types::*;
-use crate::mir::mir::*;
+use crate::{common, mir::mir::*};
 use id_arena::Arena;
 use util::Id as Var;
+use util::{Map, Set};
 
 type LiveId = (ProgramPoint, usize);
 
@@ -15,12 +16,12 @@ pub enum Follow {
 fn prepare_impl(
     arena: &Arena<Block>,
     entry: BlockId,
-    var_idx: &util::Map<Var, usize>,
-    def: &mut util::Set<LiveId>,
-    used: &mut util::Set<LiveId>,
-    follow: &mut util::Map<ProgramPoint, Follow>,
-    prev: &mut util::Map<BlockId, Vec<ProgramPoint>>,
-    moves: &mut Vec<(ProgramPoint, (usize, usize))>,
+    var_idx: &Map<Var, usize>,
+    def: &mut Set<LiveId>,
+    used: &mut Set<LiveId>,
+    follow: &mut Map<ProgramPoint, Follow>,
+    prev: &mut Map<BlockId, Vec<ProgramPoint>>,
+    moves: &mut Map<ProgramPoint, (usize, usize)>,
 ) {
     for bid in collect_used(arena, entry) {
         let block = &arena[bid];
@@ -45,7 +46,7 @@ fn prepare_impl(
                     push(x);
                     let d = *var_idx.get(d.as_ref().unwrap()).unwrap();
                     let x = *var_idx.get(x).unwrap();
-                    moves.push((pp, (d, x)));
+                    moves.insert(pp, (d, x));
                 }
                 CallDir(_) => {
                     // for r in REGS {
@@ -132,15 +133,19 @@ fn analyze_impl(
     arena: &Arena<Block>,
     entry: BlockId,
     n: usize,
-    def: &util::Set<LiveId>,
-    used: &util::Set<LiveId>,
-    follow: &util::Map<ProgramPoint, Follow>,
-    prev: &util::Map<BlockId, Vec<ProgramPoint>>,
-) -> Liveness {
-    let mut live_in = util::Set::default();
-    let mut live_out = util::Set::default();
+    def: &Set<LiveId>,
+    used: &Set<LiveId>,
+    follow: &Map<ProgramPoint, Follow>,
+    prev: &Map<BlockId, Vec<ProgramPoint>>,
+) -> (
+    Liveness,
+    Map<ProgramPoint, usize>,
+    Map<ProgramPoint, Set<usize>>,
+) {
+    let mut live_in = Set::default();
+    let mut live_out = Set::default();
 
-    let mut queue = util::Set::default();
+    let mut queue = Set::default();
     for bid in collect_used(arena, entry) {
         let block = &arena[bid];
         for i in 0..(block.body.len()) {
@@ -235,28 +240,108 @@ fn analyze_impl(
         }
     }
 
-    let mut res: Liveness = util::Map::default();
-    for (pp, i_v) in live_in {
-        res.entry(pp).or_default().insert(i_v);
-    }
+    let mut out: Liveness = Map::default();
     for (pp, i_v) in live_out {
-        res.entry(pp).or_default().insert(i_v);
+        out.entry(pp).or_default().insert(i_v);
     }
 
-    res
+    let mut defs = Map::default();
+    for (pp, i_v) in def {
+        defs.insert(pp.clone(), *i_v);
+    }
+    let mut uses: Map<ProgramPoint, Set<_>> = Map::default();
+    for (pp, i_v) in used {
+        uses.entry(pp.clone()).or_default().insert(*i_v);
+    }
+
+    (out, defs, uses)
+}
+
+fn build_graph(
+    arena: &Arena<Block>,
+    entry: BlockId,
+    n: usize,
+    live_out: &Liveness,
+    moves: &Map<ProgramPoint, (usize, usize)>,
+    def: &Map<ProgramPoint, usize>,
+    used: &Map<ProgramPoint, Set<usize>>,
+    precolored: &Map<usize, common::Color>,
+) -> (Vec<Set<usize>>, Set<(usize, usize)>, Vec<usize>) {
+    let mut edges: Vec<Set<usize>> = vec![Set::default(); n];
+    let mut all_edges: Set<(usize, usize)> = Set::default();
+    let mut degrees: Vec<usize> = vec![0; n];
+
+    for bid in collect_used(arena, entry) {
+        let tail_idx = arena[bid].body.len();
+        let mut live: Set<_> = live_out
+            .get(&ProgramPoint::new(bid, tail_idx))
+            .into_iter()
+            .flatten()
+            .cloned()
+            .collect();
+
+        for idx in (0..(tail_idx + 1)).rev() {
+            let pp = ProgramPoint::new(bid, idx);
+
+            if let Some((x, y)) = moves.get(&pp) {
+                if x == y {
+                    continue;
+                }
+
+                for u in used.get(&pp).into_iter().flatten() {
+                    live.remove(u);
+                }
+            }
+
+            if let Some(d) = def.get(&pp) {
+                for v in &live {
+                    let d = *d;
+                    let v = *v;
+                    if d == v || all_edges.contains(&(d, v)) {
+                        continue;
+                    }
+                    all_edges.insert((d, v));
+                    all_edges.insert((v, d));
+
+                    if !precolored.contains_key(&d) {
+                        edges[d].insert(v);
+                        degrees[d] += 1;
+                    }
+                    if !precolored.contains_key(&v) {
+                        edges[v].insert(d);
+                        degrees[v] += 1;
+                    }
+                }
+
+                live.remove(d);
+            }
+
+            for u in used.get(&pp).into_iter().flatten() {
+                live.insert(*u);
+            }
+        }
+    }
+
+    (edges, all_edges, degrees)
 }
 
 pub fn analyze(
     arena: &Arena<Block>,
     entry: BlockId,
     n: usize,
-    var_idx: &util::Map<Var, usize>,
-) -> (Liveness, Vec<(ProgramPoint, (usize, usize))>) {
-    let mut def = util::Set::default();
-    let mut used = util::Set::default();
-    let mut follow = util::Map::default();
-    let mut prev = util::Map::default();
-    let mut moves = vec![];
+    var_idx: &Map<Var, usize>,
+    precolored: &Map<usize, common::Color>,
+) -> (
+    Map<ProgramPoint, (usize, usize)>,
+    Vec<Set<usize>>,
+    Set<(usize, usize)>,
+    Vec<usize>,
+) {
+    let mut def = Set::default();
+    let mut used = Set::default();
+    let mut follow = Map::default();
+    let mut prev = Map::default();
+    let mut moves = Map::default();
     prepare_impl(
         arena,
         entry,
@@ -268,12 +353,10 @@ pub fn analyze(
         &mut moves,
     );
 
-    let r = analyze_impl(arena, entry, n, &def, &used, &follow, &prev);
+    let (live_out, def, used) = analyze_impl(arena, entry, n, &def, &used, &follow, &prev);
 
-    for (pp, y) in &r {
-        let name = &arena[pp.bid].name;
-        println!("{name}[{}] = {:#?}", pp.idx, y);
-    }
+    let (edges, all_edges, degrees) =
+        build_graph(arena, entry, n, &live_out, &moves, &def, &used, precolored);
 
-    (r, moves)
+    (moves, edges, all_edges, degrees)
 }

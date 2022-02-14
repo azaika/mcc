@@ -62,13 +62,16 @@ pub struct RegAllocator {
 impl RegAllocator {
     pub fn new(arena: &Arena<Block>, entry: BlockId, var_idx: &Map<Var, usize>) -> Self {
         let n = var_idx.len();
-        let (live, moves) = liveness::analyze(arena, entry, n, var_idx);
+
         let mut precolored: Map<usize, Color> = Map::default();
         for r in common::REGS {
             let v = format!("%{r}");
             let v = *var_idx.get(&v).unwrap();
             precolored.insert(v, r);
         }
+
+        let (moves, edges, all_edges, degrees) =
+            liveness::analyze(arena, entry, n, var_idx, &precolored);
 
         let mut move_lists: Map<usize, Set<(ProgramPoint, (usize, usize))>> = Map::default();
         let mut move_states = Map::default();
@@ -81,27 +84,6 @@ impl RegAllocator {
                 l1.insert((pp.clone(), (u, v)));
                 let l2 = move_lists.entry(v).or_default();
                 l2.insert((pp, (u, v)));
-            }
-        }
-
-        let mut edges = vec![Set::default(); n];
-        let mut all_edges = Set::with_capacity_and_hasher(n, util::Hasher::default());
-        let mut degrees = vec![0; n];
-        for (_, set) in live {
-            for u in &set {
-                let precolored = precolored.contains_key(u);
-                let u = *u;
-                for v in &set {
-                    if *v == u {
-                        continue;
-                    }
-
-                    all_edges.insert((u, *v));
-                    if !precolored {
-                        degrees[u] += 1;
-                        edges[u].insert(*v);
-                    }
-                }
             }
         }
 

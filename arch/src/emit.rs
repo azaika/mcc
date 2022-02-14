@@ -303,7 +303,7 @@ pub fn emit<W: Write>(w: &mut W, p: Program, regmaps: (RegMap, Map<Label, RegMap
     write!(w, "# === .data section ===\n")?;
     write!(w, "\t.data\n")?;
     for (label, size) in p.globals {
-        write!(w, "{label}:\n")?;
+        write!(w, "{}:\n", label.0)?;
         write!(w, "\t.size {size}\n")?;
     }
     Ok(())
