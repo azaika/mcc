@@ -102,7 +102,7 @@ fn emit_inst<W: Write>(
                 IntOpKind::Mul16 => "mul16i",
                 IntOpKind::Shl => {
                     assert!(0 <= *y && *y <= 31);
-                    "shli"
+                    "slwi"
                 }
                 IntOpKind::Shr => {
                     assert!(0 <= *y && *y <= 31);
@@ -155,7 +155,7 @@ fn emit_inst<W: Write>(
         Lw(x, Value::Var(y)) => write!(w, "\tlwx\t\t{}, {}, {}", reg_v!(), reg!(x), reg!(y))?,
         Sw(x, Value::Imm(y), z) => write!(w, "\tsw\t\t{}, {y}({})", reg!(z), reg!(x))?,
         Sw(x, Value::Var(y), z) => write!(w, "\tswx\t\t{}, {}, {}", reg!(z), reg!(y), reg!(x))?,
-        In => write!(w, "\tin")?,
+        In => write!(w, "\tin\t\t{}", reg_v!())?,
         Out(x) => write!(w, "\tout\t\t{}", reg!(x))?,
         Save(tag, x) => {
             if let Some(offset) = stackmap.get(tag) {

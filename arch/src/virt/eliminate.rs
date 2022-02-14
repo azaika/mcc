@@ -31,7 +31,7 @@ fn conv(
                     return e2;
                 } else {
                     let e1 = conv(e1, tyenv, used, global_used);
-                    Let(None, e1, e2)
+                    Let(Some(v), e1, e2)
                 }
             } else {
                 let e1 = conv(e1, tyenv, used, global_used);

@@ -129,10 +129,10 @@ pub fn estimate_cost(tyenv: &TyMap, arena: &Arena<Block>, entry: BlockId) -> Map
 }
 
 pub fn insert_save_restore(
-    arena: &mut Arena<Block>,
-    entry: BlockId,
-    tyenv: &mut TyMap,
-    spilled: &Set<Id>,
+    _arena: &mut Arena<Block>,
+    _entry: BlockId,
+    _tyenv: &mut TyMap,
+    _spilled: &Set<Id>,
 ) {
     todo!()
 }
