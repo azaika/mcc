@@ -48,7 +48,9 @@ fn conv(
             if let Some(y) = env.get(&y) {
                 match kind {
                     IntOpKind::Mul16 => {
-                        if y.count_ones() == 1 {
+                        if *y == 0 {
+                            Li(0)
+                        } else if y.count_ones() == 1 {
                             IntOp(IntOpKind::Shl, x, Value::Imm(y.log2() as i16))
                         } else {
                             IntOp(IntOpKind::Mul16, x, Value::Imm(*y))
@@ -62,22 +64,20 @@ fn conv(
                         }
                     }
                 }
-            } else if let Some(x) = env.get(&x) {
+            } else if let Some(xx) = env.get(&x) {
                 match kind {
                     IntOpKind::Mul16 => {
-                        if x.count_ones() == 1 {
-                            IntOp(IntOpKind::Shl, y, Value::Imm(x.log2() as i16))
+                        if *xx == 0 {
+                            Li(0)
+                        } else if xx.count_ones() == 1 {
+                            IntOp(IntOpKind::Shl, y, Value::Imm(xx.log2() as i16))
                         } else {
-                            IntOp(IntOpKind::Mul16, y, Value::Imm(*x))
+                            IntOp(IntOpKind::Mul16, y, Value::Imm(*xx))
                         }
                     }
-                    kind => {
-                        if *x == 0 {
-                            Var(y)
-                        } else {
-                            IntOp(kind, y, Value::Imm(*x))
-                        }
-                    }
+                    _ if *xx == 0 => Var(y),
+                    IntOpKind::Add => IntOp(IntOpKind::Add, y, Value::Imm(*xx)),
+                    kind => IntOp(kind, x, Value::Var(y))
                 }
             } else {
                 IntOp(kind, x, Value::Var(y))
