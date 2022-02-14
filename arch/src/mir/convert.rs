@@ -337,6 +337,12 @@ pub fn convert(prog: virt::Program) -> mir::Program {
     let mut arena = id_arena::Arena::new();
     let entry = arena.alloc(mir::Block::with_name("_min_caml_start".to_string()));
     let exit = arena.alloc(mir::Block::with_name("_min_caml_end".to_string()));
+    {
+        let body = &mut arena[exit].body;
+        for _ in 0..10 {
+            body.push((None, mir::InstKind::Nop.with_span((0, 0))));
+        }
+    }
     let mut p = mir::Program::new(arena, entry, exit);
 
     for (label, data) in prog.globals {

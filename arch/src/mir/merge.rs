@@ -28,6 +28,7 @@ fn conv(bid: BlockId, arena: &mut Arena<Block>, arrived: &mut Set) {
 
 pub fn merge_block(mut p: Program) -> Program {
     let mut arrived = Set::default();
+    arrived.insert(p.exit);
     for bid in p.collect_main_used() {
         conv(bid, &mut p.main_arena, &mut arrived);
     }
