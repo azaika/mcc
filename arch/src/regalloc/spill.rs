@@ -1,8 +1,8 @@
-use std::{collections::VecDeque, ops::{RangeBounds, AddAssign}};
+use std::{collections::VecDeque, ops::AddAssign};
 
 use crate::mir::mir::*;
 use id_arena::Arena;
-use util::{Id, Set, Map};
+use util::{Id, Map, Set};
 
 use super::types::*;
 
@@ -45,25 +45,27 @@ pub fn estimate_cost(tyenv: &TyMap, arena: &Arena<Block>, entry: BlockId) -> Map
                     if !x.starts_with("%") {
                         count.get_mut(x).unwrap().add_assign(1);
                     }
-                },
+                }
                 UnOp(_, x) | IntOp(_, x, Value::Imm(_)) | Lw(x, Value::Imm(_)) | Out(x) => {
                     count.get_mut(x).unwrap().add_assign(1);
-                },
-                IntOp(_, x, Value::Var(y)) | FloatOp(_, x, y) | Lw(x, Value::Var(y)) | Sw(x, Value::Imm(_), y) => {
+                }
+                IntOp(_, x, Value::Var(y))
+                | FloatOp(_, x, y)
+                | Lw(x, Value::Var(y))
+                | Sw(x, Value::Imm(_), y) => {
                     count.get_mut(x).unwrap().add_assign(1);
                     count.get_mut(y).unwrap().add_assign(1);
-                },
+                }
                 Sw(x, Value::Var(y), z) => {
                     count.get_mut(x).unwrap().add_assign(1);
                     count.get_mut(y).unwrap().add_assign(1);
                     count.get_mut(z).unwrap().add_assign(1);
-                },
-                _ => ()
+                }
+                _ => (),
             }
 
             que.push_back(ProgramPoint::new(pp.bid, pp.idx + 1));
-        }
-        else {
+        } else {
             assert!(pp.idx == block.body.len());
             match &block.tail.item {
                 TailKind::If(_, x, Value::Imm(_), b1, b2) => {
@@ -80,7 +82,7 @@ pub fn estimate_cost(tyenv: &TyMap, arena: &Arena<Block>, entry: BlockId) -> Map
                     if !visited.contains(&ProgramPoint::new(*b2, 0)) {
                         que.push_back(ProgramPoint::new(*b2, 0));
                     }
-                },
+                }
                 TailKind::If(_, x, Value::Var(y), b1, b2) | TailKind::IfF(_, x, y, b1, b2) => {
                     count.get_mut(x).unwrap().add_assign(1);
                     count.get_mut(y).unwrap().add_assign(1);
@@ -96,7 +98,7 @@ pub fn estimate_cost(tyenv: &TyMap, arena: &Arena<Block>, entry: BlockId) -> Map
                     if !visited.contains(&ProgramPoint::new(*b2, 0)) {
                         que.push_back(ProgramPoint::new(*b2, 0));
                     }
-                },
+                }
                 TailKind::Jump(b) => {
                     let nd = block_depth.entry(*b).or_insert(usize::MAX);
                     *nd = (*nd).min(d + 1);
@@ -104,7 +106,7 @@ pub fn estimate_cost(tyenv: &TyMap, arena: &Arena<Block>, entry: BlockId) -> Map
                     if !visited.contains(&ProgramPoint::new(*b, 0)) {
                         que.push_back(ProgramPoint::new(*b, 0));
                     }
-                },
+                }
                 TailKind::Return => (),
             }
         }

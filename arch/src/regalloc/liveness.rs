@@ -1,8 +1,5 @@
 use super::types::*;
-use crate::{
-    common::{Color, REGS, REG_RET},
-    mir::mir::*,
-};
+use crate::{common::REGS, mir::mir::*};
 use id_arena::Arena;
 use util::Id as Var;
 
@@ -23,7 +20,6 @@ fn prepare_impl(
     used: &mut util::Set<LiveId>,
     follow: &mut util::Map<ProgramPoint, Follow>,
     prev: &mut util::Map<BlockId, Vec<ProgramPoint>>,
-    precolor: &mut util::Map<usize, Color>,
     moves: &mut Vec<(ProgramPoint, (usize, usize))>,
 ) {
     for bid in collect_used(arena, entry) {
@@ -52,23 +48,10 @@ fn prepare_impl(
                     moves.push((pp, (d, x)));
                 }
                 CallDir(_) => {
-                    if let Some(d) = d {
-                        let d = *var_idx.get(d).unwrap();
-                        precolor.insert(d, REG_RET);
-                        for r in REGS {
-                            if *r == REG_RET {
-                                continue;
-                            }
-                            let r = format!("%{r}");
-                            let r = *var_idx.get(&r).unwrap();
-                            def.insert((pp.clone(), r));
-                        }
-                    } else {
-                        for r in REGS {
-                            let r = format!("%{r}");
-                            let r = *var_idx.get(&r).unwrap();
-                            def.insert((pp.clone(), r));
-                        }
+                    for r in REGS {
+                        let r = format!("%{r}");
+                        let r = *var_idx.get(&r).unwrap();
+                        def.insert((pp.clone(), r));
                     }
                 }
                 Sw(x, Value::Var(y), z) => {
@@ -176,8 +159,7 @@ fn analyze_impl(
                             for next in prev.get(&pp.bid).iter().flat_map(|x| *x) {
                                 queue.insert(((next.clone(), j), false));
                             }
-                        }
-                        else {
+                        } else {
                             queue.insert(((ProgramPoint::new(bid, i - 1), j), false));
                         }
                     }
@@ -226,8 +208,7 @@ fn analyze_impl(
                     for next in prev.get(&pp.bid).iter().flat_map(|x| *x) {
                         queue.insert(((next.clone(), i_v), false));
                     }
-                }
-                else {
+                } else {
                     queue.insert(((ProgramPoint::new(pp.bid, pp.idx - 1), i_v), false));
                 }
             }
@@ -267,16 +248,11 @@ pub fn analyze(
     entry: BlockId,
     n: usize,
     var_idx: &util::Map<Var, usize>,
-) -> (
-    Liveness,
-    util::Map<usize, Color>,
-    Vec<(ProgramPoint, (usize, usize))>,
-) {
+) -> (Liveness, Vec<(ProgramPoint, (usize, usize))>) {
     let mut def = util::Set::default();
     let mut used = util::Set::default();
     let mut follow = util::Map::default();
     let mut prev = util::Map::default();
-    let mut precolor = util::Map::default();
     let mut moves = vec![];
     prepare_impl(
         arena,
@@ -286,7 +262,6 @@ pub fn analyze(
         &mut used,
         &mut follow,
         &mut prev,
-        &mut precolor,
         &mut moves,
     );
 
@@ -297,5 +272,5 @@ pub fn analyze(
         println!("{name}[{}] = {:#?}", pp.idx, y);
     }
 
-    (r, precolor, moves)
+    (r, moves)
 }

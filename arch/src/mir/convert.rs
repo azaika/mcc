@@ -107,7 +107,12 @@ fn conv_let(
                 body.push((Some(reg), kind.with_span(span)));
             }
 
-            body.push((res.clone(), mir::InstKind::CallDir(label).with_span(span)));
+            let ret = format!("%{}", common::REG_RET);
+            body.push((
+                Some(ret.clone()),
+                mir::InstKind::CallDir(label).with_span(span),
+            ));
+            body.push((res.clone(), mir::InstKind::Mv(ret).with_span(span)));
         }
         virt::ExprKind::CallCls(..) => unimplemented!("I have no time"),
         _ => body.push((res.clone(), conv_simple(e1.item).with_span(span))),
@@ -235,9 +240,13 @@ fn conv(
                 block.body.push((Some(reg), kind.with_span(e.loc)));
             }
 
+            let reg = format!("%{}", common::REG_RET);
             block
                 .body
-                .push((res, InstKind::CallDir(label).with_span(e.loc)));
+                .push((Some(reg.clone()), InstKind::CallDir(label).with_span(e.loc)));
+            block
+                .body
+                .push((Some(reg.clone()), InstKind::Mv(reg).with_span(e.loc)));
             block.tail = Box::new(tail.with_span(e.loc));
         }
         ExprKind::CallCls(..) => unimplemented!("I have no time"),

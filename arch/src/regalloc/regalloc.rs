@@ -2,14 +2,12 @@ use std::hash::Hash;
 
 use id_arena::Arena;
 
-use super::{types::*, spill};
-use crate::common::{self, REGS};
+use super::{spill, types::*};
+use crate::common::{self, Color, REGS};
 use crate::mir::mir::*;
 use crate::regalloc::liveness;
 use util::Id as Var;
 use util::{Map, Set};
-
-type Color = &'static str;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum NodeState {
@@ -40,13 +38,6 @@ fn set_pop<T: Eq + Hash + Clone>(set: &mut Set<T>) -> Option<T> {
     }
 }
 
-fn is_real_adj(states: &Vec<NodeState>, u: usize) -> bool {
-    match states[u] {
-        NodeState::Coalesced | NodeState::SelectStack => false,
-        _ => true,
-    }
-}
-
 pub struct RegAllocator {
     precolored: Map<usize, Color>,
     coalesced: Set<usize>,
@@ -64,35 +55,33 @@ pub struct RegAllocator {
     all_edges: Set<(usize, usize)>,
     degrees: Vec<usize>,
 
-    move_lists: Map<usize, Vec<(ProgramPoint, (usize, usize))>>,
+    move_lists: Map<usize, Set<(ProgramPoint, (usize, usize))>>,
     alias: Vec<usize>,
 }
 
 impl RegAllocator {
     pub fn new(arena: &Arena<Block>, entry: BlockId, var_idx: &Map<Var, usize>) -> Self {
         let n = var_idx.len();
-        let (live, mut precolored, moves) = liveness::analyze(arena, entry, n, var_idx);
+        let (live, moves) = liveness::analyze(arena, entry, n, var_idx);
+        let mut precolored: Map<usize, Color> = Map::default();
         for r in common::REGS {
             let v = format!("%{r}");
             let v = *var_idx.get(&v).unwrap();
             precolored.insert(v, r);
         }
 
-        let mut move_lists: Map<usize, Vec<(ProgramPoint, (usize, usize))>> = Map::default();
+        let mut move_lists: Map<usize, Set<(ProgramPoint, (usize, usize))>> = Map::default();
         let mut move_states = Map::default();
         let mut move_workset = Set::default();
         for (pp, (u, v)) in moves {
-            move_states.insert(pp.clone(), MoveState::Workset);
-            move_workset.insert((pp.clone(), (u, v)));
-            let l1 = move_lists.entry(u).or_default();
-            l1.push((pp.clone(), (u, v)));
-            let l2 = move_lists.entry(v).or_default();
-            l2.push((pp, (u, v)));
-        }
-
-        let mut colored = Map::default();
-        for (v, c) in &precolored {
-            colored.insert(*v, *c);
+            if u != v {
+                move_states.insert(pp.clone(), MoveState::Workset);
+                move_workset.insert((pp.clone(), (u, v)));
+                let l1 = move_lists.entry(u).or_default();
+                l1.insert((pp.clone(), (u, v)));
+                let l2 = move_lists.entry(v).or_default();
+                l2.insert((pp, (u, v)));
+            }
         }
 
         let mut edges = vec![Set::default(); n];
@@ -121,7 +110,9 @@ impl RegAllocator {
         let mut freeze_workset = Set::default();
         let mut spill_workset = Set::default();
         for v in 0..n {
-            if degrees[v] >= REGS.len() {
+            if precolored.contains_key(&v) {
+                node_states.push(NodeState::PreColored);
+            } else if degrees[v] >= REGS.len() {
                 spill_workset.insert(v);
                 node_states.push(NodeState::SpillWorkset);
             } else if move_lists.contains_key(&v) {
@@ -155,6 +146,17 @@ impl RegAllocator {
         }
     }
 
+    fn actual_adjs(&self, u: usize) -> Vec<usize> {
+        self.edges[u]
+            .iter()
+            .filter(|x| match self.node_states[**x] {
+                NodeState::Coalesced | NodeState::SelectStack => false,
+                _ => true,
+            })
+            .cloned()
+            .collect()
+    }
+
     fn alias_root(&self, u: usize) -> usize {
         if self.node_states[u] == NodeState::Coalesced {
             self.alias_root(self.alias[u])
@@ -164,9 +166,8 @@ impl RegAllocator {
     }
 
     fn enable_moves(&mut self, u: usize) {
-        let adj_u = self.edges[u].iter().filter(|x| !is_real_adj(&self.node_states, **x));
-        for u in adj_u.chain(&Some(u)).cloned() {
-            for m in self.actual_moves(u) {
+        for u in self.actual_adjs(u).into_iter().chain(Some(u)) {
+            for m in self.move_lists.get(&u).iter().flat_map(|x| *x) {
                 let state = self.move_states.get_mut(&m.0).unwrap();
                 if state == &MoveState::Active {
                     *state = MoveState::Workset;
@@ -176,10 +177,14 @@ impl RegAllocator {
         }
     }
 
-    fn separate_edge(&mut self, u: usize) {
-        assert!(self.degrees[u] > 0);
+    fn decrement_degree(&mut self, u: usize) {
+        if self.node_states[u] == NodeState::PreColored {
+            return;
+        }
 
         let d = self.degrees[u];
+        assert!(d > 0);
+
         self.degrees[u] -= 1;
 
         if d == REGS.len() {
@@ -197,96 +202,72 @@ impl RegAllocator {
 
     fn simplify(&mut self) {
         let u = set_pop(&mut self.simplify_workset).unwrap();
-        self.select_stack.push(u);
         self.node_states[u] = NodeState::SelectStack;
-        let x: Vec<_> = self.edges[u]
-            .iter()
-            .filter_map(|v| {
-                if is_real_adj(&self.node_states, *v) {
-                    Some(*v)
-                } else {
-                    None
-                }
-            })
-            .collect();
-        for v in x {
-            self.separate_edge(v);
+        self.select_stack.push(u);
+
+        for v in self.actual_adjs(u) {
+            self.decrement_degree(v);
         }
     }
 
     fn actual_moves(&self, u: usize) -> Vec<(ProgramPoint, (usize, usize))> {
-        if let Some(list) = self.move_lists.get(&u) {
-            list.iter()
-                .filter(|(pp, _)| match self.move_states.get(pp).unwrap() {
-                    MoveState::Workset | MoveState::Active => true,
-                    _ => false,
-                })
-                .cloned()
-                .collect()
-        } else {
-            vec![]
-        }
+        self.move_lists
+            .get(&u)
+            .into_iter()
+            .flatten()
+            .filter(|(pp, _)| match self.move_states.get(pp).unwrap() {
+                MoveState::Workset | MoveState::Active => true,
+                _ => false,
+            })
+            .cloned()
+            .collect()
     }
 
     fn is_move_related(&self, u: usize) -> bool {
-        if let Some(list) = self.move_lists.get(&u) {
-            list.iter()
-                .any(|(pp, _)| match self.move_states.get(pp).unwrap() {
-                    MoveState::Workset | MoveState::Active => true,
-                    _ => false,
-                })
-        } else {
-            false
-        }
+        self.move_lists
+            .get(&u)
+            .into_iter()
+            .flatten()
+            .any(|(pp, _)| match self.move_states.get(pp).unwrap() {
+                MoveState::Workset | MoveState::Active => true,
+                _ => false,
+            })
     }
 
     fn combine(&mut self, u: usize, v: usize) {
         let b1 = self.freeze_workset.remove(&v);
         let b2 = self.spill_workset.remove(&v);
-        assert!(b1 || b2);
+        assert!(b1 != b2);
         self.node_states[v] = NodeState::Coalesced;
         self.coalesced.insert(v);
 
         self.alias[v] = u;
 
-        let unified: Vec<_> = self
-            .move_lists
-            .get(&u)
-            .unwrap()
-            .iter()
-            .chain(self.move_lists.get(&v).unwrap())
-            .cloned()
-            .collect();
-        *self.move_lists.get_mut(&u).unwrap() = unified.clone();
+        let v_moves = self.move_lists.get(&v).cloned().unwrap();
+        let u_moves = self.move_lists.get_mut(&u).unwrap();
+        for m in v_moves {
+            u_moves.insert(m);
+        }
 
-        let adj_v: Vec<_> = self.edges[v]
-            .iter()
-            .filter_map(|v| {
-                if is_real_adj(&self.node_states, *v) {
-                    Some(*v)
-                } else {
-                    None
-                }
-            })
-            .collect();
-        for t in adj_v {
+        for t in self.actual_adjs(v) {
             if t == u || self.all_edges.contains(&(t, u)) {
-                self.separate_edge(t);
+                self.decrement_degree(t);
                 continue;
             }
+
             self.all_edges.insert((t, u));
             self.all_edges.insert((u, t));
 
-            if !self.precolored.contains_key(&t) {
+            if self.node_states[t] != NodeState::PreColored {
                 self.edges[t].insert(u);
                 self.degrees[t] += 1;
             }
-            if !self.precolored.contains_key(&u) {
+            if self.node_states[u] != NodeState::PreColored {
                 self.edges[u].insert(t);
                 self.degrees[u] += 1;
             }
 
-            self.separate_edge(t);
+            self.decrement_degree(t);
         }
 
         if self.degrees[u] >= REGS.len() && self.node_states[u] == NodeState::FreezeWorkset {
@@ -295,7 +276,7 @@ impl RegAllocator {
             self.spill_workset.insert(u);
         }
 
-        if !self.precolored.contains_key(&u)
+        if self.node_states[u] != NodeState::PreColored
             && !self.is_move_related(u)
             && self.degrees[u] < REGS.len()
         {
@@ -310,8 +291,13 @@ impl RegAllocator {
 
         const K: usize = REGS.len();
 
-        for x in self.edges[u].iter().chain(&self.edges[v]) {
-            if is_real_adj(&self.node_states, *x) && self.degrees[*x] >= K {
+        let s: Set<_> = self
+            .actual_adjs(u)
+            .into_iter()
+            .chain(self.actual_adjs(v))
+            .collect();
+        for x in s {
+            if self.degrees[x] >= K {
                 k += 1;
             }
         }
@@ -320,14 +306,10 @@ impl RegAllocator {
     }
 
     fn is_ok(&self, v: usize, u: usize) -> bool {
-        let mut adj = self.edges[v]
-            .iter()
-            .filter(|t| is_real_adj(&self.node_states, **t));
-
-        adj.all(|t| {
-            self.degrees[*t] < REGS.len()
-                || self.precolored.contains_key(t)
-                || self.all_edges.contains(&(*t, u))
+        self.actual_adjs(v).into_iter().all(|t| {
+            self.degrees[t] < REGS.len()
+                || self.node_states[t] == NodeState::PreColored
+                || self.all_edges.contains(&(t, u))
         })
     }
 
@@ -335,7 +317,7 @@ impl RegAllocator {
         let (pp, (x, y)) = set_pop(&mut self.move_workset).unwrap();
         let x = self.alias_root(x);
         let y = self.alias_root(y);
-        let (u, v) = if self.precolored.contains_key(&y) {
+        let (u, v) = if self.node_states[y] == NodeState::PreColored {
             (y, x)
         } else {
             (x, y)
@@ -349,8 +331,8 @@ impl RegAllocator {
         macro_rules! add_workset {
             ($u: ident) => {
                 if self.node_states[$u] != NodeState::PreColored
-                    && !self.is_move_related($u)
                     && self.degrees[$u] < K
+                    && !self.is_move_related($u)
                 {
                     self.node_states[$u] = NodeState::SimplifyWorkset;
                     assert!(self.freeze_workset.remove(&$u));
@@ -390,7 +372,7 @@ impl RegAllocator {
             if !self.is_move_related(v) && self.degrees[v] < REGS.len() {
                 self.node_states[v] = NodeState::SimplifyWorkset;
                 assert!(self.freeze_workset.remove(&v));
-                self.freeze_workset.insert(v);
+                self.simplify_workset.insert(v);
             }
         }
     }
@@ -419,7 +401,10 @@ impl RegAllocator {
         self.freeze_move(u)
     }
 
-    pub fn do_alloc(mut self, mut costs: Map<usize, usize>) -> Result<Map<usize, Color>, Set<usize>> {
+    pub fn do_alloc(
+        mut self,
+        mut costs: Map<usize, usize>,
+    ) -> Result<Map<usize, Color>, Set<usize>> {
         loop {
             if !self.simplify_workset.is_empty() {
                 self.simplify();
@@ -500,7 +485,10 @@ fn alloc_impl(
 ) -> RegMap {
     let (var_idx, idx_var) = make_varmap(tyenv);
 
-    let costs = spill::estimate_cost(tyenv, arena, entry).into_iter().map(|(x, c)| (*var_idx.get(&x).unwrap(), c)).collect();
+    let costs = spill::estimate_cost(tyenv, arena, entry)
+        .into_iter()
+        .map(|(x, c)| (*var_idx.get(&x).unwrap(), c))
+        .collect();
     match RegAllocator::new(&arena, entry, &var_idx).do_alloc(costs) {
         Ok(colored) => colored
             .into_iter()

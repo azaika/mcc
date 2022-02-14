@@ -5,7 +5,14 @@ use id_arena::Arena;
 use std::io::{Result, Write};
 use util::{Id, Map, Set};
 
-fn emit_inst<W: Write>(w: &mut W, v: &Option<Id>, inst: &Inst, regmap: &RegMap) -> Result<()> {
+fn emit_inst<W: Write>(
+    w: &mut W,
+    v: &Option<Id>,
+    inst: &Inst,
+    regmap: &RegMap,
+    _stackmap: &Map<Id, i32>,
+    stack_size: &mut i32,
+) -> Result<()> {
     use InstKind::*;
     macro_rules! reg_v {
         () => {
@@ -18,8 +25,16 @@ fn emit_inst<W: Write>(w: &mut W, v: &Option<Id>, inst: &Inst, regmap: &RegMap) 
         };
     }
     match &inst.item {
-        Nop => (),
-        Mv(x) => write!(w, "\tmv\t\t{}, {}", reg_v!(), reg!(x))?,
+        Nop => return Ok(()),
+        Mv(x) => {
+            let v = reg_v!();
+            let x = reg!(x);
+            if x == v {
+                return Ok(());
+            }
+
+            write!(w, "\tmv\t\t{v}, {x}")?
+        }
         Li(i) => {
             if i16::MIN as i32 <= *i && *i <= i16::MAX as i32 {
                 write!(w, "\taddi\t{}, {REG_ZERO}, {i}", reg_v!())?;
@@ -50,7 +65,7 @@ fn emit_inst<W: Write>(w: &mut W, v: &Option<Id>, inst: &Inst, regmap: &RegMap) 
             let v = reg_v!();
             let f = match kind {
                 UnOpKind::Neg => {
-                    return write!(w, "\tsub\t\t{v}, {REG_ZERO}, {}", reg!(x));
+                    return write!(w, "\tsub\t\t{v}, {REG_ZERO}, {}\t\t\t\t# {}", reg!(x), inst.loc.0);
                 }
                 UnOpKind::FNeg => "fneg",
                 UnOpKind::FAbs => "fabs",
@@ -70,7 +85,7 @@ fn emit_inst<W: Write>(w: &mut W, v: &Option<Id>, inst: &Inst, regmap: &RegMap) 
                 IntOpKind::Add => "addi",
                 IntOpKind::Sub => {
                     assert!(*y != i16::MIN);
-                    return write!(w, "\taddi\t{}, {}, {}", reg_v!(), reg!(x), (-y) as i16);
+                    return write!(w, "\taddi\t{}, {}, {}\t\t\t\t# {}", reg_v!(), reg!(x), (-y) as i16, inst.loc.0);
                 }
                 IntOpKind::Mul16 => "mul16i",
                 IntOpKind::Shl => {
@@ -102,7 +117,20 @@ fn emit_inst<W: Write>(w: &mut W, v: &Option<Id>, inst: &Inst, regmap: &RegMap) 
             };
             write!(w, "\t{f}\t{}, {}, {}", reg_v!(), reg!(x), reg!(y))?
         }
-        CallDir(label) => write!(w, "\tbl\t\t{}", label.0)?,
+        CallDir(label) => {
+            let stack_size = *stack_size;
+            write!(w, "\tmflr\t{REG_TMP}\n")?;
+            write!(w, "\tsw\t\t{REG_TMP}, {}({REG_STACK})\n", -stack_size)?;
+            write!(
+                w,
+                "\taddi\t{REG_STACK}, {REG_STACK}, {}\n",
+                -(stack_size + 1)
+            )?;
+            write!(w, "\tbl\t\t{}\n", label.0)?;
+            write!(w, "\taddi\t{REG_STACK}, {REG_STACK}, {}\n", stack_size + 1)?;
+            write!(w, "\tlw\t\t{REG_TMP}, {}({REG_STACK})\n", -stack_size)?;
+            write!(w, "\tmtlr\t{REG_TMP}")?
+        }
         CallCls => unimplemented!(),
         AllocHeap(s) => {
             write!(w, "\tmv\t\t{}, {REG_HEAP}\n", reg_v!())?;
@@ -112,14 +140,14 @@ fn emit_inst<W: Write>(w: &mut W, v: &Option<Id>, inst: &Inst, regmap: &RegMap) 
             }
         }
         Lw(x, Value::Imm(y)) => write!(w, "\tlw\t\t{}, {y}({})", reg_v!(), reg!(x))?,
-        Lw(x, Value::Var(y)) => write!(w, "\tlwx\t\t{}, {}, {},", reg_v!(), reg!(x), reg!(y))?,
+        Lw(x, Value::Var(y)) => write!(w, "\tlwx\t\t{}, {}, {}", reg_v!(), reg!(x), reg!(y))?,
         Sw(x, Value::Imm(y), z) => write!(w, "\tsw\t\t{}, {y}({})", reg!(z), reg!(x))?,
         Sw(x, Value::Var(y), z) => write!(w, "\tswx\t\t{}, {}, {}", reg!(z), reg!(y), reg!(x))?,
         In => write!(w, "\tin")?,
         Out(x) => write!(w, "\tout\t\t{}", reg!(x))?,
     }
 
-    write!(w, "\t\t# {}", inst.loc.0)
+    write!(w, "\t\t\t\t# {}", inst.loc.0)
 }
 
 fn emit_block<W: Write>(
@@ -128,6 +156,8 @@ fn emit_block<W: Write>(
     arena: &Arena<Block>,
     arrived: &mut Set<BlockId>,
     regmap: &RegMap,
+    stackmap: &mut Map<Id, i32>,
+    stack_size: &mut i32,
 ) -> Result<()> {
     if arrived.contains(&bid) {
         return Ok(());
@@ -137,7 +167,7 @@ fn emit_block<W: Write>(
     let block = &arena[bid];
     write!(w, "{}:\n", block.name)?;
     for (v, inst) in &block.body {
-        emit_inst(w, v, inst, &regmap)?;
+        emit_inst(w, v, inst, &regmap, stackmap, stack_size)?;
         write!(w, "\n")?;
     }
 
@@ -149,7 +179,7 @@ fn emit_block<W: Write>(
     match &block.tail.item {
         TailKind::If(kind, x, y, b1, b2) => {
             match y {
-                Value::Var(y) => write!(w, "\tcmp\t{}, {}\n", reg!(x), reg!(y))?,
+                Value::Var(y) => write!(w, "\tcmp\t\t{}, {}\n", reg!(x), reg!(y))?,
                 Value::Imm(y) => write!(w, "\tcmpi\t{}, {y}\n", reg!(x))?,
             }
             let fb = match kind {
@@ -159,12 +189,14 @@ fn emit_block<W: Write>(
             };
 
             write!(w, "\t{fb}\t{}", arena[*b1].name)?;
-            write!(w, "\t\t# {}\n", block.tail.loc.0)?;
+            write!(w, "\t\t\t\t# {}\n", block.tail.loc.0)?;
             if arrived.contains(b2) {
                 write!(w, "\tb\t\t{}\n", arena[*b2].name)?;
             }
-            emit_block(w, *b2, arena, arrived, regmap)?;
-            emit_block(w, *b1, arena, arrived, regmap)?;
+            let original_ss = *stack_size;
+            emit_block(w, *b2, arena, arrived, regmap, stackmap, stack_size)?;
+            *stack_size = original_ss;
+            emit_block(w, *b1, arena, arrived, regmap, stackmap, stack_size)?;
         }
         TailKind::IfF(kind, x, y, b1, b2) => {
             write!(w, "\tfcmp\t{}, {}\n", reg!(x), reg!(y))?;
@@ -175,24 +207,26 @@ fn emit_block<W: Write>(
             };
 
             write!(w, "\t{fb}\t{}", arena[*b1].name)?;
-            write!(w, "\t\t# {}\n", block.tail.loc.0)?;
+            write!(w, "\t\t\t\t# {}\n", block.tail.loc.0)?;
             if arrived.contains(b2) {
                 write!(w, "\tb\t\t{}\n", arena[*b2].name)?;
             }
-            emit_block(w, *b2, arena, arrived, regmap)?;
-            emit_block(w, *b1, arena, arrived, regmap)?;
+            let original_ss = *stack_size;
+            emit_block(w, *b2, arena, arrived, regmap, stackmap, stack_size)?;
+            *stack_size = original_ss;
+            emit_block(w, *b1, arena, arrived, regmap, stackmap, stack_size)?;
         }
         TailKind::Jump(b1) => {
             if arrived.contains(b1) {
                 write!(w, "\tb\t\t{}", arena[*b1].name)?;
-                write!(w, "\t\t# {}\n", block.tail.loc.0)?;
+                write!(w, "\t\t\t\t# {}\n", block.tail.loc.0)?;
             }
-            emit_block(w, *b1, arena, arrived, regmap)?;
+            emit_block(w, *b1, arena, arrived, regmap, stackmap, stack_size)?;
         }
         TailKind::Return => {
             write!(w, "\tblr")?;
-            write!(w, "\t\t# {}\n", block.tail.loc.0)?;
-        },
+            write!(w, "\t\t\t\t# {}\n", block.tail.loc.0)?;
+        }
     }
 
     Ok(())
@@ -216,21 +250,27 @@ pub fn emit<W: Write>(w: &mut W, p: Program, regmaps: (RegMap, Map<Label, RegMap
             block_arena,
             &mut Set::default(),
             regmaps.1.get(&name).unwrap(),
+            &mut Map::default(),
+            &mut 0,
         )?;
     }
 
     write!(w, "\t# main program start\n")?;
 
+    let mut arrived = Set::default();
+    arrived.insert(p.exit);
     emit_block(
         w,
         p.entry,
         &p.main_arena,
-        &mut Set::default(),
+        &mut arrived,
         &regmaps.0,
+        &mut Map::default(),
+        &mut 0,
     )?;
 
     write!(w, "\t# main program end\n")?;
-    write!(w, "_min_caml_end\n")?;
+    write!(w, "_min_caml_end:\n")?;
     write!(w, "\tflush\n")?;
     write!(w, "\thalt\n")?;
     write!(w, "\thalt\n")?;
