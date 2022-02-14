@@ -115,37 +115,7 @@ fn conv(
         Let(Some(v), mut e1, e2) => {
             let res = conv_single(&mut e1.item, tyenv, safe, rename, saved_data, restored);
 
-            match &mut e1.item {
-                If(_, _, _, e1, e2) => {
-                    let mut safe_1 = safe.clone();
-
-                    let mut dummy = Box::new(ExprKind::dummy());
-                    std::mem::swap(e1, &mut dummy);
-                    *e1 = conv(dummy, tyenv, &mut safe_1, rename, saved_data, restored);
-
-                    let mut dummy = Box::new(ExprKind::dummy());
-                    std::mem::swap(e2, &mut dummy);
-                    *e2 = conv(dummy, tyenv, safe, rename, saved_data, restored);
-
-                    safe.retain(|x| safe_1.contains(x));
-                }
-                IfF(_, _, _, e1, e2) => {
-                    let mut safe_1 = safe.clone();
-
-                    let mut dummy = Box::new(ExprKind::dummy());
-                    std::mem::swap(e1, &mut dummy);
-                    *e1 = conv(dummy, tyenv, &mut safe_1, rename, saved_data, restored);
-
-                    let mut dummy = Box::new(ExprKind::dummy());
-                    std::mem::swap(e2, &mut dummy);
-                    *e2 = conv(dummy, tyenv, safe, rename, saved_data, restored);
-
-                    safe.retain(|x| safe_1.contains(x));
-                }
-                _ => {
-                    e1 = conv(e1, tyenv, safe, rename, saved_data, restored);
-                }
-            };
+            e1 = conv(e1, tyenv, safe, rename, saved_data, restored);
 
             let data = match &e1.item {
                 Nop => Saved::Nop,
@@ -201,21 +171,35 @@ fn conv(
             let res = conv_single(&mut e.item, tyenv, safe, rename, saved_data, restored);
             e.item = match e.item {
                 If(kind, x, y, e1, e2) => {
-                    let e1 = conv(e1, tyenv, safe, rename, saved_data, restored);
+                    let mut safe_1 = safe.clone();
+                    let mut rename_1 = rename.clone();
+                    let e1 = conv(e1, tyenv, &mut safe_1, &mut rename_1, saved_data, restored);
                     let e2 = conv(e2, tyenv, safe, rename, saved_data, restored);
+
+                    safe.retain(|x| safe_1.contains(x));
+                    rename.retain(|x, _| rename_1.contains_key(x));
+
                     If(kind, x, y, e1, e2)
                 }
                 IfF(kind, x, y, e1, e2) => {
-                    let e1 = conv(e1, tyenv, safe, rename, saved_data, restored);
+                    let mut safe_1 = safe.clone();
+                    let mut rename_1 = rename.clone();
+                    let e1 = conv(e1, tyenv, &mut safe_1, &mut rename_1, saved_data, restored);
                     let e2 = conv(e2, tyenv, safe, rename, saved_data, restored);
+
+                    safe.retain(|x| safe_1.contains(x));
+                    rename.retain(|x, _| rename_1.contains_key(x));
+
                     IfF(kind, x, y, e1, e2)
                 }
                 CallDir(label, xs) => {
                     safe.clear();
+                    rename.clear();
                     CallDir(label, xs)
                 }
                 CallCls(f, xs) => {
                     safe.clear();
+                    rename.clear();
                     CallCls(f, xs)
                 }
                 Loop { vars, init, body } => {
@@ -224,6 +208,7 @@ fn conv(
                     }
                     if contains_call(&body) {
                         safe.clear();
+                        rename.clear();
                     }
                     for v in &vars {
                         safe.insert(v.clone());
