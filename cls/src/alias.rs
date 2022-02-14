@@ -73,12 +73,31 @@ fn iterate_loop(
     }
 }
 
+fn emerged(e: &Expr, sets: &Set<Id>) -> bool {
+    use ExprKind::*;
+    match &e.item {
+        Var(x) | AllocArray(_, _, Some(x)) | ArrayGet(x, _) | Assign(_, x) => sets.contains(x),
+        If(_, _, _, e1, e2) | Let(_, e1, e2) => {
+            emerged(e1, sets) || emerged(e2, sets)
+        },
+        Tuple(xs) | CallDir(_, xs) | CallCls(_, xs) | MakeCls(_, xs) | Asm(_, xs) => xs.iter().any(|x| sets.contains(x)),
+        ArrayPut(x, _, y) => sets.contains(x) || sets.contains(y),
+        Loop { init, body, .. } => {
+            init.iter().any(|x| sets.contains(x)) || emerged(body, sets)
+        },
+        DoAll { body, .. } => emerged(body, sets),
+        Continue(ps) => ps.iter().any(|(_, x)| sets.contains(x)),
+        _ => false
+    }
+}
+
 fn analyze_loop(
     vars: &Vec<Id>,
     init: &Vec<Id>,
     body: &Expr,
     consts: &common::ConstMap,
     aliases: &mut AliasMap,
+    independent: &mut Set<Id>
 ) {
     assert!(vars.len() == init.len());
 
@@ -112,6 +131,28 @@ fn analyze_loop(
 
         if old == vars_aliases {
             // ループ変数が取りうる変数の範囲を定める
+            let mut is_partial_indep = true;
+            let mut inits = Set::default();
+            for a in vars_aliases.iter().flatten().flatten() {
+                if a.belongs.len() != 0 {
+                    is_partial_indep = false;
+                }
+                else {
+                    inits.insert(a.top.clone());
+                }
+            }
+            if is_partial_indep && !emerged(body, &inits) {
+                for (v, a) in vars.iter().zip(&vars_aliases) {
+                    if a.is_none() {
+                        continue;
+                    }
+                    aliases.remove(v);
+
+                    independent.insert(v.clone());
+                    aliases.insert(v.clone(), vec![Alias { top: v.clone(), belongs: vec![] }]);
+                }
+            }
+
             return;
         }
 
@@ -129,7 +170,7 @@ fn analyze_loop(
 fn analyze_aliases_impl(
     e: &Expr,
     consts: &common::ConstMap,
-    independent: &Set<Id>,
+    independent: &mut Set<Id>,
     aliases: &mut AliasMap,
 ) {
     use ExprKind::*;
@@ -190,7 +231,7 @@ fn analyze_aliases_impl(
             analyze_aliases_impl(e2, consts, independent, aliases);
         }
         Loop { vars, init, body } => {
-            analyze_loop(vars, init, body, consts, aliases);
+            analyze_loop(vars, init, body, consts, aliases, independent);
             analyze_aliases_impl(body, consts, independent, aliases);
         }
         e => e.map_ref(|e| analyze_aliases_impl(e, consts, independent, aliases)),
@@ -282,10 +323,10 @@ fn collect_independent(p: &Program, use_strict_aliasing: bool) -> Set<Id> {
 pub fn analyze_aliases(p: &Program, use_strict_aliasing: bool) -> (Set<Id>, AliasMap) {
     let consts = common::collect_consts(p);
 
-    let independent = collect_independent(p, use_strict_aliasing);
+    let mut independent = collect_independent(p, use_strict_aliasing);
     let mut aliases = AliasMap::default();
 
-    analyze_aliases_impl(&p.global_init, &consts, &independent, &mut aliases);
+    analyze_aliases_impl(&p.global_init, &consts, &mut independent, &mut aliases);
     for Fundef { body, args, .. } in &p.fundefs {
         if use_strict_aliasing {
             for x in args {
@@ -301,9 +342,9 @@ pub fn analyze_aliases(p: &Program, use_strict_aliasing: bool) -> (Set<Id>, Alia
                 }
             }
         }
-        analyze_aliases_impl(body, &consts, &independent, &mut aliases);
+        analyze_aliases_impl(body, &consts, &mut independent, &mut aliases);
     }
-    analyze_aliases_impl(&p.main, &consts, &independent, &mut aliases);
+    analyze_aliases_impl(&p.main, &consts, &mut independent, &mut aliases);
 
     for (x, t) in &p.tyenv {
         if !t.is_array() {

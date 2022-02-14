@@ -299,7 +299,9 @@ fn cleanse_cache<'a>(
         }
         Continue(ps) => {
             for (_, x) in ps {
-                disable_dep(x, params, disabled, indep_saved);
+                if !params.independents.contains(x) {
+                    disable_dep(x, params, disabled, indep_saved);
+                }
             }
         }
         Assign(label, x) => {
@@ -309,7 +311,9 @@ fn cleanse_cache<'a>(
         }
         Loop { init, body, .. } => {
             for x in init {
-                disable_dep(x, params, disabled, indep_saved);
+                if !params.independents.contains(x) {
+                    disable_dep(x, params, disabled, indep_saved);
+                }
             }
             cleanse_cache(body, params, disabled, indep_saved, unknown_saved);
         }
@@ -503,7 +507,9 @@ fn conv<'a>(
         }
         Continue(ps) => {
             for (_, x) in &ps {
-                disable_dep(x, params, disabled, indep_saved);
+                if !params.independents.contains(x) {
+                    disable_dep(x, params, disabled, indep_saved);
+                }
             }
             Continue(ps)
         }
@@ -524,7 +530,9 @@ fn conv<'a>(
         TupleGet(tup, idx) => conv_tuple_get(tup, idx, None, params, indep_saved),
         Loop { vars, init, body } => {
             for x in &init {
-                disable_dep(x, params, disabled, indep_saved);
+                if !params.independents.contains(x) {
+                    disable_dep(x, params, disabled, indep_saved);
+                }
             }
             cleanse_cache(&body, params, disabled, indep_saved, unknown_saved);
 
