@@ -49,6 +49,7 @@ fn prepare_impl(
                     moves.insert(pp, (d, x));
                 }
                 CallDir(_) => {
+                    
                     // for r in REGS {
                     //     let r = format!("%{r}");
                     //     let r = *var_idx.get(&r).unwrap();
@@ -330,6 +331,7 @@ pub fn analyze(
     entry: BlockId,
     n: usize,
     var_idx: &Map<Var, usize>,
+    idx_var: &Map<usize, Var>,
     precolored: &Map<usize, common::Color>,
 ) -> (
     Map<ProgramPoint, (usize, usize)>,
@@ -354,6 +356,10 @@ pub fn analyze(
     );
 
     let (live_out, def, used) = analyze_impl(arena, entry, n, &def, &used, &follow, &prev);
+
+    for (pp , live) in &live_out {
+        println!("{}[{}] = {:#?}", arena[pp.bid].name, pp.idx, live.iter().map(|x| idx_var.get(x).unwrap()).collect::<Vec<&Var>>());
+    }
 
     let (edges, all_edges, degrees) =
         build_graph(arena, entry, n, &live_out, &moves, &def, &used, precolored);

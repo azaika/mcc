@@ -60,7 +60,7 @@ pub struct RegAllocator {
 }
 
 impl RegAllocator {
-    pub fn new(arena: &Arena<Block>, entry: BlockId, var_idx: &Map<Var, usize>) -> Self {
+    pub fn new(arena: &Arena<Block>, entry: BlockId, var_idx: &Map<Var, usize>, idx_var: &Map<usize, Var>) -> Self {
         let n = var_idx.len();
 
         let mut precolored: Map<usize, Color> = Map::default();
@@ -71,7 +71,7 @@ impl RegAllocator {
         }
 
         let (moves, edges, all_edges, degrees) =
-            liveness::analyze(arena, entry, n, var_idx, &precolored);
+            liveness::analyze(arena, entry, n, var_idx, &idx_var, &precolored);
 
         let mut move_lists: Map<usize, Set<(ProgramPoint, (usize, usize))>> = Map::default();
         let mut move_states = Map::default();
@@ -406,8 +406,7 @@ impl RegAllocator {
         for (u, c) in &self.precolored {
             colored.insert(*u, *c);
         }
-        while !self.select_stack.is_empty() {
-            let u = self.select_stack.pop().unwrap();
+        while let Some(u) = self.select_stack.pop() {
             let mut cand: Set<_> = REGS.iter().collect();
             for v in &self.edges[u] {
                 let v = self.alias_root(*v);
@@ -471,7 +470,7 @@ fn alloc_impl(
         .into_iter()
         .map(|(x, c)| (*var_idx.get(&x).unwrap(), c))
         .collect();
-    match RegAllocator::new(&arena, entry, &var_idx).do_alloc(costs) {
+    match RegAllocator::new(&arena, entry, &var_idx, &idx_var).do_alloc(costs) {
         Ok(colored) => colored
             .into_iter()
             .map(|(u, c)| (idx_var.get(&u).unwrap().clone(), c))

@@ -284,8 +284,8 @@ fn conv(
         }
         closure::ExprKind::ExtArray(label) => lift(GetLabel(label)),
         closure::ExprKind::ArrayGet(arr, idx) => {
-            let t = tyenv.get(&arr).unwrap().elem_t();
-            let size: i32 = common::type_size(t).try_into().unwrap();
+            let t = tyenv.get(&arr).unwrap();
+            let size: i32 = common::type_size(t.elem_t()).try_into().unwrap();
             if (t.is_array() || t.is_tuple()) && !t.is_pointer() {
                 if let Some(ConstKind::CInt(idx)) = consts.get(&idx) {
                     let offset = (*idx * size).try_into().unwrap();
