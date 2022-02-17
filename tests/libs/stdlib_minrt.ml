@@ -59,15 +59,25 @@ let rec print_char x =
   _asmE"out" x;
   ()
 in
-let rec rem10 x d =
+let rec print_2d x d =
   let dd = d * 10 in
-  if x >= dd then (
+  let r = x - dd in
+  if r >= 0 then (
     print_char (d + 48);
-    x - dd
-  ) else rem10 x (d - 1)
+    print_char (r + 48)
+  ) else print_2d x (d - 1)
 in
 let rec print_byte x = (* assume `0 <= x < 256` *)
-  let x = if x >= 200 then (
+  let x = if x >= 500 then (
+    print_char 53;
+    x - 500
+  ) else if x >= 400 then (
+    print_char 52;
+    x - 400
+  ) else if x >= 300 then (
+    print_char 51;
+    x - 300
+  ) else if x >= 200 then (
     print_char 50;
     x - 200
   ) else if x >= 100 then (
@@ -78,8 +88,7 @@ let rec print_byte x = (* assume `0 <= x < 256` *)
     x
   ) in
   (* x < 100 *)
-  let r = rem10 x 9 in
-  print_char (r + 48)
+  print_2d x 9
 in
 let print_int = print_byte in
 let rec read_float _ =
