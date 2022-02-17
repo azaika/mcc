@@ -1,6 +1,6 @@
 use crate::common;
 use ast::closure::*;
-use util::{Id, Set, ToSpanned};
+use util::{id, Id, Set, ToSpanned};
 
 fn is_alloc_array(e: &Expr) -> bool {
     match e.item {
@@ -19,6 +19,79 @@ fn remove_assign(mut e: Box<Expr>, x: &Id) -> Box<Expr> {
     };
 
     e
+}
+
+fn gen_array_init(
+    arr: Id,
+    size: usize,
+    init: Id,
+    span: util::Span,
+    tyenv: &mut TyMap,
+    e2: Box<Expr>,
+) -> Box<Expr> {
+    let mut gen_new = |t: Ty| -> Id {
+        let v = id::gen_tmp_var_with(t.short());
+        tyenv.insert(v.clone(), t);
+        v
+    };
+    let lift = |e: ExprKind| -> Box<Expr> { Box::new(e.with_span(span)) };
+
+    use ExprKind::*;
+    if size < 10 {
+        let mut e2 = e2;
+        for idx in (0..size).rev() {
+            let tmp = gen_new(Ty::Unit);
+            let idx_v = gen_new(Ty::Int);
+
+            e2 = lift(Let(
+                tmp,
+                lift(ArrayPut(arr.clone(), idx_v.clone(), init.clone())),
+                e2,
+            ));
+            e2 = lift(Let(idx_v, lift(Const(ConstKind::CInt(idx as i32))), e2));
+        }
+
+        e2
+    } else {
+        let idx = gen_new(Ty::Int);
+        let idx_next = gen_new(Ty::Int);
+        let zero = gen_new(Ty::Int);
+        let one = gen_new(Ty::Int);
+        let end = gen_new(Ty::Int);
+        let tmp1 = gen_new(Ty::Unit);
+        let tmp2 = gen_new(Ty::Unit);
+
+        let cont = lift(Let(
+            idx_next.clone(),
+            lift(BinOp(BinOpKind::Add, idx.clone(), one.clone())),
+            lift(Continue(vec![(idx.clone(), idx_next)])),
+        ));
+
+        let body = lift(Let(
+            tmp1,
+            lift(ArrayPut(arr.clone(), idx.clone(), init)),
+            cont,
+        ));
+        let body = lift(If(
+            IfKind::IfLE,
+            idx.clone(),
+            end.clone(),
+            body,
+            lift(Const(ConstKind::CUnit)),
+        ));
+
+        let init_loop = lift(DoAll {
+            idx,
+            range: (zero.clone(), end.clone()),
+            delta: 1,
+            body,
+        });
+
+        let e2 = lift(Let(tmp2, init_loop, e2));
+        let e2 = lift(Let(end, lift(Const(ConstKind::CInt(size as i32 - 1))), e2));
+        let e2 = lift(Let(one, lift(Const(ConstKind::CInt(1))), e2));
+        lift(Let(zero, lift(Const(ConstKind::CInt(0))), e2))
+    }
 }
 
 fn flatten_array(
@@ -43,8 +116,12 @@ fn flatten_array(
                 if globals.contains(&v) {
                     // グローバル変数なら Assign を削除
                     let e1 = Box::new(Load(Label(v.clone())).with_span(e1.loc));
-                    let e2 = remove_assign(e2, &v);
-                    let e2 = flatten_array(e2, independents, consts, globals, tyenv);
+                    let mut e2 = remove_assign(e2, &v);
+                    e2 = flatten_array(e2, independents, consts, globals, tyenv);
+                    // add initizalize loop
+                    if let Some(init) = init {
+                        e2 = gen_array_init(v.clone(), s, init, e1.loc, tyenv, e2);
+                    }
 
                     Let(v, e1, e2)
                 } else {
@@ -59,9 +136,7 @@ fn flatten_array(
                 Let(v, e1, e2)
             }
         }
-        _ => e
-            .item
-            .map(|e| flatten_array(e, independents, consts, globals, tyenv)),
+        e => e.map(|e| flatten_array(e, independents, consts, globals, tyenv)),
     };
 
     e

@@ -77,17 +77,15 @@ fn emerged(e: &Expr, sets: &Set<Id>) -> bool {
     use ExprKind::*;
     match &e.item {
         Var(x) | AllocArray(_, _, Some(x)) | ArrayGet(x, _) | Assign(_, x) => sets.contains(x),
-        If(_, _, _, e1, e2) | Let(_, e1, e2) => {
-            emerged(e1, sets) || emerged(e2, sets)
-        },
-        Tuple(xs) | CallDir(_, xs) | CallCls(_, xs) | MakeCls(_, xs) | Asm(_, xs) => xs.iter().any(|x| sets.contains(x)),
+        If(_, _, _, e1, e2) | Let(_, e1, e2) => emerged(e1, sets) || emerged(e2, sets),
+        Tuple(xs) | CallDir(_, xs) | CallCls(_, xs) | MakeCls(_, xs) | Asm(_, xs) => {
+            xs.iter().any(|x| sets.contains(x))
+        }
         ArrayPut(x, _, y) => sets.contains(x) || sets.contains(y),
-        Loop { init, body, .. } => {
-            init.iter().any(|x| sets.contains(x)) || emerged(body, sets)
-        },
+        Loop { init, body, .. } => init.iter().any(|x| sets.contains(x)) || emerged(body, sets),
         DoAll { body, .. } => emerged(body, sets),
         Continue(ps) => ps.iter().any(|(_, x)| sets.contains(x)),
-        _ => false
+        _ => false,
     }
 }
 
@@ -97,7 +95,7 @@ fn analyze_loop(
     body: &Expr,
     consts: &common::ConstMap,
     aliases: &mut AliasMap,
-    independent: &mut Set<Id>
+    independent: &mut Set<Id>,
 ) {
     assert!(vars.len() == init.len());
 
@@ -136,8 +134,7 @@ fn analyze_loop(
             for a in vars_aliases.iter().flatten().flatten() {
                 if a.belongs.len() != 0 {
                     is_partial_indep = false;
-                }
-                else {
+                } else {
                     inits.insert(a.top.clone());
                 }
             }
@@ -149,7 +146,13 @@ fn analyze_loop(
                     aliases.remove(v);
 
                     independent.insert(v.clone());
-                    aliases.insert(v.clone(), vec![Alias { top: v.clone(), belongs: vec![] }]);
+                    aliases.insert(
+                        v.clone(),
+                        vec![Alias {
+                            top: v.clone(),
+                            belongs: vec![],
+                        }],
+                    );
                 }
             }
 

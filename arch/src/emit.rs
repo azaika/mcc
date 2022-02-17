@@ -54,15 +54,12 @@ fn emit_inst<W: Write>(
             let ha = (x ^ lo) >> 16;
             if ha == 0 {
                 write!(w, "\taddi\t{v}, {REG_ZERO}, {lo}")?;
-            }
-            else {
+            } else {
                 write!(w, "\taddis\t{v}, {REG_ZERO}, {ha}\n")?;
                 write!(w, "\tori\t\t{v}, {v}, {lo}")?
             }
         }
-        GetLabel(label) => {
-            write!(w, "\tlli\t\t{}, {}", reg_v!(), label.0)?
-        }
+        GetLabel(label) => write!(w, "\tlli\t\t{}, {}", reg_v!(), label.0)?,
         LoadLabel(label) => write!(w, "\tlwi\t\t{}, {}", reg_v!(), label.0)?,
         UnOp(kind, x) => {
             let v = reg_v!();

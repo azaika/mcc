@@ -60,7 +60,12 @@ pub struct RegAllocator {
 }
 
 impl RegAllocator {
-    pub fn new(arena: &Arena<Block>, entry: BlockId, var_idx: &Map<Var, usize>, idx_var: &Map<usize, Var>) -> Self {
+    pub fn new(
+        arena: &Arena<Block>,
+        entry: BlockId,
+        var_idx: &Map<Var, usize>,
+        idx_var: &Map<usize, Var>,
+    ) -> Self {
         let n = var_idx.len();
 
         let mut precolored: Map<usize, Color> = Map::default();
@@ -128,6 +133,42 @@ impl RegAllocator {
         }
     }
 
+    fn switch_state(&mut self, u: usize, state: NodeState) -> NodeState {
+        let orig = self.node_states[u];
+        match orig {
+            NodeState::PreColored | NodeState::SelectStack | NodeState::Coalesced => {
+                panic!("illegal NodeState found")
+            }
+            NodeState::SimplifyWorkset => {
+                assert!(self.simplify_workset.remove(&u));
+            }
+            NodeState::FreezeWorkset => {
+                assert!(self.freeze_workset.remove(&u));
+            }
+            NodeState::SpillWorkset => {
+                assert!(self.spill_workset.remove(&u));
+            }
+        }
+        self.node_states[u] = state;
+        match state {
+            NodeState::SimplifyWorkset => {
+                self.simplify_workset.insert(u);
+            }
+            NodeState::FreezeWorkset => {
+                self.freeze_workset.insert(u);
+            }
+            NodeState::SpillWorkset => {
+                self.spill_workset.insert(u);
+            }
+            NodeState::Coalesced => {
+                self.coalesced.insert(u);
+            }
+            NodeState::SelectStack => self.select_stack.push(u),
+            _ => panic!("illegal NodeState found"),
+        };
+        orig
+    }
+
     fn actual_adjs(&self, u: usize) -> Vec<usize> {
         self.edges[u]
             .iter()
@@ -171,13 +212,16 @@ impl RegAllocator {
 
         if d == REGS.len() {
             self.enable_moves(u);
-            assert!(self.spill_workset.remove(&u));
             if self.is_move_related(u) {
-                self.node_states[u] = NodeState::FreezeWorkset;
-                self.freeze_workset.insert(u);
+                assert_eq!(
+                    NodeState::SpillWorkset,
+                    self.switch_state(u, NodeState::FreezeWorkset)
+                );
             } else {
-                self.node_states[u] = NodeState::SimplifyWorkset;
-                self.simplify_workset.insert(u);
+                assert_eq!(
+                    NodeState::SpillWorkset,
+                    self.switch_state(u, NodeState::SimplifyWorkset)
+                );
             }
         }
     }
@@ -243,28 +287,38 @@ impl RegAllocator {
             if self.node_states[t] != NodeState::PreColored {
                 self.edges[t].insert(u);
                 self.degrees[t] += 1;
+
+                if self.degrees[t] == REGS.len() {
+                    self.switch_state(t, NodeState::SpillWorkset);
+                }
             }
             if self.node_states[u] != NodeState::PreColored {
                 self.edges[u].insert(t);
                 self.degrees[u] += 1;
+
+                if self.degrees[u] == REGS.len() {
+                    self.switch_state(u, NodeState::SpillWorkset);
+                }
             }
 
             self.decrement_degree(t);
         }
 
         if self.degrees[u] >= REGS.len() && self.node_states[u] == NodeState::FreezeWorkset {
-            self.node_states[u] = NodeState::SpillWorkset;
-            assert!(self.freeze_workset.remove(&u));
-            self.spill_workset.insert(u);
+            assert_eq!(
+                NodeState::FreezeWorkset,
+                self.switch_state(u, NodeState::SpillWorkset)
+            );
         }
 
         if self.node_states[u] != NodeState::PreColored
             && !self.is_move_related(u)
             && self.degrees[u] < REGS.len()
         {
-            self.node_states[u] = NodeState::SimplifyWorkset;
-            assert!(self.freeze_workset.remove(&u));
-            self.simplify_workset.insert(u);
+            assert_eq!(
+                NodeState::FreezeWorkset,
+                self.switch_state(u, NodeState::SimplifyWorkset)
+            );
         }
     }
 
@@ -311,14 +365,15 @@ impl RegAllocator {
         const K: usize = REGS.len();
 
         macro_rules! add_workset {
-            ($u: ident) => {
-                if self.node_states[$u] != NodeState::PreColored
-                    && self.degrees[$u] < K
-                    && !self.is_move_related($u)
+            ($t: ident) => {
+                if self.node_states[$t] != NodeState::PreColored
+                    && self.degrees[$t] < K
+                    && !self.is_move_related($t)
                 {
-                    self.node_states[$u] = NodeState::SimplifyWorkset;
-                    assert!(self.freeze_workset.remove(&$u));
-                    self.simplify_workset.insert($u);
+                    assert_eq!(
+                        NodeState::FreezeWorkset,
+                        self.switch_state($t, NodeState::SimplifyWorkset)
+                    );
                 }
             };
         }
@@ -352,9 +407,10 @@ impl RegAllocator {
 
             *self.move_states.get_mut(&pp).unwrap() = MoveState::Frozen;
             if !self.is_move_related(v) && self.degrees[v] < REGS.len() {
-                self.node_states[v] = NodeState::SimplifyWorkset;
-                assert!(self.freeze_workset.remove(&v));
-                self.simplify_workset.insert(v);
+                assert_eq!(
+                    NodeState::FreezeWorkset,
+                    self.switch_state(v, NodeState::SimplifyWorkset)
+                );
             }
         }
     }
@@ -376,9 +432,10 @@ impl RegAllocator {
         let u = *u;
         costs.remove(&u);
 
-        self.node_states[u] = NodeState::SimplifyWorkset;
-        assert!(self.spill_workset.remove(&u));
-        self.simplify_workset.insert(u);
+        assert_eq!(
+            NodeState::SpillWorkset,
+            self.switch_state(u, NodeState::SimplifyWorkset)
+        );
 
         self.freeze_move(u)
     }

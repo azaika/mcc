@@ -109,7 +109,7 @@ fn conv_let(
                         }
 
                         mir::InstKind::Mv(x)
-                    },
+                    }
                     virt::Value::Imm(x) => mir::InstKind::Li(x as i32),
                 };
                 body.push((Some(reg), kind.with_span(span)));
@@ -250,7 +250,7 @@ fn conv(
                         }
 
                         InstKind::Mv(x)
-                    },
+                    }
                     virt::Value::Imm(x) => InstKind::Li(x as i32),
                 };
                 block.body.push((Some(reg), kind.with_span(e.loc)));
@@ -262,7 +262,7 @@ fn conv(
             if res.is_some() {
                 body.push((res.clone(), InstKind::Mv(reg).with_span(e.loc)));
             }
-            
+
             block.tail = Box::new(tail.with_span(e.loc));
         }
         ExprKind::CallCls(..) => unimplemented!("I have no time"),
@@ -372,6 +372,8 @@ pub fn convert(prog: virt::Program) -> mir::Program {
             virt::GlobalData::GFloat(_) => 1,
             virt::GlobalData::GSpace(s) => s,
         };
+        p.tymap
+            .insert(label.clone(), prog.tyenv.get(&label).unwrap().clone());
         p.globals.push((Label(label), size));
     }
 

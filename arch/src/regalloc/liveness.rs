@@ -49,7 +49,7 @@ fn prepare_impl(
                     moves.insert(pp, (d, x));
                 }
                 CallDir(_) => {
-                    
+
                     // for r in REGS {
                     //     let r = format!("%{r}");
                     //     let r = *var_idx.get(&r).unwrap();
@@ -357,8 +357,15 @@ pub fn analyze(
 
     let (live_out, def, used) = analyze_impl(arena, entry, n, &def, &used, &follow, &prev);
 
-    for (pp , live) in &live_out {
-        println!("{}[{}] = {:#?}", arena[pp.bid].name, pp.idx, live.iter().map(|x| idx_var.get(x).unwrap()).collect::<Vec<&Var>>());
+    for (pp, live) in &live_out {
+        println!(
+            "{}[{}] = {:#?}",
+            arena[pp.bid].name,
+            pp.idx,
+            live.iter()
+                .map(|x| idx_var.get(x).unwrap())
+                .collect::<Vec<&Var>>()
+        );
     }
 
     let (edges, all_edges, degrees) =

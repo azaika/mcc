@@ -44,6 +44,19 @@ fn conv(
                 LoadLabel(label)
             }
         }
+        IntOp(kind, x, Value::Imm(y)) => {
+            if let Some(xx) = env.get(&x) {
+                match kind {
+                    IntOpKind::Mul16 => Li((xx * y) as i32),
+                    IntOpKind::Add => Li((xx + y) as i32),
+                    IntOpKind::Sub => Li((xx - y) as i32),
+                    IntOpKind::Shl => Li((*xx as i32) << y),
+                    IntOpKind::Shr => Li((*xx as i32) >> y),
+                }
+            } else {
+                IntOp(kind, x, Value::Imm(y))
+            }
+        }
         IntOp(kind, x, Value::Var(y)) => {
             if let Some(y) = env.get(&y) {
                 match kind {
@@ -77,7 +90,7 @@ fn conv(
                     }
                     _ if *xx == 0 => Var(y),
                     IntOpKind::Add => IntOp(IntOpKind::Add, y, Value::Imm(*xx)),
-                    kind => IntOp(kind, x, Value::Var(y))
+                    kind => IntOp(kind, x, Value::Var(y)),
                 }
             } else {
                 IntOp(kind, x, Value::Var(y))

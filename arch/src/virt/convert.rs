@@ -1,5 +1,5 @@
 use super::program::*;
-use crate::common;
+use crate::common::{self, type_size};
 use ast::{closure, knormal::ConstKind};
 
 use util::{Id, ToSpanned};
@@ -114,7 +114,9 @@ fn conv(
                     )));
                     return lift(ExprKind::Let(Some(v), e1, e2));
                 }
-                closure::ExprKind::Load(label) if (vt.is_array() || vt.is_tuple()) && !vt.is_pointer() => {
+                closure::ExprKind::Load(label)
+                    if (vt.is_array() || vt.is_tuple()) && !vt.is_pointer() =>
+                {
                     let e1 = lift(ExprKind::GetLabel(label.clone()));
                     return lift(ExprKind::Let(Some(v), e1, e2));
                 }
@@ -207,7 +209,21 @@ fn conv(
             let args = args.into_iter().map(|x| Value::Var(x)).collect();
             lift(CallCls(cls, args))
         }
-        closure::ExprKind::AllocArray(num, _, None) => lift(ExprKind::AllocHeap(Value::Var(num))),
+        closure::ExprKind::AllocArray(num, t, None) => {
+            let st = type_size(&t);
+            if st == 1 {
+                lift(ExprKind::AllocHeap(Value::Var(num)))
+            } else {
+                let s = gen_new_var(p, Ty::Int);
+                let alloc = lift(ExprKind::AllocHeap(Value::Var(s.clone())));
+                let size = lift(ExprKind::IntOp(
+                    IntOpKind::Mul16,
+                    num,
+                    Value::Imm(st.try_into().unwrap()),
+                ));
+                lift(ExprKind::Let(Some(s), size, alloc))
+            }
+        }
         closure::ExprKind::AllocArray(num, t, Some(init)) => {
             let name = gen_new_var(p, Ty::ArrayPtr(Box::new(t)));
             let mut e2 = lift(ExprKind::Var(name.clone()));
@@ -285,11 +301,14 @@ fn conv(
         closure::ExprKind::ExtArray(label) => lift(GetLabel(label)),
         closure::ExprKind::ArrayGet(arr, idx) => {
             let t = tyenv.get(&arr).unwrap();
-            let size: i32 = common::type_size(t.elem_t()).try_into().unwrap();
-            if (t.is_array() || t.is_tuple()) && !t.is_pointer() {
+            let et = t.elem_t();
+            let size: i32 = common::type_size(et).try_into().unwrap();
+            if !et.is_pointer() && (et.is_array() || et.is_tuple()) {
                 if let Some(ConstKind::CInt(idx)) = consts.get(&idx) {
                     let offset = (*idx * size).try_into().unwrap();
                     lift(ExprKind::IntOp(IntOpKind::Add, arr, Value::Imm(offset)))
+                } else if size == 1 {
+                    lift(ExprKind::IntOp(IntOpKind::Add, arr, Value::Var(idx)))
                 } else {
                     let offset_v = gen_new_var(p, Ty::Int);
                     let offset = lift(ExprKind::IntOp(
