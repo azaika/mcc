@@ -150,6 +150,8 @@ fn conv(
             // insert restores
             let mut e = Box::new(item.with_span(e.loc));
             for (x, nx) in res {
+                rename.remove(&x);
+                
                 let kind = match saved_data.get(&x).unwrap().clone() {
                     Saved::Nop => Nop,
                     Saved::Tag(x) => Restore(x),
@@ -163,10 +165,29 @@ fn conv(
             }
             return e;
         }
-        Let(None, e1, e2) => {
+        Let(None, mut e1, e2) => {
+            let res = conv_single(&mut e1.item, tyenv, safe, rename, saved_data, restored);
             let e1 = conv(e1, tyenv, safe, rename, saved_data, restored);
             let e2 = conv(e2, tyenv, safe, rename, saved_data, restored);
-            Let(None, e1, e2)
+
+            let item = Let(None, e1, e2);
+            // insert restores
+            let mut e = Box::new(item.with_span(e.loc));
+            for (x, nx) in res {
+                rename.remove(&x);
+
+                let kind = match saved_data.get(&x).unwrap().clone() {
+                    Saved::Nop => Nop,
+                    Saved::Tag(x) => Restore(x),
+                    Saved::Li(i) => Li(i),
+                    Saved::FLi(x) => FLi(x),
+                    Saved::GetLabel(label) => GetLabel(label),
+                };
+                e = Box::new(
+                    ExprKind::Let(Some(nx), Box::new(kind.with_span(span)), e).with_span(span),
+                );
+            }
+            return e;
         }
         _ => {
             let res = conv_single(&mut e.item, tyenv, safe, rename, saved_data, restored);
@@ -236,6 +257,8 @@ fn conv(
                 e.item
             } else {
                 for (x, nx) in res {
+                    rename.remove(&x);
+
                     let kind = match saved_data.get(&x).unwrap().clone() {
                         Saved::Nop => Nop,
                         Saved::Tag(x) => Restore(x),
