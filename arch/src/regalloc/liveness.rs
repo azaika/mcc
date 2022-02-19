@@ -56,7 +56,7 @@ fn prepare_impl(
                     //     def.insert((pp.clone(), r));
                     // }
                 }
-                Sw(x, Value::Var(y), z) => {
+                Sw(x, Value::Var(y), z) | FAddMul(x, y, z) => {
                     push(x);
                     push(y);
                     push(z);
@@ -130,7 +130,7 @@ fn prepare_impl(
 }
 
 // returns: (live_in, live_out)
-fn analyze_impl(
+pub fn analyze_impl(
     arena: &Arena<Block>,
     entry: BlockId,
     n: usize,
@@ -326,12 +326,47 @@ fn build_graph(
     (edges, all_edges, degrees)
 }
 
-pub fn analyze(
+pub fn analyze_liveout(
     arena: &Arena<Block>,
     entry: BlockId,
     n: usize,
     var_idx: &Map<Var, usize>,
     idx_var: &Map<usize, Var>,
+) -> Map<ProgramPoint, Set<Var>> {
+    let mut def = Set::default();
+    let mut used = Set::default();
+    let mut follow = Map::default();
+    let mut prev = Map::default();
+    let mut moves = Map::default();
+    prepare_impl(
+        arena,
+        entry,
+        var_idx,
+        &mut def,
+        &mut used,
+        &mut follow,
+        &mut prev,
+        &mut moves,
+    );
+
+    let (live_out, _, _) = analyze_impl(arena, entry, n, &def, &used, &follow, &prev);
+    live_out
+        .into_iter()
+        .map(|(pp, out)| {
+            let out = out
+                .into_iter()
+                .map(|x| idx_var.get(&x).unwrap().clone())
+                .collect();
+            (pp, out)
+        })
+        .collect()
+}
+
+pub fn analyze(
+    arena: &Arena<Block>,
+    entry: BlockId,
+    n: usize,
+    var_idx: &Map<Var, usize>,
     precolored: &Map<usize, common::Color>,
 ) -> (
     Map<ProgramPoint, (usize, usize)>,
@@ -357,16 +392,16 @@ pub fn analyze(
 
     let (live_out, def, used) = analyze_impl(arena, entry, n, &def, &used, &follow, &prev);
 
-    for (pp, live) in &live_out {
-        println!(
-            "{}[{}] = {:#?}",
-            arena[pp.bid].name,
-            pp.idx,
-            live.iter()
-                .map(|x| idx_var.get(x).unwrap())
-                .collect::<Vec<&Var>>()
-        );
-    }
+    // for (pp, live) in &live_out {
+    //     println!(
+    //         "{}[{}] = {:#?}",
+    //         arena[pp.bid].name,
+    //         pp.idx,
+    //         live.iter()
+    //             .map(|x| idx_var.get(x).unwrap())
+    //             .collect::<Vec<&Var>>()
+    //     );
+    // }
 
     let (edges, all_edges, degrees) =
         build_graph(arena, entry, n, &live_out, &moves, &def, &used, precolored);

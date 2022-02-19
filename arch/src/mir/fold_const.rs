@@ -1,6 +1,6 @@
 use super::mir::*;
 use id_arena::Arena;
-use util::{Id, Set, Map};
+use util::{Id, Map, Set};
 
 fn is_16bit(x: i32) -> bool {
     i16::MIN as i32 <= x && x <= i16::MAX as i32
@@ -8,9 +8,7 @@ fn is_16bit(x: i32) -> bool {
 
 fn to_vi(v: &Value, consts: &Map<Id, i32>) -> Option<i32> {
     match v {
-        Value::Var(y) => {
-            consts.get(y).cloned()
-        },
+        Value::Var(y) => consts.get(y).cloned(),
         Value::Imm(x) => Some(*x as i32),
     }
 }
@@ -35,18 +33,17 @@ fn conv(bid: BlockId, arena: &mut Arena<Block>, arrived: &mut Set<BlockId>) {
                     if is_16bit(x) {
                         inst.item = InstKind::Li(x);
                     }
+                } else if let Some(x) = const_f.get(x).cloned() {
+                    const_f.insert(v.as_ref().unwrap().clone(), x);
                 }
-                else if let Some(x) = const_f.get(x).cloned() {
-                    const_f.insert(v.as_ref().unwrap().clone(), x);    
-                }
-            },
+            }
             InstKind::Li(x) => {
                 const_i.insert(v.as_ref().unwrap().clone(), *x);
-            },
+            }
             InstKind::FLi(x) => {
                 const_f.insert(v.as_ref().unwrap().clone(), *x);
-            },
-            _ => ()
+            }
+            _ => (),
         }
     }
 
@@ -64,14 +61,13 @@ fn conv(bid: BlockId, arena: &mut Arena<Block>, arrived: &mut Set<BlockId>) {
                     if cond {
                         let b1 = *b1;
                         tail.item = TailKind::Jump(b1);
-                    }
-                    else {
+                    } else {
                         let b2 = *b2;
                         tail.item = TailKind::Jump(b2);
                     }
                 }
             }
-        },
+        }
         TailKind::IfF(kind, x, y, b1, b2) => {
             if let Some(x) = const_f.get(x).cloned() {
                 if let Some(y) = const_f.get(y).cloned() {
@@ -84,15 +80,14 @@ fn conv(bid: BlockId, arena: &mut Arena<Block>, arrived: &mut Set<BlockId>) {
                     if cond {
                         let b1 = *b1;
                         tail.item = TailKind::Jump(b1);
-                    }
-                    else {
+                    } else {
                         let b2 = *b2;
                         tail.item = TailKind::Jump(b2);
                     }
                 }
             }
-        },
-        _ => ()
+        }
+        _ => (),
     }
 }
 

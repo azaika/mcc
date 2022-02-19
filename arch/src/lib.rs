@@ -32,14 +32,24 @@ pub fn finalize_virt(mut p: Virtual, do_opt: bool) -> Virtual {
 }
 
 pub fn optimize_mir(mut p: Mir) -> Mir {
-    let prev = p.clone();
-    for _ in 0..100 {
-        p = mir::fold_const(p);
+    let mut prev = p.clone();
+    for i in 0..100 {
+        log::info!("mir opt loop: {}", i + 1);
         p = mir::skip_jump(p);
         p = mir::merge_block(p);
+        p = mir::fold_const(p);
+        p = mir::faddmul(p);
+        p = mir::eliminate(p);
+        p = mir::skip_jump(p);
+        p = mir::merge_block(p);
+        p = mir::fold_const(p);
+        p = mir::faddmul(p);
+
         if p == prev {
             break;
         }
+
+        prev = p.clone();
     }
     p
 }

@@ -96,8 +96,8 @@ let rec fhalf x = x /. 2. in
 let rec fneg x = -. x in
 
 let rec fless x y =
-  let a = x < 0. in
-  let b = y < 0. in
+  let a = x +. 0. in
+  let b = y +. 0. in
   x < y in
 
 let rec fiszero x = x = 0. in

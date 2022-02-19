@@ -21,6 +21,7 @@ pub enum InstKind {
     UnOp(UnOpKind, Id),
     IntOp(IntOpKind, Id, Value),
     FloatOp(FloatOpKind, Id, Id),
+    FAddMul(Id, Id, Id),
     CallDir(Label),
     #[allow(dead_code)]
     CallCls,
@@ -48,6 +49,7 @@ impl fmt::Display for InstKind {
             UnOp(op, x) => write!(f, "{:?} {x}", op),
             IntOp(op, x, y) => write!(f, "{:?} {x}, {y}", op),
             FloatOp(op, x, y) => write!(f, "{:?} {x}, {y}", op),
+            FAddMul(x, y, z) => write!(f, "FAddMul {x}, {y}, {z}"),
             AllocHeap(x) => write!(f, "AllocHeap {x}"),
             CallDir(func) => write!(f, "CallDir {func}"),
             CallCls => write!(f, "CallCls"),

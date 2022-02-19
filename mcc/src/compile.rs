@@ -137,21 +137,6 @@ fn optimize_closure(mut p: ast::closure::Program, option: &Args) -> ast::closure
     p
 }
 
-// fn optimize_mir(mut p: ast::mir::Program) -> ast::mir::Program {
-//     let mut prev = p.clone();
-//     for i in 0..100 {
-//         log::info!("mir opt loop: {i}");
-//         p = cfg::skip_jump(p);
-
-//         if p == prev {
-//             break;
-//         }
-//         prev = p.clone();
-//     }
-
-//     p
-// }
-
 fn debug_output(path: &Path, s: String) -> Result<()> {
     if !Path::new(&"debug").exists() {
         std::fs::create_dir("debug")?;

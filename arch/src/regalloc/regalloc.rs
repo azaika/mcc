@@ -60,12 +60,7 @@ pub struct RegAllocator {
 }
 
 impl RegAllocator {
-    pub fn new(
-        arena: &Arena<Block>,
-        entry: BlockId,
-        var_idx: &Map<Var, usize>,
-        idx_var: &Map<usize, Var>,
-    ) -> Self {
+    pub fn new(arena: &Arena<Block>, entry: BlockId, var_idx: &Map<Var, usize>) -> Self {
         let n = var_idx.len();
 
         let mut precolored: Map<usize, Color> = Map::default();
@@ -76,7 +71,7 @@ impl RegAllocator {
         }
 
         let (moves, edges, all_edges, degrees) =
-            liveness::analyze(arena, entry, n, var_idx, &idx_var, &precolored);
+            liveness::analyze(arena, entry, n, var_idx, &precolored);
 
         let mut move_lists: Map<usize, Set<(ProgramPoint, (usize, usize))>> = Map::default();
         let mut move_states = Map::default();
@@ -493,7 +488,7 @@ impl RegAllocator {
     }
 }
 
-fn make_varmap(tyenv: &TyMap) -> (Map<Var, usize>, Map<usize, Var>) {
+pub fn make_varmap(tyenv: &TyMap) -> (Map<Var, usize>, Map<usize, Var>) {
     let mut i: usize = 0;
     let mut m1 = Map::default();
     let mut m2 = Map::default();
@@ -527,7 +522,7 @@ fn alloc_impl(
         .into_iter()
         .map(|(x, c)| (*var_idx.get(&x).unwrap(), c))
         .collect();
-    match RegAllocator::new(&arena, entry, &var_idx, &idx_var).do_alloc(costs) {
+    match RegAllocator::new(&arena, entry, &var_idx).do_alloc(costs) {
         Ok(colored) => colored
             .into_iter()
             .map(|(u, c)| (idx_var.get(&u).unwrap().clone(), c))
@@ -549,6 +544,8 @@ fn alloc_impl(
 }
 
 pub fn do_regalloc(mut p: Program) -> (Program, RegMap, Map<Label, RegMap>) {
+    log::info!("register allocation started");
+
     let globals: Set<_> = p.globals.iter().map(|(l, _)| l.0.clone()).collect();
 
     let mut fres: Map<Label, RegMap> = Map::default();

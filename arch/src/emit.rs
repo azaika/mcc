@@ -56,8 +56,7 @@ fn emit_inst<W: Write>(
                 write!(w, "\taddi\t{v}, {REG_ZERO}, {lo}")?;
             } else if lo == 0 {
                 write!(w, "\taddis\t{v}, {REG_ZERO}, {ha}")?;
-            }
-            else {
+            } else {
                 write!(w, "\taddis\t{v}, {REG_ZERO}, {ha}\n")?;
                 write!(w, "\tori\t\t{v}, {v}, {lo}")?
             }
@@ -132,6 +131,14 @@ fn emit_inst<W: Write>(
             };
             write!(w, "\t{f}\t{}, {}, {}", reg_v!(), reg!(x), reg!(y))?
         }
+        FAddMul(x, y, z) => write!(
+            w,
+            "\tfaddmul\t{}, {}, {}, {}",
+            reg_v!(),
+            reg!(x),
+            reg!(y),
+            reg!(z)
+        )?,
         CallDir(label) => {
             let stack_size = *stack_size;
             write!(w, "\tmflr\t{REG_TMP}\n")?;

@@ -151,7 +151,7 @@ fn conv(
             let mut e = Box::new(item.with_span(e.loc));
             for (x, nx) in res {
                 rename.remove(&x);
-                
+
                 let kind = match saved_data.get(&x).unwrap().clone() {
                     Saved::Nop => Nop,
                     Saved::Tag(x) => Restore(x),

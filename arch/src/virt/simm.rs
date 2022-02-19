@@ -63,8 +63,8 @@ fn conv(
                     IntOpKind::Mul16 => {
                         if *y == 0 {
                             Li(0)
-                        } else if y.count_ones() == 1 {
-                            IntOp(IntOpKind::Shl, x, Value::Imm(y.log2() as i16))
+                        } else if *y == 1 {
+                            Var(x)
                         } else {
                             IntOp(IntOpKind::Mul16, x, Value::Imm(*y))
                         }
@@ -82,8 +82,8 @@ fn conv(
                     IntOpKind::Mul16 => {
                         if *xx == 0 {
                             Li(0)
-                        } else if xx.count_ones() == 1 {
-                            IntOp(IntOpKind::Shl, y, Value::Imm(xx.log2() as i16))
+                        } else if *xx == 1 {
+                            Var(y)
                         } else {
                             IntOp(IntOpKind::Mul16, y, Value::Imm(*xx))
                         }
